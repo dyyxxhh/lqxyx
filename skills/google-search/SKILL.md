@@ -1,6 +1,6 @@
 ---
 name: google-search
-description: Use Google Custom Search JSON API to search the web using GOOGLE_API_KEY and GOOGLE_SEARCH_ENGINE_ID. Use when the user asks to search the web, find recent pages, gather sources, or look up public information. Prefer this local skill when Google search credentials already exist in /x/know/.env or in the environment.
+description: Search the public web with Google Custom Search JSON API. Use whenever the user asks to search the web, look something up online, find sources, check recent information, research a topic, compare webpages, or gather links. Prefer this local skill over third-party web-search skills when /x/know/.env or the environment already provides GOOGLE_API_KEY and GOOGLE_SEARCH_ENGINE_ID. Triggers on phrases like "搜一下", "查一下", "search", "web search", "google 一下", "找资料", "找来源", "联网搜索", or any request for online sources.
 ---
 
 # Google Search

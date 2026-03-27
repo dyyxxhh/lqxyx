@@ -384,21 +384,6 @@ const initDB = async () => {
     )
   `);
 
-  // 文件传输助手文本消息表
-  await pool.execute(`
-    CREATE TABLE IF NOT EXISTS assistant_messages (
-      id INT AUTO_INCREMENT PRIMARY KEY,
-      username VARCHAR(50) NOT NULL,
-      device_id VARCHAR(64) DEFAULT NULL,
-      message_type ENUM('text', 'file', 'system') DEFAULT 'text',
-      encryption_mode ENUM('plain', 'self') DEFAULT 'plain',
-      content LONGTEXT NOT NULL,
-      file_meta JSON DEFAULT NULL,
-      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-      INDEX idx_assistant_user_created (username, created_at)
-    ) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci
-  `);
-
   // Helper function to send push notification
   global.sendPushToUser = async (username, title, body, data = {}) => {
     try {
@@ -446,8 +431,10 @@ const performAccountDeletion = async (username) => {
 
   await redisClient.del(`user_counter:${username}`);
   await redisClient.del(`pinned_counter:${username}`);
-  await redisClient.del(`assistant_presence:${username}`);
+  await redisClient.del(`assistant_msgs:${username}`);
   await redisClient.del(`assistant_signal_inbox:${username}`);
+  const assistantPresenceKeys = await scanKeys(`assistant_presence:${username}:*`);
+  for (const key of assistantPresenceKeys) await redisClient.del(key);
   const assistantSignalKeys = await scanKeys(`assistant_signal_waiting:${username}:*`);
   for (const key of assistantSignalKeys) await redisClient.del(key);
 
@@ -496,7 +483,6 @@ const performAccountDeletion = async (username) => {
 
   // D. 删除用户的投票和踩
   await pool.execute('DELETE FROM group_message_downvotes WHERE username = ?', [username]);
-  await pool.execute('DELETE FROM assistant_messages WHERE username = ?', [username]);
   await pool.execute('DELETE FROM group_vote_records WHERE username = ?', [username]);
 
   // 最后删除用户
@@ -1111,25 +1097,24 @@ app.get('/api/assistant/messages', authenticate, async (req, res) => {
   try {
     const limit = Math.min(parseInt(req.query.limit || '100', 10), 300);
     const safeLimit = Number.isFinite(limit) && limit > 0 ? limit : 100;
-    const [rows] = await pool.query(
-      `SELECT id, device_id, message_type, encryption_mode, content, file_meta, created_at
-       FROM assistant_messages
-       WHERE username = ?
-       ORDER BY id DESC
-       LIMIT ${safeLimit}`,
-      [req.username]
-    );
+    const key = `assistant_msgs:${req.username}`;
+    const items = await redisClient.lRange(key, 0, safeLimit - 1);
 
-    const messages = rows.reverse().map(row => ({
-      id: row.id,
-      deviceId: row.device_id,
-      messageType: row.message_type,
-      encryptionMode: row.encryption_mode,
-      content: escapeHtml(row.content),
-      rawContent: row.content,
-      fileMeta: row.file_meta || null,
-      createdAt: row.created_at
-    }));
+    const messages = items
+      .map(item => {
+        try {
+          const parsed = JSON.parse(item);
+          return {
+            ...parsed,
+            content: escapeHtml(parsed.content || ''),
+            rawContent: parsed.content || ''
+          };
+        } catch {
+          return null;
+        }
+      })
+      .filter(Boolean)
+      .reverse();
 
     res.json({ messages });
   } catch (err) {
@@ -1152,13 +1137,22 @@ app.post('/api/assistant/messages', authenticate, async (req, res) => {
       return res.status(400).json({ error: '消息内容超过100KB' });
     }
 
-    const [result] = await pool.execute(
-      `INSERT INTO assistant_messages (username, device_id, message_type, encryption_mode, content, file_meta)
-       VALUES (?, ?, ?, ?, ?, ?)`,
-      [req.username, deviceId || null, normalizedType, normalizedMode, content, fileMeta ? JSON.stringify(fileMeta) : null]
-    );
+    const message = {
+      id: crypto.randomUUID(),
+      deviceId: deviceId || null,
+      messageType: normalizedType,
+      encryptionMode: normalizedMode,
+      content,
+      fileMeta: fileMeta || null,
+      createdAt: new Date().toISOString()
+    };
 
-    res.json({ success: true, id: result.insertId });
+    const key = `assistant_msgs:${req.username}`;
+    await redisClient.lPush(key, JSON.stringify(message));
+    await redisClient.lTrim(key, 0, 299);
+    await redisClient.expire(key, 86400 * 7);
+
+    res.json({ success: true, id: message.id });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: '服务器错误' });
@@ -1167,8 +1161,21 @@ app.post('/api/assistant/messages', authenticate, async (req, res) => {
 
 app.delete('/api/assistant/messages/:id', authenticate, async (req, res) => {
   try {
-    await pool.execute('DELETE FROM assistant_messages WHERE id = ? AND username = ?', [req.params.id, req.username]);
-    res.json({ success: true });
+    const key = `assistant_msgs:${req.username}`;
+    const items = await redisClient.lRange(key, 0, -1);
+    let removed = false;
+    for (const item of items) {
+      try {
+        const parsed = JSON.parse(item);
+        if (parsed.id === req.params.id) {
+          await redisClient.lRem(key, 1, item);
+          removed = true;
+          break;
+        }
+      } catch {
+      }
+    }
+    res.json({ success: true, removed });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: '服务器错误' });

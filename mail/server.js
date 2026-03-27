@@ -1110,13 +1110,14 @@ app.get('/api/me', authenticate, (req, res) => {
 app.get('/api/assistant/messages', authenticate, async (req, res) => {
   try {
     const limit = Math.min(parseInt(req.query.limit || '100', 10), 300);
-    const [rows] = await pool.execute(
+    const safeLimit = Number.isFinite(limit) && limit > 0 ? limit : 100;
+    const [rows] = await pool.query(
       `SELECT id, device_id, message_type, encryption_mode, content, file_meta, created_at
        FROM assistant_messages
        WHERE username = ?
        ORDER BY id DESC
-       LIMIT ?`,
-      [req.username, limit]
+       LIMIT ${safeLimit}`,
+      [req.username]
     );
 
     const messages = rows.reverse().map(row => ({

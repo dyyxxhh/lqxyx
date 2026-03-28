@@ -2099,6 +2099,9 @@
     let assistantDataChannel = null;
     let assistantSelectedFile = null;
     let assistantIncomingFile = null;
+    let assistantOutgoingTransfer = null;
+    let assistantChunkHeader = null;
+    let assistantRetryTimer = null;
     let assistantPresenceInterval = null;
     let assistantSignalInterval = null;
     let inviteTurnstileWidget = null;
@@ -2871,11 +2874,107 @@
       return pc;
     }
 
+    function scheduleAssistantRetry() {
+      if (!assistantOutgoingTransfer) return;
+      if (assistantRetryTimer) clearTimeout(assistantRetryTimer);
+      assistantRetryTimer = setTimeout(async () => {
+        if (!assistantOutgoingTransfer || !assistantDataChannel || assistantDataChannel.readyState !== 'open') return;
+        const pending = assistantOutgoingTransfer.pendingIndexes.find(i => !assistantOutgoingTransfer.acked.has(i));
+        if (pending === undefined) return;
+        await sendAssistantChunk(pending, true);
+      }, 1800);
+    }
+
+    async function sendAssistantChunk(index, isRetry = false) {
+      if (!assistantOutgoingTransfer || !assistantSelectedFile) return;
+      if (!assistantDataChannel || assistantDataChannel.readyState !== 'open') return;
+      const start = index * assistantOutgoingTransfer.chunkSize;
+      const end = Math.min(start + assistantOutgoingTransfer.chunkSize, assistantSelectedFile.size);
+      const chunk = await assistantSelectedFile.slice(start, end).arrayBuffer();
+      assistantDataChannel.send(JSON.stringify({
+        type: 'file-chunk',
+        transferId: assistantOutgoingTransfer.transferId,
+        index,
+        size: chunk.byteLength,
+        retry: isRetry
+      }));
+      assistantDataChannel.send(chunk);
+      assistantOutgoingTransfer.lastSentAt = Date.now();
+      scheduleAssistantRetry();
+    }
+
+    function maybeFinishAssistantTransfer() {
+      if (!assistantOutgoingTransfer) return;
+      const done = assistantOutgoingTransfer.pendingIndexes.every(i => assistantOutgoingTransfer.acked.has(i));
+      if (!done) return;
+      updateAssistantTransferProgress(100, `${assistantOutgoingTransfer.name} 发送完成`);
+      fetch('/api/assistant/messages', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
+        body: JSON.stringify({
+          content: `发送文件：${assistantOutgoingTransfer.name}`,
+          encryptionMode: 'plain',
+          deviceId: assistantDeviceId,
+          messageType: 'file',
+          fileMeta: { name: assistantOutgoingTransfer.name, size: assistantOutgoingTransfer.size }
+        })
+      }).then(() => loadAssistantMessages()).finally(() => hideAssistantTransferProgress());
+      assistantOutgoingTransfer = null;
+      assistantSelectedFile = null;
+      if (assistantRetryTimer) clearTimeout(assistantRetryTimer);
+      assistantRetryTimer = null;
+    }
+
+    async function beginAssistantTransfer(file) {
+      const errorEl = document.getElementById('assistantError');
+      errorEl.textContent = '';
+      if (!assistantPeerDeviceId) {
+        errorEl.textContent = '请先选择接收设备';
+        return false;
+      }
+      if (!assistantDataChannel || assistantDataChannel.readyState !== 'open') {
+        errorEl.textContent = '当前还没有连上另一台设备，请稍等片刻再试';
+        return false;
+      }
+      assistantSelectedFile = file;
+      const chunkSize = 64 * 1024;
+      const totalChunks = Math.ceil(file.size / chunkSize);
+      assistantOutgoingTransfer = {
+        transferId: crypto.randomUUID(),
+        name: file.name,
+        size: file.size,
+        chunkSize,
+        totalChunks,
+        acked: new Set(),
+        pendingIndexes: Array.from({ length: totalChunks }, (_, i) => i)
+      };
+      assistantDataChannel.send(JSON.stringify({
+        type: 'file-meta',
+        transferId: assistantOutgoingTransfer.transferId,
+        name: file.name,
+        size: file.size,
+        chunkSize,
+        totalChunks
+      }));
+      updateAssistantTransferProgress(0, `正在发送 ${file.name}...`);
+      await sendAssistantChunk(0);
+      return true;
+    }
+
     function setupAssistantDataChannel(channel) {
       assistantDataChannel = channel;
       channel.binaryType = 'arraybuffer';
-      channel.onopen = () => {
+      channel.onopen = async () => {
         document.getElementById('assistantPeerStatus').textContent = '已连接到另一台设备，可以直接传文件';
+        if (assistantOutgoingTransfer && assistantSelectedFile) {
+          channel.send(JSON.stringify({
+            type: 'resume-sync',
+            transferId: assistantOutgoingTransfer.transferId,
+            totalChunks: assistantOutgoingTransfer.totalChunks,
+            acked: Array.from(assistantOutgoingTransfer.acked)
+          }));
+          const nextMissing = assistantOutgoingTransfer.pendingIndexes.find(i => !assistantOutgoingTransfer.acked.has(i));
+          if (nextMissing !== undefined) await sendAssistantChunk(nextMissing, true);
+        }
       };
       channel.onclose = () => {
         document.getElementById('assistantPeerStatus').textContent = '连接已断开，等待重新连接';
@@ -2884,11 +2983,40 @@
         if (typeof event.data === 'string') {
           const payload = JSON.parse(event.data);
           if (payload.type === 'file-meta') {
-            assistantIncomingFile = { name: payload.name, size: payload.size, chunks: [], receivedBytes: 0 };
+            assistantIncomingFile = {
+              transferId: payload.transferId,
+              name: payload.name,
+              size: payload.size,
+              totalChunks: payload.totalChunks,
+              chunkSize: payload.chunkSize,
+              chunks: new Array(payload.totalChunks),
+              receivedIndexes: new Set(),
+              receivedBytes: 0
+            };
             updateAssistantTransferProgress(0, `正在接收 ${payload.name}...`);
+          } else if (payload.type === 'file-chunk') {
+            assistantChunkHeader = payload;
+          } else if (payload.type === 'chunk-ack' && assistantOutgoingTransfer && payload.transferId === assistantOutgoingTransfer.transferId) {
+            assistantOutgoingTransfer.acked.add(payload.index);
+            const percent = (assistantOutgoingTransfer.acked.size / assistantOutgoingTransfer.totalChunks) * 100;
+            updateAssistantTransferProgress(percent, `正在发送 ${assistantOutgoingTransfer.name}... ${Math.floor(percent)}%`);
+            const nextMissing = assistantOutgoingTransfer.pendingIndexes.find(i => !assistantOutgoingTransfer.acked.has(i));
+            if (nextMissing !== undefined) {
+              await sendAssistantChunk(nextMissing);
+            } else {
+              maybeFinishAssistantTransfer();
+            }
+          } else if (payload.type === 'resume-sync' && assistantIncomingFile && payload.transferId === assistantIncomingFile.transferId) {
+            channel.send(JSON.stringify({ type: 'resume-state', transferId: assistantIncomingFile.transferId, received: Array.from(assistantIncomingFile.receivedIndexes) }));
+          } else if (payload.type === 'resume-state' && assistantOutgoingTransfer && payload.transferId === assistantOutgoingTransfer.transferId) {
+            const received = new Set(payload.received || []);
+            assistantOutgoingTransfer.acked = received;
+            const nextMissing = assistantOutgoingTransfer.pendingIndexes.find(i => !assistantOutgoingTransfer.acked.has(i));
+            if (nextMissing !== undefined) await sendAssistantChunk(nextMissing, true);
+            else maybeFinishAssistantTransfer();
           } else if (payload.type === 'file-complete' && assistantIncomingFile) {
             updateAssistantTransferProgress(100, `${assistantIncomingFile.name} 接收完成，正在保存`);
-            const blob = new Blob(assistantIncomingFile.chunks);
+            const blob = new Blob(assistantIncomingFile.chunks.filter(Boolean));
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
@@ -2906,14 +3034,24 @@
               })
             });
             assistantIncomingFile = null;
+            assistantChunkHeader = null;
             await loadAssistantMessages();
             hideAssistantTransferProgress();
           }
-        } else if (assistantIncomingFile) {
-          assistantIncomingFile.chunks.push(event.data);
-          assistantIncomingFile.receivedBytes += event.data.byteLength || event.data.size || 0;
+        } else if (assistantIncomingFile && assistantChunkHeader && assistantChunkHeader.transferId === assistantIncomingFile.transferId) {
+          const idx = assistantChunkHeader.index;
+          if (!assistantIncomingFile.receivedIndexes.has(idx)) {
+            assistantIncomingFile.chunks[idx] = event.data;
+            assistantIncomingFile.receivedIndexes.add(idx);
+            assistantIncomingFile.receivedBytes += event.data.byteLength || 0;
+          }
+          channel.send(JSON.stringify({ type: 'chunk-ack', transferId: assistantIncomingFile.transferId, index: idx }));
           const percent = assistantIncomingFile.size ? (assistantIncomingFile.receivedBytes / assistantIncomingFile.size) * 100 : 0;
           updateAssistantTransferProgress(percent, `正在接收 ${assistantIncomingFile.name}... ${Math.floor(percent)}%`);
+          assistantChunkHeader = null;
+          if (assistantIncomingFile.receivedIndexes.size === assistantIncomingFile.totalChunks) {
+            channel.send(JSON.stringify({ type: 'file-complete', transferId: assistantIncomingFile.transferId }));
+          }
         }
       };
     }
@@ -3023,38 +3161,7 @@
     async function handleAssistantFileSelect(event) {
       const file = event.target.files?.[0];
       if (!file) return;
-      const errorEl = document.getElementById('assistantError');
-      errorEl.textContent = '';
-      if (!assistantDataChannel || assistantDataChannel.readyState !== 'open') {
-        errorEl.textContent = '当前还没有连上另一台设备，请先在另一端打开文件传输助手';
-        event.target.value = '';
-        return;
-      }
-      assistantDataChannel.send(JSON.stringify({ type: 'file-meta', name: file.name, size: file.size }));
-      updateAssistantTransferProgress(0, `正在发送 ${file.name}...`);
-      const chunkSize = 64 * 1024;
-      let offset = 0;
-      while (offset < file.size) {
-        const chunk = await file.slice(offset, offset + chunkSize).arrayBuffer();
-        assistantDataChannel.send(chunk);
-        offset += chunkSize;
-        const percent = file.size ? (offset / file.size) * 100 : 0;
-        updateAssistantTransferProgress(percent, `正在发送 ${file.name}... ${Math.floor(percent)}%`);
-      }
-      assistantDataChannel.send(JSON.stringify({ type: 'file-complete' }));
-      updateAssistantTransferProgress(100, `${file.name} 发送完成`);
-      await fetch('/api/assistant/messages', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
-        body: JSON.stringify({
-          content: `发送文件：${file.name}`,
-          encryptionMode: 'plain',
-          deviceId: assistantDeviceId,
-          messageType: 'file',
-          fileMeta: { name: file.name, size: file.size }
-        })
-      });
-      await loadAssistantMessages();
-      hideAssistantTransferProgress();
+      await beginAssistantTransfer(file);
       event.target.value = '';
     }
 

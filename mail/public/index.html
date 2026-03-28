@@ -1438,16 +1438,11 @@
               <textarea id="assistantMessageContent" placeholder="输入要发给自己的文字..." style="flex: 1; min-height: 72px; max-height: 160px; resize: vertical; padding: 10px 12px; border: 1px solid #8a8886; border-radius: 2px; font-family: inherit; font-size: 14px;"></textarea>
               <button class="btn btn-primary" style="width: auto; padding: 10px 18px;" onclick="sendAssistantText()">发送</button>
             </div>
-            <div style="display: flex; gap: 16px; align-items: center; flex-wrap: wrap; margin-top: 10px;">
-              <label style="font-size: 13px; display: flex; align-items: center; gap: 6px;">
-                <input type="radio" name="assistantEncryptionMode" value="plain" checked>
-                明文发送
-              </label>
-              <label style="font-size: 13px; display: flex; align-items: center; gap: 6px;">
-                <input type="radio" name="assistantEncryptionMode" value="self">
-                用自己的公钥加密
-              </label>
-              <span style="font-size: 12px; color: #605e5c;">如果只是自己跨设备存一下内容，直接发就行。</span>
+            <div style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin-top: 10px;">
+              <span style="font-size: 12px; color: #107c10;">🔒 默认使用自己的公钥加密文字和文件</span>
+            </div>
+            <div class="turnstile-container" style="margin-top: 10px;">
+              <div id="assistant-turnstile"></div>
             </div>
             <div id="assistantDropZone" style="margin-top: 10px; padding: 14px 12px; border: 1px dashed #c8c6c4; border-radius: 6px; background: #faf9f8; font-size: 12px; color: #605e5c; text-align: center;">把文件拖到这里也可以发送</div>
             <div id="assistantTransferBox" style="display:none; margin-top: 10px; padding: 10px 12px; background: #f3f2f1; border-radius: 6px;">
@@ -2552,6 +2547,7 @@
 
     // 具体的 Init 函数需要被替换为 renderVerification 调用
     function initComposeTurnstile() { renderVerification('send_msg', 'compose-turnstile'); }
+    function initAssistantTurnstile() { renderVerification('assistant_send', 'assistant-turnstile'); }
     function initEraseTurnstile() { renderVerification('erase_msg', 'erase-turnstile'); }
     function initRadarTurnstile() { renderVerification('key_share_request', 'radar-turnstile'); }
     function initCryptoTurnstile() { /* 似乎没用到? 待查 */ }
@@ -2745,6 +2741,7 @@
         initSettings();
       } else if (view === 'assistant') {
         document.getElementById('assistantPanel').style.display = 'flex';
+        initAssistantTurnstile();
         initAssistant();
       } else if (view === 'groups') {
         document.getElementById('groupsPanel').style.display = 'block';
@@ -2759,7 +2756,7 @@
     }
 
     function getAssistantEncryptionMode() {
-      return document.querySelector('input[name="assistantEncryptionMode"]:checked')?.value || 'plain';
+      return 'self';
     }
 
     function updateAssistantTransferProgress(percent, statusText) {
@@ -2790,6 +2787,7 @@
     async function loadAssistantMessages() {
       const list = document.getElementById('assistantMessageList');
       if (!list) return;
+      const shouldStickToBottom = (list.scrollHeight - list.scrollTop - list.clientHeight) < 48;
       try {
         const res = await fetch('/api/assistant/messages', { credentials: 'include' });
         const data = await res.json();
@@ -2799,13 +2797,28 @@
           return;
         }
 
-        list.innerHTML = messages.map(msg => {
+        const rendered = await Promise.all(messages.map(async (msg) => {
           const modeText = msg.encryptionMode === 'self' ? '用自己的公钥加密' : '明文';
           const timeText = new Date(msg.createdAt).toLocaleString('zh-CN');
           let contentHtml = escapeHtml(msg.rawContent || msg.content || '');
           if (msg.messageType === 'file' && msg.fileMeta) {
             const meta = typeof msg.fileMeta === 'string' ? JSON.parse(msg.fileMeta) : msg.fileMeta;
-            contentHtml = `📎 文件：${escapeHtml(meta.name || '未命名文件')}（${escapeHtml(String(meta.size || 0))} 字节）`;
+            const fileLabel = meta.name || '未命名文件';
+            const encryptedTag = msg.encryptionMode === 'self' ? '，已加密传输' : '';
+            contentHtml = `📎 文件：${escapeHtml(fileLabel)}（${escapeHtml(String(meta.size || 0))} 字节${encryptedTag}）`;
+          } else if (msg.encryptionMode === 'self' && msg.rawContent && msg.rawContent.includes('BEGIN PGP MESSAGE')) {
+            const cacheKey = `assistant-${msg.id}`;
+            if (decryptedCache[cacheKey]) {
+              contentHtml = decryptedCache[cacheKey];
+            } else {
+              const result = await decryptMessageContent(msg.rawContent);
+              if (result.success) {
+                contentHtml = `<div class="decrypted-text">${escapeHtml(result.content)}</div>`;
+              } else {
+                contentHtml = `<span class="decrypt-error">🔒 解密失败</span>`;
+              }
+              decryptedCache[cacheKey] = contentHtml;
+            }
           }
           return `
             <div class="message-item" style="border-radius: 8px; margin-bottom: 10px; background: white; border: 1px solid #edebe9;">
@@ -2817,8 +2830,11 @@
               <div class="message-id">模式：${modeText}</div>
             </div>
           `;
-        }).join('');
-        list.scrollTop = list.scrollHeight;
+        }));
+        list.innerHTML = rendered.join('');
+        if (shouldStickToBottom) {
+          list.scrollTop = list.scrollHeight;
+        }
       } catch (err) {
         list.innerHTML = `<div class="empty-state"><h3>加载失败</h3><p>${escapeHtml(err.message || '未知错误')}</p></div>`;
       }
@@ -2829,10 +2845,20 @@
       const errorEl = document.getElementById('assistantError');
       const content = input.value.trim();
       const encryptionMode = getAssistantEncryptionMode();
+      const verifyData = getVerificationData('assistant_send');
+      const verifyMethod = verificationConfig['assistant_send'] || 'turnstile';
       errorEl.textContent = '';
 
       if (!content) {
         errorEl.textContent = '消息不能为空';
+        return;
+      }
+      if (verifyMethod === 'turnstile' && !verifyData.turnstileToken) {
+        errorEl.textContent = '请先完成人机验证';
+        return;
+      }
+      if (verifyMethod === 'aitest' && !verifyData.aitestReference) {
+        errorEl.textContent = '请先完成人机验证';
         return;
       }
 
@@ -2854,12 +2880,14 @@
           body: JSON.stringify({
             content: finalContent,
             encryptionMode,
-            deviceId: assistantDeviceId
+            deviceId: assistantDeviceId,
+            ...verifyData
           })
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || '发送失败');
         input.value = '';
+        resetVerification('assistant_send');
         await loadAssistantMessages();
       } catch (err) {
         errorEl.textContent = err.message || '发送失败';
@@ -2919,10 +2947,10 @@
         method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
         body: JSON.stringify({
           content: `发送文件：${assistantOutgoingTransfer.name}`,
-          encryptionMode: 'plain',
+          encryptionMode: 'self',
           deviceId: assistantDeviceId,
           messageType: 'file',
-          fileMeta: { name: assistantOutgoingTransfer.name, size: assistantOutgoingTransfer.size }
+          fileMeta: { name: assistantOutgoingTransfer.name, size: assistantOutgoingTransfer.size, encryptedSize: assistantOutgoingTransfer.encryptedSize, mimeType: assistantOutgoingTransfer.mimeType }
         })
       }).then(() => loadAssistantMessages()).finally(() => hideAssistantTransferProgress());
       assistantOutgoingTransfer = null;
@@ -2933,6 +2961,8 @@
 
     async function beginAssistantTransfer(file) {
       const errorEl = document.getElementById('assistantError');
+      const verifyData = getVerificationData('assistant_send');
+      const verifyMethod = verificationConfig['assistant_send'] || 'turnstile';
       errorEl.textContent = '';
       if (!assistantPeerDeviceId) {
         errorEl.textContent = '请先选择接收设备';
@@ -2942,15 +2972,36 @@
         errorEl.textContent = '当前还没有连上另一台设备，请稍等片刻再试';
         return false;
       }
-      assistantSelectedFile = file;
+      if (verifyMethod === 'turnstile' && !verifyData.turnstileToken) {
+        errorEl.textContent = '请先完成人机验证';
+        return false;
+      }
+      if (verifyMethod === 'aitest' && !verifyData.aitestReference) {
+        errorEl.textContent = '请先完成人机验证';
+        return false;
+      }
+
+      const fileBuffer = await file.arrayBuffer();
+      const base64Payload = btoa(String.fromCharCode(...new Uint8Array(fileBuffer)));
+      const envelope = JSON.stringify({ name: file.name, type: file.type || 'application/octet-stream', data: base64Payload });
+      const encrypted = await encryptMessage(envelope, [currentUsername]);
+      if (!encrypted.success) {
+        errorEl.textContent = '未找到自己的公钥，无法加密文件';
+        return false;
+      }
+
+      const encryptedBlob = new Blob([encrypted.encrypted], { type: 'application/pgp-encrypted' });
+      assistantSelectedFile = encryptedBlob;
       const chunkSize = 64 * 1024;
-      const totalChunks = Math.ceil(file.size / chunkSize);
+      const totalChunks = Math.ceil(encryptedBlob.size / chunkSize);
       assistantOutgoingTransfer = {
         transferId: crypto.randomUUID(),
         name: file.name,
         size: file.size,
+        encryptedSize: encryptedBlob.size,
         chunkSize,
         totalChunks,
+        mimeType: file.type || 'application/octet-stream',
         acked: new Set(),
         pendingIndexes: Array.from({ length: totalChunks }, (_, i) => i)
       };
@@ -2959,11 +3010,15 @@
         transferId: assistantOutgoingTransfer.transferId,
         name: file.name,
         size: file.size,
+        encryptedSize: encryptedBlob.size,
+        mimeType: assistantOutgoingTransfer.mimeType,
         chunkSize,
-        totalChunks
+        totalChunks,
+        encryptionMode: 'self'
       }));
-      updateAssistantTransferProgress(0, `正在发送 ${file.name}...`);
+      updateAssistantTransferProgress(0, `正在加密并发送 ${file.name}...`);
       await sendAssistantChunk(0);
+      resetVerification('assistant_send');
       return true;
     }
 
@@ -2994,6 +3049,9 @@
               transferId: payload.transferId,
               name: payload.name,
               size: payload.size,
+              encryptedSize: payload.encryptedSize || payload.size,
+              mimeType: payload.mimeType || 'application/octet-stream',
+              encryptionMode: payload.encryptionMode || 'self',
               totalChunks: payload.totalChunks,
               chunkSize: payload.chunkSize,
               chunks: new Array(payload.totalChunks),
@@ -3024,22 +3082,31 @@
             if (nextMissing !== undefined) await sendAssistantChunk(nextMissing, true);
             else maybeFinishAssistantTransfer();
           } else if (payload.type === 'file-complete' && assistantIncomingFile) {
-            updateAssistantTransferProgress(100, `${assistantIncomingFile.name} 接收完成，正在保存`);
-            const blob = new Blob(assistantIncomingFile.chunks.filter(Boolean));
+            updateAssistantTransferProgress(100, `${assistantIncomingFile.name} 接收完成，正在解密保存`);
+            const encryptedText = await new Blob(assistantIncomingFile.chunks.filter(Boolean)).text();
+            const decryptedResult = await decryptMessageContent(encryptedText);
+            if (!decryptedResult.success) {
+              throw new Error('文件解密失败');
+            }
+            const filePayload = JSON.parse(decryptedResult.content);
+            const binary = atob(filePayload.data);
+            const bytes = new Uint8Array(binary.length);
+            for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+            const blob = new Blob([bytes], { type: filePayload.type || assistantIncomingFile.mimeType || 'application/octet-stream' });
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            a.download = assistantIncomingFile.name;
+            a.download = filePayload.name || assistantIncomingFile.name;
             a.click();
             URL.revokeObjectURL(url);
             await fetch('/api/assistant/messages', {
               method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
               body: JSON.stringify({
                 content: `收到文件：${assistantIncomingFile.name}`,
-                encryptionMode: 'plain',
+                encryptionMode: 'self',
                 deviceId: assistantDeviceId,
                 messageType: 'file',
-                fileMeta: { name: assistantIncomingFile.name, size: assistantIncomingFile.size }
+                fileMeta: { name: assistantIncomingFile.name, size: assistantIncomingFile.size, encryptedSize: assistantIncomingFile.encryptedSize, mimeType: assistantIncomingFile.mimeType }
               })
             });
             assistantIncomingFile = null;

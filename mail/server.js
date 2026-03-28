@@ -493,6 +493,7 @@ const performAccountDeletion = async (username) => {
 app.get('/api/config/verification', (req, res) => {
   res.json({
     auth: process.env.VERIFY_AUTH || 'turnstile',
+    assistant_send: process.env.VERIFY_ASSISTANT_SEND || 'turnstile',
     delete_account: process.env.VERIFY_DELETE_ACCOUNT || 'turnstile',
     send_msg: process.env.VERIFY_SEND_MSG || 'turnstile',
     erase_msg: process.env.VERIFY_ERASE_MSG || 'turnstile',
@@ -1122,6 +1123,11 @@ app.get('/api/assistant/messages', authenticate, async (req, res) => {
 
 app.post('/api/assistant/messages', authenticate, async (req, res) => {
   try {
+    const verification = await verifyAction('assistant_send', req);
+    if (!verification.success) {
+      return res.status(400).json({ error: verification.error || '人机验证失败' });
+    }
+
     const { content, encryptionMode, deviceId, messageType, fileMeta } = req.body;
     const normalizedMode = encryptionMode === 'self' ? 'self' : 'plain';
     const normalizedType = ['text', 'file', 'system'].includes(messageType) ? messageType : 'text';

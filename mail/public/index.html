@@ -1422,10 +1422,10 @@
           <div style="padding: 16px 20px; border-bottom: 1px solid #edebe9; display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap;">
             <div>
               <h2 style="margin: 0; font-size: 20px;">文件传输助手</h2>
-              <div style="margin-top: 6px; color: #605e5c; font-size: 12px;">文字像聊天一样发送；文件默认走浏览器端点对点直传，不经过服务器存储。</div>
+              <div style="margin-top: 6px; color: #605e5c; font-size: 12px;">给自己发文字、图片和文件。适合在不同设备之间临时中转。</div>
             </div>
             <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
-              <span id="assistantPeerStatus" style="font-size: 12px; color: #605e5c;">正在检测其它在线设备...</span>
+              <span id="assistantPeerStatus" style="font-size: 12px; color: #605e5c;">正在检查可接收的设备...</span>
               <button class="btn btn-secondary" style="width: auto; padding: 8px 14px;" onclick="document.getElementById('assistantFileInput').click()">📎 发送文件</button>
             </div>
           </div>
@@ -1444,7 +1444,13 @@
                 <input type="radio" name="assistantEncryptionMode" value="self">
                 用自己的公钥加密
               </label>
-              <span style="font-size: 12px; color: #605e5c;">发送时可选，跟聊天一样，不走原来的写信流程。</span>
+              <span style="font-size: 12px; color: #605e5c;">如果只是自己跨设备存一下内容，直接发就行。</span>
+            </div>
+            <div id="assistantTransferBox" style="display:none; margin-top: 10px; padding: 10px 12px; background: #f3f2f1; border-radius: 6px;">
+              <div id="assistantTransferStatus" style="font-size: 12px; color: #323130; margin-bottom: 6px;">准备传输...</div>
+              <div style="height: 8px; background: #e1dfdd; border-radius: 999px; overflow: hidden;">
+                <div id="assistantTransferBar" style="width: 0%; height: 100%; background: #0078d4; transition: width 0.15s ease;"></div>
+              </div>
             </div>
             <div class="error" id="assistantError" style="margin-top: 8px;"></div>
           </div>
@@ -2749,6 +2755,26 @@
       return document.querySelector('input[name="assistantEncryptionMode"]:checked')?.value || 'plain';
     }
 
+    function updateAssistantTransferProgress(percent, statusText) {
+      const box = document.getElementById('assistantTransferBox');
+      const bar = document.getElementById('assistantTransferBar');
+      const status = document.getElementById('assistantTransferStatus');
+      if (!box || !bar || !status) return;
+      box.style.display = 'block';
+      bar.style.width = `${Math.max(0, Math.min(100, percent))}%`;
+      status.textContent = statusText;
+    }
+
+    function hideAssistantTransferProgress(delay = 1500) {
+      const box = document.getElementById('assistantTransferBox');
+      const bar = document.getElementById('assistantTransferBar');
+      if (!box || !bar) return;
+      setTimeout(() => {
+        box.style.display = 'none';
+        bar.style.width = '0%';
+      }, delay);
+    }
+
     async function loadAssistantMessages() {
       const list = document.getElementById('assistantMessageList');
       if (!list) return;
@@ -2845,17 +2871,19 @@
       assistantDataChannel = channel;
       channel.binaryType = 'arraybuffer';
       channel.onopen = () => {
-        document.getElementById('assistantPeerStatus').textContent = '已与另一台设备直连，可直接传文件';
+        document.getElementById('assistantPeerStatus').textContent = '已连接到另一台设备，可以直接传文件';
       };
       channel.onclose = () => {
-        document.getElementById('assistantPeerStatus').textContent = '直连已断开，正在等待重新建立';
+        document.getElementById('assistantPeerStatus').textContent = '连接已断开，等待重新连接';
       };
       channel.onmessage = async (event) => {
         if (typeof event.data === 'string') {
           const payload = JSON.parse(event.data);
           if (payload.type === 'file-meta') {
-            assistantIncomingFile = { name: payload.name, size: payload.size, chunks: [] };
+            assistantIncomingFile = { name: payload.name, size: payload.size, chunks: [], receivedBytes: 0 };
+            updateAssistantTransferProgress(0, `正在接收 ${payload.name}...`);
           } else if (payload.type === 'file-complete' && assistantIncomingFile) {
+            updateAssistantTransferProgress(100, `${assistantIncomingFile.name} 接收完成，正在保存`);
             const blob = new Blob(assistantIncomingFile.chunks);
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
@@ -2875,9 +2903,13 @@
             });
             assistantIncomingFile = null;
             await loadAssistantMessages();
+            hideAssistantTransferProgress();
           }
         } else if (assistantIncomingFile) {
           assistantIncomingFile.chunks.push(event.data);
+          assistantIncomingFile.receivedBytes += event.data.byteLength || event.data.size || 0;
+          const percent = assistantIncomingFile.size ? (assistantIncomingFile.receivedBytes / assistantIncomingFile.size) * 100 : 0;
+          updateAssistantTransferProgress(percent, `正在接收 ${assistantIncomingFile.name}... ${Math.floor(percent)}%`);
         }
       };
     }
@@ -2963,19 +2995,23 @@
       const errorEl = document.getElementById('assistantError');
       errorEl.textContent = '';
       if (!assistantDataChannel || assistantDataChannel.readyState !== 'open') {
-        errorEl.textContent = '当前没有建立点对点直连，请先在另一台设备打开文件传输助手';
+        errorEl.textContent = '当前还没有连上另一台设备，请先在另一端打开文件传输助手';
         event.target.value = '';
         return;
       }
       assistantDataChannel.send(JSON.stringify({ type: 'file-meta', name: file.name, size: file.size }));
+      updateAssistantTransferProgress(0, `正在发送 ${file.name}...`);
       const chunkSize = 64 * 1024;
       let offset = 0;
       while (offset < file.size) {
         const chunk = await file.slice(offset, offset + chunkSize).arrayBuffer();
         assistantDataChannel.send(chunk);
         offset += chunkSize;
+        const percent = file.size ? (offset / file.size) * 100 : 0;
+        updateAssistantTransferProgress(percent, `正在发送 ${file.name}... ${Math.floor(percent)}%`);
       }
       assistantDataChannel.send(JSON.stringify({ type: 'file-complete' }));
+      updateAssistantTransferProgress(100, `${file.name} 发送完成`);
       await fetch('/api/assistant/messages', {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
         body: JSON.stringify({
@@ -2987,6 +3023,7 @@
         })
       });
       await loadAssistantMessages();
+      hideAssistantTransferProgress();
       event.target.value = '';
     }
 

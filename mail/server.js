@@ -1128,7 +1128,6 @@ app.post('/api/assistant/messages', authenticate, async (req, res) => {
     const key = `assistant_msgs:${req.username}`;
     await redisClient.lPush(key, JSON.stringify(message));
     await redisClient.lTrim(key, 0, 299);
-    await redisClient.expire(key, 86400 * 7);
 
     res.json({ success: true, id: message.id });
   } catch (err) {

@@ -2782,6 +2782,11 @@
       }, delay);
     }
 
+    async function hashAssistantChunk(buffer) {
+      const digest = await crypto.subtle.digest('SHA-256', buffer);
+      return Array.from(new Uint8Array(digest)).map(b => b.toString(16).padStart(2, '0')).join('');
+    }
+
     async function loadAssistantMessages() {
       const list = document.getElementById('assistantMessageList');
       if (!list) return;
@@ -2891,11 +2896,13 @@
       const start = index * assistantOutgoingTransfer.chunkSize;
       const end = Math.min(start + assistantOutgoingTransfer.chunkSize, assistantSelectedFile.size);
       const chunk = await assistantSelectedFile.slice(start, end).arrayBuffer();
+      const hash = await hashAssistantChunk(chunk);
       assistantDataChannel.send(JSON.stringify({
         type: 'file-chunk',
         transferId: assistantOutgoingTransfer.transferId,
         index,
         size: chunk.byteLength,
+        hash,
         retry: isRetry
       }));
       assistantDataChannel.send(chunk);
@@ -2990,12 +2997,14 @@
               totalChunks: payload.totalChunks,
               chunkSize: payload.chunkSize,
               chunks: new Array(payload.totalChunks),
+              expectedHashes: {},
               receivedIndexes: new Set(),
               receivedBytes: 0
             };
             updateAssistantTransferProgress(0, `正在接收 ${payload.name}...`);
           } else if (payload.type === 'file-chunk') {
             assistantChunkHeader = payload;
+            if (assistantIncomingFile) assistantIncomingFile.expectedHashes[payload.index] = payload.hash;
           } else if (payload.type === 'chunk-ack' && assistantOutgoingTransfer && payload.transferId === assistantOutgoingTransfer.transferId) {
             assistantOutgoingTransfer.acked.add(payload.index);
             const percent = (assistantOutgoingTransfer.acked.size / assistantOutgoingTransfer.totalChunks) * 100;
@@ -3040,12 +3049,18 @@
           }
         } else if (assistantIncomingFile && assistantChunkHeader && assistantChunkHeader.transferId === assistantIncomingFile.transferId) {
           const idx = assistantChunkHeader.index;
+          const expectedHash = assistantIncomingFile.expectedHashes[idx];
+          const actualHash = await hashAssistantChunk(event.data);
+          if (expectedHash && expectedHash !== actualHash) {
+            assistantChunkHeader = null;
+            return;
+          }
           if (!assistantIncomingFile.receivedIndexes.has(idx)) {
             assistantIncomingFile.chunks[idx] = event.data;
             assistantIncomingFile.receivedIndexes.add(idx);
             assistantIncomingFile.receivedBytes += event.data.byteLength || 0;
           }
-          channel.send(JSON.stringify({ type: 'chunk-ack', transferId: assistantIncomingFile.transferId, index: idx }));
+          channel.send(JSON.stringify({ type: 'chunk-ack', transferId: assistantIncomingFile.transferId, index: idx, hash: actualHash }));
           const percent = assistantIncomingFile.size ? (assistantIncomingFile.receivedBytes / assistantIncomingFile.size) * 100 : 0;
           updateAssistantTransferProgress(percent, `正在接收 ${assistantIncomingFile.name}... ${Math.floor(percent)}%`);
           assistantChunkHeader = null;

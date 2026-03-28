@@ -1425,6 +1425,9 @@
               <div style="margin-top: 6px; color: #605e5c; font-size: 12px;">给自己发文字、图片和文件。适合在不同设备之间临时中转。</div>
             </div>
             <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+              <select id="assistantPeerSelect" style="padding: 8px 10px; border: 1px solid #d2d0ce; border-radius: 4px; min-width: 180px; font-size: 13px;">
+                <option value="">选择接收设备</option>
+              </select>
               <span id="assistantPeerStatus" style="font-size: 12px; color: #605e5c;">正在检查可接收的设备...</span>
               <button class="btn btn-secondary" style="width: auto; padding: 8px 14px;" onclick="document.getElementById('assistantFileInput').click()">📎 发送文件</button>
             </div>
@@ -1446,6 +1449,7 @@
               </label>
               <span style="font-size: 12px; color: #605e5c;">如果只是自己跨设备存一下内容，直接发就行。</span>
             </div>
+            <div id="assistantDropZone" style="margin-top: 10px; padding: 14px 12px; border: 1px dashed #c8c6c4; border-radius: 6px; background: #faf9f8; font-size: 12px; color: #605e5c; text-align: center;">把文件拖到这里也可以发送</div>
             <div id="assistantTransferBox" style="display:none; margin-top: 10px; padding: 10px 12px; background: #f3f2f1; border-radius: 6px;">
               <div id="assistantTransferStatus" style="font-size: 12px; color: #323130; margin-bottom: 6px;">准备传输...</div>
               <div style="height: 8px; background: #e1dfdd; border-radius: 999px; overflow: hidden;">
@@ -2932,6 +2936,31 @@
     }
 
     let assistantPeerDeviceId = null;
+    let assistantAvailablePeers = [];
+
+    function renderAssistantPeerOptions(peers) {
+      const select = document.getElementById('assistantPeerSelect');
+      if (!select) return;
+      const current = select.value || assistantPeerDeviceId || '';
+      select.innerHTML = '<option value="">选择接收设备</option>';
+      peers.forEach(peer => {
+        const opt = document.createElement('option');
+        opt.value = peer.deviceId;
+        opt.textContent = peer.peerName || peer.deviceId;
+        if (peer.deviceId === current) opt.selected = true;
+        select.appendChild(opt);
+      });
+      assistantPeerDeviceId = select.value || null;
+      if (!select.dataset.bound) {
+        select.addEventListener('change', async (e) => {
+          assistantPeerDeviceId = e.target.value || null;
+          assistantPeerConnection = null;
+          assistantDataChannel = null;
+          if (assistantPeerDeviceId) await refreshAssistantPresence();
+        });
+        select.dataset.bound = '1';
+      }
+    }
 
     async function pollAssistantSignals() {
       if (!assistantPeerDeviceId) return;
@@ -2968,21 +2997,23 @@
         const res = await fetch('/api/assistant/presence', { credentials: 'include' });
         const data = await res.json();
         const peers = (data.presence || []).filter(p => p.deviceId && p.deviceId !== assistantDeviceId);
-        if (peers.length) {
-          const peer = peers[0];
-          assistantPeerDeviceId = peer.deviceId;
-          document.getElementById('assistantPeerStatus').textContent = `检测到在线设备：${peer.peerName || peer.deviceId}，尝试建立直连...`;
-          if (!assistantPeerConnection) {
-            assistantPeerConnection = createAssistantPeerConnection();
-            const channel = assistantPeerConnection.createDataChannel('file-transfer');
-            setupAssistantDataChannel(channel);
-            const offer = await assistantPeerConnection.createOffer();
-            await assistantPeerConnection.setLocalDescription(offer);
-            await postAssistantSignal({ type: 'offer', offer });
+        assistantAvailablePeers = peers;
+        renderAssistantPeerOptions(peers);
+        if (assistantPeerDeviceId) {
+          const peer = peers.find(p => p.deviceId === assistantPeerDeviceId);
+          if (peer) {
+            document.getElementById('assistantPeerStatus').textContent = `当前目标设备：${peer.peerName || peer.deviceId}`;
+            if (!assistantPeerConnection) {
+              assistantPeerConnection = createAssistantPeerConnection();
+              const channel = assistantPeerConnection.createDataChannel('file-transfer');
+              setupAssistantDataChannel(channel);
+              const offer = await assistantPeerConnection.createOffer();
+              await assistantPeerConnection.setLocalDescription(offer);
+              await postAssistantSignal({ type: 'offer', offer });
+            }
           }
         } else {
-          assistantPeerDeviceId = null;
-          document.getElementById('assistantPeerStatus').textContent = '暂未发现其它在线设备，可先发送文字';
+          document.getElementById('assistantPeerStatus').textContent = peers.length ? '请选择一个接收设备' : '暂未发现其它在线设备，可先发送文字';
         }
       } catch (err) {
         console.error(err);
@@ -3040,6 +3071,27 @@
       if (fileInput && !fileInput.dataset.bound) {
         fileInput.addEventListener('change', handleAssistantFileSelect);
         fileInput.dataset.bound = '1';
+      }
+      const dropZone = document.getElementById('assistantDropZone');
+      if (dropZone && !dropZone.dataset.bound) {
+        ['dragenter', 'dragover'].forEach(evt => dropZone.addEventListener(evt, e => {
+          e.preventDefault();
+          dropZone.style.borderColor = '#0078d4';
+          dropZone.style.background = '#eef6fc';
+        }));
+        ['dragleave', 'drop'].forEach(evt => dropZone.addEventListener(evt, e => {
+          e.preventDefault();
+          dropZone.style.borderColor = '#c8c6c4';
+          dropZone.style.background = '#faf9f8';
+        }));
+        dropZone.addEventListener('drop', e => {
+          const dt = e.dataTransfer;
+          if (dt?.files?.length) {
+            fileInput.files = dt.files;
+            handleAssistantFileSelect({ target: fileInput });
+          }
+        });
+        dropZone.dataset.bound = '1';
       }
     }
 

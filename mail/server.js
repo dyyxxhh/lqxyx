@@ -97,6 +97,25 @@ const cleanupMessages = async () => {
     }
   }
 
+  const assistantKeys = await scanKeys('assistant_msgs:*');
+  for (const key of assistantKeys) {
+    const items = await redisClient.lRange(key, 0, -1);
+    const keep = [];
+    for (const item of items) {
+      try {
+        const msgData = JSON.parse(item);
+        const [year, month] = String(msgData.time || '').split(':').map(Number);
+        const monthsDiff = (currentYear - year) * 12 + (currentMonth - month);
+        if (monthsDiff < 1) keep.push(item);
+      } catch {
+      }
+    }
+    await redisClient.del(key);
+    if (keep.length) {
+      await redisClient.rPush(key, keep.reverse());
+    }
+  }
+
   // 清理任务完成，不输出日志
 };
 
@@ -1115,6 +1134,7 @@ app.post('/api/assistant/messages', authenticate, async (req, res) => {
       return res.status(400).json({ error: '消息内容超过100KB' });
     }
 
+    const now = new Date();
     const message = {
       id: crypto.randomUUID(),
       deviceId: deviceId || null,
@@ -1122,7 +1142,8 @@ app.post('/api/assistant/messages', authenticate, async (req, res) => {
       encryptionMode: normalizedMode,
       content,
       fileMeta: fileMeta || null,
-      createdAt: new Date().toISOString()
+      createdAt: now.toISOString(),
+      time: `${now.getFullYear()}:${String(now.getMonth() + 1).padStart(2, '0')}`
     };
 
     const key = `assistant_msgs:${req.username}`;

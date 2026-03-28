@@ -355,22 +355,6 @@ const initDB = async () => {
     )
   `);
 
-  // 群组消息表
-  await pool.execute(`
-    CREATE TABLE IF NOT EXISTS group_messages (
-      id INT AUTO_INCREMENT PRIMARY KEY,
-      group_id VARCHAR(16) NOT NULL,
-      username VARCHAR(50) NOT NULL,
-      content TEXT NOT NULL,
-      random_id VARCHAR(50),
-      send_id VARCHAR(50),
-      pinned BOOLEAN DEFAULT FALSE,
-      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-      FOREIGN KEY (group_id) REFERENCES \`groups\`(group_id),
-      FOREIGN KEY (username) REFERENCES users(username)
-    ) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci
-  `);
-
   // 消息踩表（用于社会主义群组的消息管理）
   await pool.execute(`
     CREATE TABLE IF NOT EXISTS group_message_downvotes (
@@ -449,8 +433,6 @@ const performAccountDeletion = async (username) => {
 
     // 删除群组成员
     await pool.execute('DELETE FROM group_members WHERE group_id = ?', [groupId]);
-    // 删除群组消息
-    await pool.execute('DELETE FROM group_messages WHERE group_id = ?', [groupId]);
     // 删除消息踩记录
     await pool.execute('DELETE FROM group_message_downvotes WHERE group_id = ?', [groupId]);
     // 删除投票记录 (先删记录，再删投票本身)
@@ -476,10 +458,6 @@ const performAccountDeletion = async (username) => {
 
   // B. 删除作为成员的记录 (在非拥有的群组)
   await pool.execute('DELETE FROM group_members WHERE username = ?', [username]);
-
-  // C. 删除用户发送的群组消息 (在非拥有的群组)
-  // 注意：这可能有些激进，但这是"彻底销毁"。
-  await pool.execute('DELETE FROM group_messages WHERE username = ?', [username]);
 
   // D. 删除用户的投票和踩
   await pool.execute('DELETE FROM group_message_downvotes WHERE username = ?', [username]);
@@ -3006,24 +2984,6 @@ async function getGroupMemberCount(groupId) {
 
 
 
-// 确保 group_messages 表存在 (helper function)
-async function ensureGroupMessagesTable() {
-  await pool.execute(`
-      CREATE TABLE IF NOT EXISTS group_messages (
-        id INT AUTO_INCREMENT PRIMARY KEY,
-        group_id VARCHAR(16) NOT NULL,
-        username VARCHAR(50) NOT NULL,
-        content TEXT NOT NULL,
-        random_id VARCHAR(50),
-        send_id VARCHAR(50),
-        pinned BOOLEAN DEFAULT FALSE,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (group_id) REFERENCES \`groups\`(group_id),
-        FOREIGN KEY (username) REFERENCES users(username)
-      ) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci
-    `);
-}
-
 // 检查并处理投票结果
 async function checkAndProcessVoteResult(voteId) {
   const [voteRows] = await pool.execute('SELECT * FROM group_votes WHERE id = ?', [voteId]);
@@ -3559,9 +3519,6 @@ app.get('/api/groups/:groupId/votes', authenticate, async (req, res) => {
     );
 
     const memberCount = await getGroupMemberCount(groupId);
-
-    // 确保 group_messages 表存在
-    await ensureGroupMessagesTable();
 
     res.json({
       votes: votes.map(v => {

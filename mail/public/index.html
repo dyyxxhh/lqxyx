@@ -2792,24 +2792,20 @@
         const res = await fetch('/api/assistant/messages', { credentials: 'include' });
         const data = await res.json();
         const messages = data.messages || [];
-        const currentSignature = messages.map(msg => `${msg.id}:${msg.createdAt}:${msg.messageType}:${msg.encryptionMode}:${msg.rawContent || ''}:${JSON.stringify(msg.fileMeta || null)}`).join('|');
-        if (currentSignature === lastAssistantMessageSignature) {
-          return;
-        }
-        lastAssistantMessageSignature = currentSignature;
-
         if (!messages.length) {
           list.innerHTML = `<div class="empty-state"><h3>暂无内容</h3><p>你可以把它当成给自己发文字和传文件的聊天窗口</p></div>`;
           return;
         }
 
         const rendered = await Promise.all(messages.map(async (msg) => {
+          const modeText = msg.encryptionMode === 'self' ? '用自己的公钥加密' : '明文';
           const timeText = new Date(msg.createdAt).toLocaleString('zh-CN');
           let contentHtml = escapeHtml(msg.rawContent || msg.content || '');
           if (msg.messageType === 'file' && msg.fileMeta) {
             const meta = typeof msg.fileMeta === 'string' ? JSON.parse(msg.fileMeta) : msg.fileMeta;
             const fileLabel = meta.name || '未命名文件';
-            contentHtml = `📎 文件：${escapeHtml(fileLabel)}（${escapeHtml(String(meta.size || 0))} 字节，已加密传输）`;
+            const encryptedTag = msg.encryptionMode === 'self' ? '，已加密传输' : '';
+            contentHtml = `📎 文件：${escapeHtml(fileLabel)}（${escapeHtml(String(meta.size || 0))} 字节${encryptedTag}）`;
           } else if (msg.encryptionMode === 'self' && msg.rawContent && msg.rawContent.includes('BEGIN PGP MESSAGE')) {
             const cacheKey = `assistant-${msg.id}`;
             if (decryptedCache[cacheKey]) {
@@ -2831,6 +2827,7 @@
                 <div class="message-time">${timeText}</div>
               </div>
               <div class="message-content">${contentHtml}</div>
+              <div class="message-id">模式：${modeText}</div>
             </div>
           `;
         }));
@@ -2890,7 +2887,6 @@
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || '发送失败');
         input.value = '';
-        lastAssistantMessageSignature = '';
         resetVerification('assistant_send');
         await loadAssistantMessages();
       } catch (err) {
@@ -2956,7 +2952,7 @@
           messageType: 'file',
           fileMeta: { name: assistantOutgoingTransfer.name, size: assistantOutgoingTransfer.size, encryptedSize: assistantOutgoingTransfer.encryptedSize, mimeType: assistantOutgoingTransfer.mimeType }
         })
-      }).then(() => { lastAssistantMessageSignature = ''; return loadAssistantMessages(); }).finally(() => hideAssistantTransferProgress());
+      }).then(() => loadAssistantMessages()).finally(() => hideAssistantTransferProgress());
       assistantOutgoingTransfer = null;
       assistantSelectedFile = null;
       if (assistantRetryTimer) clearTimeout(assistantRetryTimer);
@@ -3115,7 +3111,6 @@
             });
             assistantIncomingFile = null;
             assistantChunkHeader = null;
-            lastAssistantMessageSignature = '';
             await loadAssistantMessages();
             hideAssistantTransferProgress();
           }
@@ -3293,7 +3288,6 @@
     const decryptedCache = {};
     let localBurnedMessages = [];
     let lastMessageSignature = '';
-    let lastAssistantMessageSignature = '';
 
     // 渲染单条消息内容的辅助函数
     function renderMessageInnerHtml(msg) {

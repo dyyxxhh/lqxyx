@@ -1004,21 +1004,56 @@ app.delete('/api/messages/:id', authenticate, async (req, res) => {
       return res.status(403).json({ error: '无权限' });
     }
 
-    // 获取消息内容，以便后续做 Last Man Standing 清理
+    // 获取消息内容以检查收件人列表
     const msgStr = await redisClient.get(msgId);
+    // console.log(`[DELETE DEBUG] Deleting ${msgId}, Content found: ${!!msgStr}`);
 
-    // 无论单发、群发、置顶与否，当前用户删除收件箱消息时都应删除自己的副本
-    // 这里每个收件人本来就是独立 key，更新 allRecipients 并不能让该用户的消息消失
-    await redisClient.del(msgId);
+    if (msgStr) {
+      const msg = JSON.parse(msgStr);
+      // console.log(`[DELETE DEBUG] Message isBurnAfterReading: ${msg.isBurnAfterReading}, Pinned: ${msg.pinned}`);
 
-    // BAR / 最后一份副本清理：如果这条消息已经没有任何收件箱副本，则顺带清理发件箱记录
+      // 如果是置顶消息，用户只能从自己的收件箱删除，不影响其他收件人
+      if (msg.pinned) {
+        // 置顶消息：直接删除用户自己的副本
+        await redisClient.del(msgId);
+      } else {
+        // 普通消息：检查是否有多个收件人
+        if (msg.allRecipients && msg.allRecipients.length > 1) {
+          // 从收件人列表中移除当前用户
+          const updatedRecipients = msg.allRecipients.filter(r => r !== req.username);
+
+          if (updatedRecipients.length > 0) {
+            // 还有其他收件人，更新消息
+            msg.allRecipients = updatedRecipients;
+            await redisClient.set(msgId, JSON.stringify(msg));
+            // console.log(`[DELETE DEBUG] Updated recipients, kept message.`);
+          } else {
+            // 所有收件人都删除了，彻底删除消息
+            await redisClient.del(msgId);
+            // console.log(`[DELETE DEBUG] No recipients left, deleted message.`);
+          }
+        } else {
+          // 单个收件人，直接删除
+          await redisClient.del(msgId);
+          // console.log(`[DELETE DEBUG] Single recipient, deleted message.`);
+        }
+      }
+    } else {
+      // 消息不存在，直接删除key
+      await redisClient.del(msgId);
+      // console.log(`[DELETE DEBUG] Message content missing, deleted key.`);
+    }
+
+    // BAR: Last Man Standing Check
     try {
       const parts = msgId.split(':');
       // msg:username:time:randomId:suffix
       if (parts.length >= 4) {
         const randomId = parts[3];
+        // Check if any copies found
         const remaining = await scanKeys(`msg:*:*:${randomId}:*`);
         if (remaining.length === 0) {
+          // No copies left. Delete sender's copy (sent:...)
           const senderSentKeys = await scanKeys(`sent:*:*:${randomId}`);
           for (const key of senderSentKeys) {
             await redisClient.del(key);
@@ -1029,7 +1064,7 @@ app.delete('/api/messages/:id', authenticate, async (req, res) => {
       console.error('BAR Check Error:', e);
     }
 
-    res.json({ success: true, existed: !!msgStr });
+    res.json({ success: true });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: '服务器错误' });

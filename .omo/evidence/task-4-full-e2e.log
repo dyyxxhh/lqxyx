@@ -1,0 +1,15 @@
+
+> ying-zhong-jiu-game@0.1.0 e2e
+> playwright test
+
+
+Running 6 tests using 4 workers
+
+  ✓  4 [desktop-chromium] › tests/e2e/preload.spec.ts:33:1 › shows a visible preload failure state when a required asset fails (3.2s)
+  ✓  1 [desktop-chromium] › tests/e2e/smoke.spec.ts:3:1 › boots through Boot, Preload, and Game scenes (6.3s)
+  ✓  2 [desktop-chromium] › tests/e2e/preload.spec.ts:4:1 › preloads required first-act assets before entering GameScene (6.5s)
+  ✓  3 [mobile-landscape-chromium] › tests/e2e/preload.spec.ts:4:1 › preloads required first-act assets before entering GameScene (7.5s)
+  ✓  5 [mobile-landscape-chromium] › tests/e2e/preload.spec.ts:33:1 › shows a visible preload failure state when a required asset fails (1.8s)
+  ✓  6 [mobile-landscape-chromium] › tests/e2e/smoke.spec.ts:3:1 › boots through Boot, Preload, and Game scenes (3.1s)
+
+  6 passed (15.5s)

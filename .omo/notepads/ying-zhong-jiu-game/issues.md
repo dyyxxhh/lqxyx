@@ -17,3 +17,12 @@
 
 ## 2026-06-06 Task 3: verification update
 - Resolved during Task 3: T1 infrastructure became available before handoff, so pending story/act-boundary verification was rerun and passed. Evidence logs were updated in `.omo/evidence/task-3-story-manifest-test.log` and `.omo/evidence/task-3-act-boundary-test.log`.
+
+## 2026-06-06 Task 5: map schema
+- `rg` is unavailable in this environment, so forbidden-folder and 5F interaction source checks used scoped Python literal scans over `src/data/maps.ts` and `src/tests/*map*` / `src/tests/room-render-boundaries.test.ts` instead of shell `rg`; no forbidden directory was read or touched.
+- Full `npm run test:run` currently has an unrelated scaffold failure in `src/tests/sanity.test.ts`: `createInitialSceneDebugState()` returns an extra `preload: null` key compared with the old expected object. Targeted Task 5 tests pass.
+
+
+## 2026-06-06 Task 4: preload and static assets
+- `rg` is unavailable in this environment, so forbidden-folder verification used an explicit Python scan over `src/`, `public/`, `tests/`, and `dist/` while avoiding any traversal of forbidden source directories.
+- Vite build reports the existing Phaser bundle as larger than 500 kB after minification; build exits 0 and this task did not introduce code splitting.

@@ -29,3 +29,17 @@
 ## 2026-06-06 Task 3: verification update
 - After T1 infra landed, story tests were placed under `src/tests/story-manifest.test.ts` and `src/tests/act-boundary.test.ts` to match Vitest discovery.
 - `npm run test:run -- story-manifest`, `npm run test:run -- act-boundary`, full `npm run test:run`, and `npm run typecheck` pass for the current Task 3 surface.
+
+## 2026-06-06 Task 5: map schema
+- Created `src/data/maps.ts` as a typed school map manifest for 4F/5F corridor, room areas, doors, spawn points, walkable bounds, collision placeholders, occlusion placeholders, and render-context separation metadata.
+- 4F left-side corridor doors are encoded top-to-bottom as: GT2前门, GT2后门, GT1前门, GT1后门, 高一一班前门, 高一一班后门, 高一二班前门, 高一二班后门.
+- 5F left-side four class doors are visible `backgroundDoor` entries with `interaction.type: "none"`, no `roomId`, and no `storyTargetId`; they must remain non-interactive for T11/T13.
+- Door render metadata uses approved programmatic `doors.wallWoodBars` with wood material and horizontal-bar shape; no standalone door asset dependency was added.
+- Corridor render contexts include `corridorOnly` and `sharedDoorSurface` scopes while excluding `roomOnly`; room render contexts include only `roomOnly`, preserving corridor/room render separation for T11.
+
+
+## 2026-06-06 Task 4: preload and static assets
+- `src/data/assetUrls.ts` maps each `assetManifest` final asset from `最终素材/` to Vite public URLs under `/assets/final/`; Phaser must preload those public URLs, never source paths.
+- The 53 explicit manifest files were copied to `public/assets/final/` preserving nested names for `立绘/` and `角色动作/`; copy evidence is `.omo/evidence/task-4-asset-copy.log`.
+- `window.__YING_ZHONG_JIU_SCENE_STATE__.preload` now exposes deterministic preload status, progress, queued keys, failed asset details, and `canEnterGame` for Vitest/Playwright inspection.
+- Playwright success/failure smoke captures `.omo/evidence/task-4-preload-success.png` and `.omo/evidence/task-4-preload-failure.png`; manual browser QA additionally captured `task-4-manual-success.png` and `task-4-manual-failure.png`.

@@ -13,7 +13,8 @@ describe('Phaser app scaffold', () => {
       currentScene: null,
       booted: false,
       preloaded: false,
-      gameReady: false
+      gameReady: false,
+      preload: null
     });
   });
 

@@ -264,7 +264,7 @@ Wave 5: T19 first-act content completion pass, T20 final blocker/asset handoff a
 
   **Commit**: YES | Message: `feat(story): add first act manifest` | Files: [src/data/story*, tests]
 
-- [ ] 4. Implement preloader and static asset copy pipeline
+- [x] 4. Implement preloader and static asset copy pipeline
 
   **What to do**: Copy allowed production assets from `最终素材/` into the app public/static asset directory using explicit file list from manifest. Implement `PreloadScene` to load all required first-act assets before play starts, show loading progress, and fail visibly if required assets are missing. Keep missing supplement items as blockers, not loaded fake art.
   **Must NOT do**: Do not glob copy `其他/`; do not lazy-load first-act required assets during play; do not hide failed loads.
@@ -303,7 +303,7 @@ Wave 5: T19 first-act content completion pass, T20 final blocker/asset handoff a
 
   **Commit**: YES | Message: `feat(assets): preload first act resources` | Files: [public assets, src/scenes/PreloadScene*, tests]
 
-- [ ] 5. Define near-1:1 map schema for corridor, rooms, doors, floors, collision, and spawn points
+- [x] 5. Define near-1:1 map schema for corridor, rooms, doors, floors, collision, and spawn points
 
   **What to do**: Create typed map data for 4F/5F corridor and separate room scenes/areas. Encode user-specified left-side eight doors in order for 4F class/room routing; encode 5F left-side four class doors as visible non-interactive background doors with no entry/no story; encode right-side elevator, 4F office front/back, and 5F communication-control back door only. Map must support near-1:1 design layout, door coordinates, spawn points, walkable bounds, collision zones, occlusion zones, and room/floor identifiers. Treat `设计/楼道.jpg` as authoritative visual relation reference where precise dimensions are unavailable.
   **Must NOT do**: Do not render classrooms while corridor is active; do not keep 5F office front door; do not add interaction/entry/story to 5F left-side class doors; do not invent extra doors.

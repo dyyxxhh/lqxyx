@@ -1,3 +1,5 @@
+import type { PreloadDebugState } from '../scenes/preloadState';
+
 export const GAME_WIDTH = 1280;
 export const GAME_HEIGHT = 720;
 export const GAME_SCENES = ['BootScene', 'PreloadScene', 'GameScene'] as const;
@@ -10,6 +12,7 @@ export interface SceneDebugState {
   booted: boolean;
   preloaded: boolean;
   gameReady: boolean;
+  preload: PreloadDebugState | null;
 }
 
 declare global {
@@ -24,7 +27,8 @@ export function createInitialSceneDebugState(): SceneDebugState {
     currentScene: null,
     booted: false,
     preloaded: false,
-    gameReady: false
+    gameReady: false,
+    preload: null,
   };
 }
 
@@ -49,5 +53,11 @@ export function markSceneStarted(sceneName: GameSceneName): SceneDebugState {
   state.preloaded ||= sceneName === 'PreloadScene';
   state.gameReady ||= sceneName === 'GameScene';
 
+  return state;
+}
+
+export function setPreloadDebugState(preload: PreloadDebugState): SceneDebugState {
+  const state = getSceneDebugState();
+  state.preload = preload;
   return state;
 }

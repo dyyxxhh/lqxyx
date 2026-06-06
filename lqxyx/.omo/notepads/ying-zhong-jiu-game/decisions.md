@@ -20,3 +20,9 @@
 ## 2026-06-06 Task 6: post-review decisions
 - Treat preload `failed` as terminal at the pure state-helper level rather than only inside `PreloadScene.create()`, because loader event order can otherwise mask failures.
 - Preserve unique `sceneOrder` for readable order assertions and add `sceneCounts` for exact-once assertions instead of changing `sceneOrder` to include duplicates.
+
+
+## 2026-06-06 Task 9: checkpoint save/load decisions
+- Use a single localStorage-backed save slot for Task 9; multiple slots and migration chains remain out of scope.
+- Version mismatch is treated as invalid and reset to default state instead of migrated because no previous shipped schema exists yet.
+- Keep save integration debug-only in `scaffoldState.ts`; no Continue button or first-act gameplay restoration UI was added.

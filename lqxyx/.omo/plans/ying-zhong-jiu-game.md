@@ -465,7 +465,7 @@ Wave 5: T19 first-act content completion pass, T20 final blocker/asset handoff a
 
   **Commit**: YES | Message: `feat(ui): add narrative overlays` | Files: [src/ui*, src/scenes*, tests]
 
-- [ ] 9. Implement checkpoint save/load state manager
+- [x] 9. Implement checkpoint save/load state manager
 
   **What to do**: Implement localStorage-backed `StateManager` with schema version, safe defaults, corruption handling, checkpoint id, act id, floor, room, position, current controllable character, task, story flags, branch choices, timers, inventory/pickups if required, and triggered-event set. Save on checkpoint entry and scripted save points; load from main/start flow.
   **Must NOT do**: Do not add cloud save; do not add multiple save slots unless required by first-act script.

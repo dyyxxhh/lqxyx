@@ -1,0 +1,13 @@
+
+> ying-zhong-jiu-game@0.1.0 test:run
+> vitest run save-state
+
+
+ RUN  v4.1.8 /mnt/Storage1_xe6x96xb0xe5x8axa0xe5x8dxb7/nas/lucky/lqxyx
+
+
+ Test Files  1 passed (1)
+      Tests  7 passed (7)
+   Start at  18:53:47
+   Duration  1.99s (transform 72ms, setup 0ms, import 100ms, tests 17ms, environment 1.60s)
+

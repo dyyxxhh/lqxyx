@@ -35,3 +35,8 @@
 ## 2026-06-06 Task 6: post-review resolved issues
 - Resolved reviewer finding: real loader failure state is terminal and covered by `src/tests/preload.test.ts` regression `keeps failure terminal when later loader progress events arrive`.
 - Resolved reviewer finding: exact-once scene start evidence now uses `sceneCounts` in runtime and e2e tests.
+
+
+## 2026-06-06 Task 9: checkpoint save/load issues
+- Vite build still reports the known Phaser bundle-size warning over 500 kB; build exits 0 and Task 9 did not change chunking.
+- Review-work skill was loaded because Task 9 touched more than three files, but this harness exposes no compatible reviewer-spawn tools from that skill; verification was completed with local tests, typecheck, build, LSP, and Playwright evidence.

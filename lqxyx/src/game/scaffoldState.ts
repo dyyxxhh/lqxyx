@@ -1,3 +1,4 @@
+import { createDefaultSaveState, createSaveDebugState, loadSaveState, type SaveDebugState } from '../state/saveState';
 import type { PreloadDebugState } from '../scenes/preloadState';
 
 export const GAME_WIDTH = 1280;
@@ -8,7 +9,8 @@ export type GameSceneName = (typeof GAME_SCENES)[number];
 
 export interface SceneMenuDebugState {
   readonly visible: boolean;
-  readonly selectedAction: 'new-game' | null;
+  readonly selectedAction: 'new-game' | 'continue' | null;
+  readonly hasContinue: boolean;
 }
 
 export interface SceneCanvasDebugState {
@@ -41,6 +43,7 @@ export interface SceneDebugState {
   canvas: SceneCanvasDebugState | null;
   sizing: SceneSizingDebugState;
   preload: PreloadDebugState | null;
+  save: SaveDebugState;
 }
 
 declare global {
@@ -58,7 +61,7 @@ export function createInitialSceneDebugState(): SceneDebugState {
     gameReady: false,
     ready: false,
     sceneCounts: { BootScene: 0, PreloadScene: 0, GameScene: 0 },
-    menu: { visible: false, selectedAction: null },
+    menu: { visible: false, selectedAction: null, hasContinue: false },
     canvas: null,
     sizing: {
       mode: 'FIT',
@@ -68,6 +71,7 @@ export function createInitialSceneDebugState(): SceneDebugState {
       aspectRatio: GAME_WIDTH / GAME_HEIGHT,
     },
     preload: null,
+    save: createSaveDebugState({ status: 'empty', state: createDefaultSaveState() }),
   };
 }
 
@@ -117,7 +121,15 @@ export function markGameSceneReady(): SceneDebugState {
   const state = getSceneDebugState();
   state.gameReady = true;
   state.ready = true;
-  state.menu = { visible: true, selectedAction: 'new-game' };
+  const save = refreshSaveDebugState().save;
+  state.menu = { visible: true, selectedAction: 'new-game', hasContinue: save.hasValidSave };
+  return state;
+}
+
+export function refreshSaveDebugState(): SceneDebugState {
+  const state = getSceneDebugState();
+  state.save = createSaveDebugState(loadSaveState());
+  state.menu = { ...state.menu, hasContinue: state.save.hasValidSave };
   return state;
 }
 

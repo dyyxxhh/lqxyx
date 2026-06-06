@@ -14,3 +14,8 @@
 ## 2026-06-06 Task 6: runtime shell follow-up risks
 - Downstream tasks should treat the Task 6 `menu` debug state as shell readiness only; it is not a final UI manager or input contract.
 - Future UI/input work should preserve preload failure blocking: failed preload must leave `currentScene` as `PreloadScene` and keep `preload.canEnterGame` false.
+
+
+## 2026-06-06 Task 9: checkpoint save/load follow-up risks
+- Future event-engine tasks should reuse `SaveState` rather than introduce parallel runtime-save shapes, especially for branch choices, timer remaining time, and triggered event ids.
+- Continue-button implementation should read `SceneDebugState.menu.hasContinue` / `save.hasValidSave`; Task 9 intentionally did not add visible Continue UI.

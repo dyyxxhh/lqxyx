@@ -28,7 +28,7 @@ describe('runtime scene shell', () => {
     expect(state.preloaded).toBe(true);
     expect(state.gameReady).toBe(true);
     expect(state.ready).toBe(true);
-    expect(state.menu).toEqual({ visible: true, selectedAction: 'new-game' });
+    expect(state.menu).toEqual({ visible: true, selectedAction: 'new-game', hasContinue: false });
   });
 
   it('exposes deterministic sizing and canvas debug info for desktop and mobile landscape checks', () => {
@@ -71,7 +71,7 @@ describe('runtime scene shell', () => {
       gameReady: false,
       ready: false,
       sceneCounts: { BootScene: 0, PreloadScene: 0, GameScene: 0 },
-      menu: { visible: false, selectedAction: null },
+      menu: { visible: false, selectedAction: null, hasContinue: false },
       canvas: null,
     });
   });

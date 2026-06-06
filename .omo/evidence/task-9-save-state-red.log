@@ -1,0 +1,36 @@
+
+> ying-zhong-jiu-game@0.1.0 test:run
+> vitest run save-state
+
+
+ RUN  v4.1.8 /mnt/Storage1_xe6x96xb0xe5x8axa0xe5x8dxb7/nas/lucky/lqxyx
+
+ ❯ src/tests/save-state.test.ts (0 test)
+
+⎯⎯⎯⎯⎯⎯ Failed Suites 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/tests/save-state.test.ts [ src/tests/save-state.test.ts ]
+Error: Failed to resolve import "../state/saveState" from "src/tests/save-state.test.ts". Does the file exist?
+  Plugin: vite:import-analysis
+  File: /mnt/Storage1_xe6x96xb0xe5x8axa0xe5x8dxb7/nas/lucky/lqxyx/src/tests/save-state.test.ts:14:7
+  1  |  import { beforeEach, describe, expect, it } from "vitest";
+  2  |  ...e, loadSaveState, saveSaveState, serializeSaveState } from "../state/saveState";
+     |                                                                 ^
+  3  |  function createCheckpointState() {
+  4  |  	return {
+ ❯ TransformPluginContext._formatLog node_modules/vite/dist/node/chunks/node.js:30602:39
+ ❯ TransformPluginContext.error node_modules/vite/dist/node/chunks/node.js:30599:14
+ ❯ normalizeUrl node_modules/vite/dist/node/chunks/node.js:27842:18
+ ❯ node_modules/vite/dist/node/chunks/node.js:27905:30
+ ❯ TransformPluginContext.transform node_modules/vite/dist/node/chunks/node.js:27873:4
+ ❯ EnvironmentPluginContainer.transform node_modules/vite/dist/node/chunks/node.js:30387:14
+ ❯ loadAndTransform node_modules/vite/dist/node/chunks/node.js:24646:26
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  no tests
+   Start at  18:49:42
+   Duration  2.12s (transform 0ms, setup 0ms, import 0ms, tests 0ms, environment 1.68s)
+

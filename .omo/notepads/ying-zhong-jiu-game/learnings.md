@@ -53,3 +53,11 @@
 ## 2026-06-06 Task 6: post-review fixes
 - Review found that real Phaser loader failures could be overwritten by later progress/completion events; `markPreloadProgress()` and `markPreloadComplete()` now keep `failed` terminal so GameScene remains blocked.
 - Scene debug state now includes `sceneCounts` so e2e can prove BootScene, PreloadScene, and GameScene each started exactly once while keeping `sceneOrder` as first-seen order.
+
+
+## 2026-06-06 Task 9: checkpoint save/load state
+- Added `src/state/saveState.ts` as the deterministic localStorage checkpoint-save manager with storage key `ying-zhong-jiu.checkpoint-save.v1` and schema version `1`.
+- Save state preserves checkpoint id, act id, floor, room, position/facing, controllable character, task text, story flags, branch choices, timers, inventory, pickups, and triggered event ids.
+- Invalid saves return safe checkpoint A defaults and corrupted/mismatched/malformed localStorage entries are cleared instead of crashing.
+- Runtime shell debug state now includes `save` and `menu.hasContinue` so future Continue-button work can detect valid saves without implementing the UI yet.
+- Browser corrupt-save evidence uses Playwright `page.addInitScript` to seed invalid JSON before boot, then verifies `GameScene` readiness, `save.invalidReason = corrupt-json`, and cleared localStorage.

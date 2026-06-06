@@ -16,7 +16,7 @@ describe('Phaser app scaffold', () => {
       gameReady: false,
       ready: false,
       sceneCounts: { BootScene: 0, PreloadScene: 0, GameScene: 0 },
-      menu: { visible: false, selectedAction: null },
+      menu: { visible: false, selectedAction: null, hasContinue: false },
       canvas: null,
       sizing: {
         mode: 'FIT',
@@ -25,7 +25,16 @@ describe('Phaser app scaffold', () => {
         gameHeight: 720,
         aspectRatio: 1280 / 720
       },
-      preload: null
+      preload: null,
+      save: {
+        storageKey: 'ying-zhong-jiu.checkpoint-save.v1',
+        schemaVersion: 1,
+        status: 'empty',
+        hasValidSave: false,
+        invalidReason: null,
+        checkpointId: 'A',
+        actId: 'act-1'
+      }
     });
   });
 

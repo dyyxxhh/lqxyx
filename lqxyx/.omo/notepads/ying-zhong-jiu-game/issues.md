@@ -26,3 +26,12 @@
 ## 2026-06-06 Task 4: preload and static assets
 - `rg` is unavailable in this environment, so forbidden-folder verification used an explicit Python scan over `src/`, `public/`, `tests/`, and `dist/` while avoiding any traversal of forbidden source directories.
 - Vite build reports the existing Phaser bundle as larger than 500 kB after minification; build exits 0 and this task did not introduce code splitting.
+
+## 2026-06-06 Task 6: runtime shell issues
+- First mobile landscape e2e run failed because the canvas displayed at intrinsic 1280x720 and overflowed a 915x577 mobile viewport; fixed by constraining root/canvas CSS while retaining Phaser `FIT`/`CENTER_BOTH` config.
+- Scoped forbidden-reference scan over `src/` and `tests/` still reports the existing `src/data/assets.test.ts` forbidden-root rejection assertion; production `src/` files added or changed for Task 6 do not reference the forbidden source directory.
+- Vite build still reports the known Phaser bundle-size warning and exits 0; Task 6 did not change build chunking.
+
+## 2026-06-06 Task 6: post-review resolved issues
+- Resolved reviewer finding: real loader failure state is terminal and covered by `src/tests/preload.test.ts` regression `keeps failure terminal when later loader progress events arrive`.
+- Resolved reviewer finding: exact-once scene start evidence now uses `sceneCounts` in runtime and e2e tests.

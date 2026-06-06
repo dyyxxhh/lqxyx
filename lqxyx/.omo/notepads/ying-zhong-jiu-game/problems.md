@@ -10,3 +10,7 @@
 
 ## 2026-06-06 Task 5: map schema ambiguities
 - Exact pixel coordinates for the near-1:1 corridor remain placeholders because Task 5 is schema/tests only; T11 should visually tune coordinates against `设计/楼道.jpg` while preserving the tested door identities, order, and non-interaction guardrails.
+
+## 2026-06-06 Task 6: runtime shell follow-up risks
+- Downstream tasks should treat the Task 6 `menu` debug state as shell readiness only; it is not a final UI manager or input contract.
+- Future UI/input work should preserve preload failure blocking: failed preload must leave `currentScene` as `PreloadScene` and keep `preload.canEnterGame` false.

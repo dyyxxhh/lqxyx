@@ -11,3 +11,12 @@
 - Coordinates are near-1:1 typed placeholders in design-pixel units; T11 should tune exact Phaser drawing/collision against the corridor design image without changing the door identity/order contract.
 - 5F right side deliberately has only the communication-control back door plus elevator; no 5F office front door exists in the schema.
 - Room IDs chosen for downstream consumers: `gt2-classroom`, `gt1-classroom`, `class-1-1`, `class-1-2`, `office-4f`, and `communication-control-5f`.
+
+## 2026-06-06 Task 6: runtime shell decisions
+- Keep `scene: [BootScene, PreloadScene, GameScene]` with Boot as the only auto-started Phaser scene; Preload and Game are entered only through scene transitions.
+- Use deterministic debug state, not DOM text queries, as the test contract for Phaser-rendered menu/start-shell state.
+- Keep fixed 1280x720 game coordinates and use Phaser `FIT`/`CENTER_BOTH` plus viewport CSS constraints for desktop/mobile landscape scaling.
+
+## 2026-06-06 Task 6: post-review decisions
+- Treat preload `failed` as terminal at the pure state-helper level rather than only inside `PreloadScene.create()`, because loader event order can otherwise mask failures.
+- Preserve unique `sceneOrder` for readable order assertions and add `sceneCounts` for exact-once assertions instead of changing `sceneOrder` to include duplicates.

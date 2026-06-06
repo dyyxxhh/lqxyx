@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 
 import { getStaticAssetEntries } from '../data/assetUrls';
-import { GAME_HEIGHT, GAME_WIDTH, markSceneStarted, setPreloadDebugState } from '../game/scaffoldState';
+import { GAME_HEIGHT, GAME_WIDTH, markPreloadReady, markSceneStarted, refreshCanvasDebugState, setPreloadDebugState } from '../game/scaffoldState';
 import {
   createInitialPreloadDebugState,
   markPreloadComplete,
@@ -22,6 +22,7 @@ export class PreloadScene extends Phaser.Scene {
 
   public preload(): void {
     markSceneStarted('PreloadScene');
+    refreshCanvasDebugState();
 
     const entries = getStaticAssetEntries();
     this.preloadState = createInitialPreloadDebugState(entries);
@@ -67,6 +68,7 @@ export class PreloadScene extends Phaser.Scene {
     }
 
     this.setPreloadState(markPreloadComplete(state));
+    markPreloadReady();
     this.renderProgress();
     this.scene.start('GameScene');
   }

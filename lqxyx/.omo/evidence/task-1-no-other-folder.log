@@ -1,0 +1,4 @@
+Task 1 forbidden literal check
+
+$ python3 literal scan generated task-1 files
+No literal matches found in generated task-1 app/config/test scaffold files.

@@ -1,0 +1,13 @@
+
+> ying-zhong-jiu-game@0.1.0 test:run
+> vitest run story-manifest
+
+
+ RUN  v4.1.8 /mnt/Storage1_xe6x96xb0xe5x8axa0xe5x8dxb7/nas/lucky/lqxyx
+
+
+ Test Files  1 passed (1)
+      Tests  5 passed (5)
+   Start at  17:21:14
+   Duration  2.33s (transform 121ms, setup 0ms, import 152ms, tests 14ms, environment 1.85s)
+

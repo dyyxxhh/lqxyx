@@ -1,0 +1,28 @@
+{
+  "name": "ying-zhong-jiu-game",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 0.0.0.0",
+    "typecheck": "tsc --noEmit",
+    "test:run": "vitest run",
+    "build": "tsc --noEmit && vite build",
+    "e2e": "playwright test",
+    "serve:prod": "npm run build && serve dist --single --listen 8949"
+  },
+  "dependencies": {
+    "phaser": "latest"
+  },
+  "devDependencies": {
+    "@playwright/test": "latest",
+    "jsdom": "latest",
+    "serve": "latest",
+    "typescript": "latest",
+    "vite": "latest",
+    "vitest": "latest"
+  },
+  "engines": {
+    "node": ">=22.12.0"
+  }
+}

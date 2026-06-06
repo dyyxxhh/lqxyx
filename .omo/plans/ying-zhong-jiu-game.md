@@ -345,7 +345,7 @@ Wave 5: T19 first-act content completion pass, T20 final blocker/asset handoff a
 
   **Commit**: YES | Message: `feat(map): define school floor schema` | Files: [src/data/maps*, tests]
 
-- [ ] 6. Implement Phaser Boot/Game scene runtime shell
+- [x] 6. Implement Phaser Boot/Game scene runtime shell
 
   **What to do**: Implement `BootScene`, `PreloadScene`, and `GameScene` wiring. Configure Phaser scale mode for responsive fit/center, pixel-art-friendly rendering, deterministic update loop boundaries, and scene transitions from boot to preload to game. Provide a visible minimal start/new game flow after preload.
   **Must NOT do**: Do not implement full first-act events yet; do not add React; do not add unrelated menus/settings.

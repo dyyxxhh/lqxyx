@@ -67,4 +67,14 @@ describe('preload debug state', () => {
     expect(failed.errorMessage).toContain('floor.tile');
     expect(failed.canEnterGame).toBe(false);
   });
+
+  it('keeps failure terminal when later loader progress events arrive', () => {
+    const state = createInitialPreloadDebugState(getStaticAssetEntries());
+    const failed = markPreloadFailure(state, 'floor.tile', '/assets/final/missing-floor.png');
+    const afterProgress = markPreloadProgress(failed, 1);
+
+    expect(afterProgress.status).toBe('failed');
+    expect(afterProgress.failedAsset).toEqual({ key: 'floor.tile', url: '/assets/final/missing-floor.png' });
+    expect(afterProgress.canEnterGame).toBe(false);
+  });
 });

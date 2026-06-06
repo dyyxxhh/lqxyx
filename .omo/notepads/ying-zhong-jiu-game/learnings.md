@@ -43,3 +43,13 @@
 - The 53 explicit manifest files were copied to `public/assets/final/` preserving nested names for `立绘/` and `角色动作/`; copy evidence is `.omo/evidence/task-4-asset-copy.log`.
 - `window.__YING_ZHONG_JIU_SCENE_STATE__.preload` now exposes deterministic preload status, progress, queued keys, failed asset details, and `canEnterGame` for Vitest/Playwright inspection.
 - Playwright success/failure smoke captures `.omo/evidence/task-4-preload-success.png` and `.omo/evidence/task-4-preload-failure.png`; manual browser QA additionally captured `task-4-manual-success.png` and `task-4-manual-failure.png`.
+
+## 2026-06-06 Task 6: Phaser runtime shell
+- Runtime shell now exposes `ready`, `menu`, `canvas`, and `sizing` under `window.__YING_ZHONG_JIU_SCENE_STATE__` while preserving `preload` debug state and the BootScene -> PreloadScene -> GameScene order.
+- `GameScene` remains a minimal start/new-game shell only: visible title, start button text, and readiness hint; no first-act gameplay, input manager, story engine, or save/load was added.
+- Mobile landscape FIT behavior needed CSS viewport constraints on `#app`, `#game-root`, and `canvas`; Phaser `FIT`/`CENTER_BOTH` alone did not prevent intrinsic 1280x720 overflow in Playwright mobile landscape.
+- Evidence for Task 6 lives under `.omo/evidence/task-6-*`, including RED/GREEN runtime logs, scene-order JSON, mobile landscape screenshot, full Vitest/typecheck/build/e2e logs, and dev-server teardown.
+
+## 2026-06-06 Task 6: post-review fixes
+- Review found that real Phaser loader failures could be overwritten by later progress/completion events; `markPreloadProgress()` and `markPreloadComplete()` now keep `failed` terminal so GameScene remains blocked.
+- Scene debug state now includes `sceneCounts` so e2e can prove BootScene, PreloadScene, and GameScene each started exactly once while keeping `sceneOrder` as first-seen order.

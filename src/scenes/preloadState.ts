@@ -36,6 +36,10 @@ export function createInitialPreloadDebugState(entries: readonly StaticAssetEntr
 }
 
 export function markPreloadProgress(state: PreloadDebugState, progress: number): PreloadDebugState {
+  if (state.status === 'failed') {
+    return state;
+  }
+
   const clampedProgress = clampProgress(progress);
 
   return {
@@ -48,6 +52,10 @@ export function markPreloadProgress(state: PreloadDebugState, progress: number):
 }
 
 export function markPreloadComplete(state: PreloadDebugState): PreloadDebugState {
+  if (state.status === 'failed') {
+    return state;
+  }
+
   return {
     ...state,
     status: 'complete',

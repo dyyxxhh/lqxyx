@@ -1,0 +1,18 @@
+
+> ying-zhong-jiu-game@0.1.0 e2e
+> playwright test
+
+
+Running 8 tests using 4 workers
+
+  -  4 [desktop-chromium] › tests/e2e/smoke.spec.ts:35:1 › keeps a centered FIT canvas in mobile landscape
+  ✓  3 [desktop-chromium] › tests/e2e/preload.spec.ts:33:1 › shows a visible preload failure state when a required asset fails (3.1s)
+  ✓  1 [desktop-chromium] › tests/e2e/smoke.spec.ts:16:1 › boots through Boot, Preload, and Game scenes once and shows the start shell (5.4s)
+  ✓  2 [desktop-chromium] › tests/e2e/preload.spec.ts:4:1 › preloads required first-act assets before entering GameScene (5.9s)
+  ✓  6 [mobile-landscape-chromium] › tests/e2e/preload.spec.ts:33:1 › shows a visible preload failure state when a required asset fails (2.3s)
+  ✓  5 [mobile-landscape-chromium] › tests/e2e/preload.spec.ts:4:1 › preloads required first-act assets before entering GameScene (6.2s)
+  ✓  7 [mobile-landscape-chromium] › tests/e2e/smoke.spec.ts:16:1 › boots through Boot, Preload, and Game scenes once and shows the start shell (4.6s)
+  ✓  8 [mobile-landscape-chromium] › tests/e2e/smoke.spec.ts:35:1 › keeps a centered FIT canvas in mobile landscape (4.3s)
+
+  1 skipped
+  7 passed (14.5s)

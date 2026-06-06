@@ -14,6 +14,17 @@ describe('Phaser app scaffold', () => {
       booted: false,
       preloaded: false,
       gameReady: false,
+      ready: false,
+      sceneCounts: { BootScene: 0, PreloadScene: 0, GameScene: 0 },
+      menu: { visible: false, selectedAction: null },
+      canvas: null,
+      sizing: {
+        mode: 'FIT',
+        autoCenter: 'CENTER_BOTH',
+        gameWidth: 1280,
+        gameHeight: 720,
+        aspectRatio: 1280 / 720
+      },
       preload: null
     });
   });

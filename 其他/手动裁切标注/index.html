@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>手动确认动作名</title>
+<style>
+:root{color-scheme:dark;--bg:#101218;--panel:#1a1f2b;--line:#30384a;--text:#e8edf5;--muted:#9aa4b5;--accent:#58d6ff}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,Segoe UI,sans-serif}header{position:sticky;top:0;z-index:2;display:flex;gap:12px;align-items:center;flex-wrap:wrap;padding:12px 16px;border-bottom:1px solid var(--line);background:#121621}h1{font-size:18px;margin:0 12px 0 0}button,input,select{background:#0d1119;color:var(--text);border:1px solid var(--line);border-radius:8px;padding:7px 9px}button{cursor:pointer}button:hover{border-color:var(--accent)}button.primary{background:#12465a;border-color:#1b9ccb}.wrap{padding:14px}.group{margin-bottom:20px}.group h2{font-size:16px;margin:8px 0 10px;color:#cfe7ff}.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:12px}.card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:10px}.card img{width:100%;height:128px;object-fit:contain;background:repeating-conic-gradient(#2a3140 0% 25%,#1b2130 0% 50%) 50%/16px 16px;border-radius:8px;image-rendering:pixelated}.meta{font-size:12px;color:var(--muted);line-height:1.5;margin:6px 0}.card input,.card select{width:100%;margin-top:4px}.status{white-space:pre-wrap;font-size:13px;color:#b6c5d8}.small{font-size:12px;color:var(--muted)}
+</style>
+</head>
+<body>
+<header>
+  <h1>手动确认动作名</h1>
+  <button id="save" class="primary">保存所有已填动作</button>
+  <button id="regen">重新裁切</button>
+  <span class="small">保存格式：角色名-边框-动作名.png（无边框则省略边框）</span>
+  <span id="status" class="status"></span>
+</header>
+<div class="wrap" id="root">加载中…</div>
+<script>
+let items=[];
+let actions=[];
+const $=id=>document.getElementById(id);
+function groupKey(it){return it.color ? `${it.character}-${it.color}` : it.character;}
+async function load(){
+  const js=await (await fetch('/api/items')).json();
+  items=js.items;
+  actions=js.actions || [];
+  render();
+}
+function render(){
+  const root=$('root'); root.innerHTML='';
+  const groups={};
+  for(const it of items){ const k=groupKey(it); (groups[k] ||= []).push(it); }
+  for(const [name,arr] of Object.entries(groups)){
+    const sec=document.createElement('section'); sec.className='group';
+    sec.innerHTML=`<h2>${name}</h2><div class="grid"></div>`;
+    const grid=sec.querySelector('.grid');
+    for(const it of arr){
+      const div=document.createElement('div'); div.className='card';
+      div.innerHTML=`
+        <img src="${it.cropUrl}?t=${Date.now()}" alt="${it.id}">
+        <div class="meta">${it.source}<br>第 ${it.index} 张<br>x=${it.box.x} y=${it.box.y} w=${it.box.w} h=${it.box.h}</div>
+        <select data-id="${it.id}">
+          ${actions.map(a=>`<option value="${a}" ${a===it.suggestedAction?'selected':''}>${a}</option>`).join('')}
+        </select>
+      `;
+      grid.appendChild(div);
+    }
+    root.appendChild(sec);
+  }
+}
+$('save').onclick=async()=>{
+  const labels=Array.from(document.querySelectorAll('[data-id]')).map(inp=>({id:inp.dataset.id, action:inp.value.trim()}));
+  const js=await (await fetch('/api/save',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({labels})})).json();
+  $('status').textContent=js.ok ? `已保存 ${js.saved.length} 个：\n${js.saved.join('\n')}` : `保存失败：${js.error}`;
+};
+$('regen').onclick=async()=>{ $('status').textContent='重新裁切中…'; const js=await (await fetch('/api/regenerate')).json(); items=js.items; render(); $('status').textContent=`已重新裁切 ${items.length} 个`; };
+load();
+</script>
+</body>
+</html>

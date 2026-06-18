@@ -26,3 +26,11 @@
 - Use a single localStorage-backed save slot for Task 9; multiple slots and migration chains remain out of scope.
 - Version mismatch is treated as invalid and reset to default state instead of migrated because no previous shipped schema exists yet.
 - Keep save integration debug-only in `scaffoldState.ts`; no Continue button or first-act gameplay restoration UI was added.
+
+## 2026-06-06 Task 16: production deployment decisions
+- Keep deployment dependency-free with the built-in Node `http` server instead of adding Docker, Nginx, Vite preview, or another static serving package.
+- Default the production host/port to `127.0.0.1:8949`, while allowing simple `HOST`, `PORT`, or CLI port override for direct local smoke checks.
+
+## 2026-06-06 Task 14: supplement blocker gate decisions
+- Keep missing supplement blockers as explicit `BLOCKER_FOR_FINAL_ART` metadata, separate from final supplied assets and approved implementations.
+- Generate the Task 14 supplement report from manifest data through a small dependency-free Node TypeScript script so T20 can cite deterministic output.

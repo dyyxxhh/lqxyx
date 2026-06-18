@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>两点框选导出</title>
+<style>
+:root{color-scheme:dark;--bg:#101218;--panel:#1a1f2b;--line:#30384a;--text:#e8edf5;--muted:#9aa4b5;--accent:#58d6ff}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,Segoe UI,sans-serif}header{display:flex;gap:12px;align-items:center;flex-wrap:wrap;padding:12px 16px;border-bottom:1px solid var(--line);background:#121621}h1{font-size:18px;margin:0 10px 0 0}button,select,input{background:#0d1119;color:var(--text);border:1px solid var(--line);border-radius:8px;padding:7px 9px}button{cursor:pointer}button:hover{border-color:var(--accent)}button.primary{background:#12465a;border-color:#1b9ccb}main{display:grid;grid-template-columns:minmax(500px,1fr) 330px;gap:12px;padding:12px;height:calc(100vh - 58px)}.panel{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px;overflow:auto}.stageWrap{height:100%;display:flex;align-items:center;justify-content:center;overflow:auto;background:#090b10;border-radius:10px}canvas{image-rendering:pixelated;image-rendering:crisp-edges}#stage{max-width:100%;max-height:calc(100vh - 96px);width:auto;height:auto}.hint{font-size:13px;color:var(--muted);line-height:1.6}.status{white-space:pre-wrap;font-size:13px;color:#b6c5d8;background:#0d1018;border:1px solid var(--line);border-radius:8px;padding:8px}.preview{width:100%;background:repeating-conic-gradient(#2a3140 0% 25%,#1b2130 0% 50%) 50%/16px 16px;border-radius:8px}.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:8px 0}.big{font-size:15px}
+</style>
+</head>
+<body>
+<header>
+<h1>两点框选导出</h1>
+<label>素材</label><select id="imageSelect"></select>
+<label>动作</label><select id="actionSelect"></select>
+<button id="clearBtn">清空两点</button>
+<button id="saveBtn" class="primary">导出当前动作</button>
+<span class="hint">点两下图：第1点左上/任意角，第2点另一个角，自动成矩形。</span>
+</header>
+<main>
+<section class="panel"><div class="stageWrap"><canvas id="stage"></canvas></div></section>
+<section class="panel">
+<h3>当前框</h3>
+<div id="boxInfo" class="status">未选择</div>
+<h3>预览</h3>
+<canvas id="preview" class="preview" width="128" height="128"></canvas>
+<div class="row"><label>输出宽</label><input id="outW" type="number" value="128" style="width:80px"><label>高</label><input id="outH" type="number" value="128" style="width:80px"><label>脚底留空</label><input id="footPad" type="number" value="4" style="width:70px"></div>
+<div class="hint big">操作：<br>1. 选秦浩瑞/但宇轩。<br>2. 在大图上点两个点框住要裁的部分。<br>3. 下拉选动作。<br>4. 点“导出当前动作”。<br><br>保存格式：角色名-动作名.png</div>
+<h3>状态</h3>
+<div id="status" class="status">加载中…</div>
+</section>
+</main>
+<script>
+const $=id=>document.getElementById(id);
+const img=new Image();
+let images=[], actions=[], loaded=null, points=[];
+function setStatus(s){$('status').textContent=s;}
+async function init(){
+ const js=await (await fetch('/api/images')).json();
+ images=js.files; actions=js.actions;
+ $('imageSelect').innerHTML=images.map((f,i)=>`<option value="${i}">${f.name}</option>`).join('');
+ $('actionSelect').innerHTML=actions.map(a=>`<option value="${a}">${a}</option>`).join('');
+ $('imageSelect').onchange=()=>loadImage(images[+$('imageSelect').value]);
+ $('clearBtn').onclick=()=>{points=[];draw();};
+ $('saveBtn').onclick=saveCurrent;
+ $('outW').onchange=draw; $('outH').onchange=draw; $('footPad').onchange=draw;
+ if(images.length) loadImage(images[0]);
+}
+function loadImage(info){
+ loaded=info; points=[];
+ img.onload=()=>{draw();setStatus(`已加载 ${info.name}，原图 ${img.naturalWidth}×${img.naturalHeight}`);};
+ img.src=info.url+'?t='+Date.now();
+}
+function getBox(){
+ if(points.length<2) return null;
+ const x=Math.round(Math.min(points[0].x,points[1].x));
+ const y=Math.round(Math.min(points[0].y,points[1].y));
+ const w=Math.round(Math.abs(points[0].x-points[1].x));
+ const h=Math.round(Math.abs(points[0].y-points[1].y));
+ if(w<1||h<1) return null;
+ return {x,y,w,h};
+}
+function bodyAnchorX(crop){
+ const c=crop, ctx=c.getContext('2d'), data=ctx.getImageData(0,0,c.width,c.height).data;
+ const y1=Math.floor(c.height*.45), y2=Math.max(y1+1,Math.floor(c.height*.95));
+ const xs=[];
+ for(let y=y1;y<y2;y++) for(let x=0;x<c.width;x++){ const i=(y*c.width+x)*4; if(data[i+3]>8) xs.push(x); }
+ if(xs.length<20) return c.width/2;
+ xs.sort((a,b)=>a-b); return xs[Math.floor(xs.length/2)];
+}
+function rawCrop(box){
+ const c=document.createElement('canvas'), ctx=c.getContext('2d'); c.width=box.w; c.height=box.h; ctx.imageSmoothingEnabled=false; ctx.clearRect(0,0,c.width,c.height); ctx.drawImage(img,box.x,box.y,box.w,box.h,0,0,box.w,box.h); return c;
+}
+function renderOut(){
+ const box=getBox(); if(!box) return null;
+ const outW=Math.max(1,+$('outW').value||128), outH=Math.max(1,+$('outH').value||128), footPad=Math.max(0,+$('footPad').value||0);
+ const crop=rawCrop(box), anchor=bodyAnchorX(crop);
+ const c=document.createElement('canvas'), ctx=c.getContext('2d'); c.width=outW; c.height=outH; ctx.imageSmoothingEnabled=false; ctx.clearRect(0,0,outW,outH);
+ const halfW=Math.max(anchor,crop.width-anchor,1);
+ const scale=Math.min(1,outW/(halfW*2),Math.max(1,outH-footPad)/crop.height);
+ const dw=Math.round(crop.width*scale), dh=Math.round(crop.height*scale);
+ const dx=Math.round(outW/2-anchor*scale), dy=Math.round(outH-footPad-dh);
+ ctx.drawImage(img,box.x,box.y,box.w,box.h,dx,dy,dw,dh);
+ return c;
+}
+function draw(){
+ const st=$('stage'), ctx=st.getContext('2d'); if(!img.naturalWidth) return;
+ st.width=img.naturalWidth; st.height=img.naturalHeight; ctx.imageSmoothingEnabled=false; ctx.clearRect(0,0,st.width,st.height); ctx.drawImage(img,0,0);
+ ctx.fillStyle='#00e5ff'; ctx.strokeStyle='#00e5ff'; ctx.lineWidth=3;
+ for(const p of points){ctx.beginPath();ctx.arc(p.x,p.y,7,0,Math.PI*2);ctx.fill();}
+ const box=getBox();
+ if(box){ctx.fillStyle='rgba(0,229,255,.12)';ctx.fillRect(box.x,box.y,box.w,box.h);ctx.strokeRect(box.x,box.y,box.w,box.h);$('boxInfo').textContent=`x=${box.x} y=${box.y} w=${box.w} h=${box.h}`;} else {$('boxInfo').textContent=points.length?`已有第1点：x=${Math.round(points[0].x)} y=${Math.round(points[0].y)}`:'未选择';}
+ const out=renderOut(), pv=$('preview'), pctx=pv.getContext('2d');
+ if(out){pv.width=out.width;pv.height=out.height;pctx.clearRect(0,0,pv.width,pv.height);pctx.drawImage(out,0,0);} else {pctx.clearRect(0,0,pv.width,pv.height);}
+}
+$('stage').onclick=e=>{
+ const r=$('stage').getBoundingClientRect();
+ const x=(e.clientX-r.left)*$('stage').width/r.width, y=(e.clientY-r.top)*$('stage').height/r.height;
+ if(points.length>=2) points=[];
+ points.push({x,y}); draw();
+};
+async function saveCurrent(){
+ const out=renderOut(); if(!out||!loaded){setStatus('先点两个点框选矩形');return;}
+ const dataUrl=out.toDataURL('image/png');
+ const payload={character:loaded.character, action:$('actionSelect').value, dataUrl};
+ const js=await (await fetch('/api/save',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)})).json();
+ setStatus(js.ok?`已保存：${js.saved}`:`保存失败：${js.error}`);
+}
+init();
+</script>
+</body>
+</html>

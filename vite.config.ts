@@ -4,7 +4,7 @@ export default defineConfig({
   appType: 'spa',
   build: {
     target: 'es2022',
-    sourcemap: true,
+    sourcemap: false,
     outDir: 'dist',
     emptyOutDir: true
   },

@@ -1,9 +1,17 @@
+import {
+  createInitialCharacterDebugState,
+  type CharacterDebugState,
+} from '../characters/characterState';
+import { createInitialInputDebugState, type InputDebugState } from '../input/inputState';
 import { createDefaultSaveState, createSaveDebugState, loadSaveState, type SaveDebugState } from '../state/saveState';
 import type { PreloadDebugState } from '../scenes/preloadState';
+import { createInitialStoryDebugState, type StoryDebugState } from '../story/eventState';
+import { createInitialNarrativeUiDebugState, type NarrativeUiDebugState } from '../ui/uiState';
+import { createInitialMapDebugState, type MapDebugState } from '../map/mapState';
 
 export const GAME_WIDTH = 1280;
 export const GAME_HEIGHT = 720;
-export const GAME_SCENES = ['BootScene', 'PreloadScene', 'GameScene'] as const;
+export const GAME_SCENES = ['BootScene', 'PreloadScene', 'GameScene', 'PlayScene'] as const;
 
 export type GameSceneName = (typeof GAME_SCENES)[number];
 
@@ -44,6 +52,11 @@ export interface SceneDebugState {
   sizing: SceneSizingDebugState;
   preload: PreloadDebugState | null;
   save: SaveDebugState;
+  input: InputDebugState;
+  story: StoryDebugState;
+  ui: NarrativeUiDebugState;
+  character: CharacterDebugState;
+  map: MapDebugState;
 }
 
 declare global {
@@ -60,7 +73,7 @@ export function createInitialSceneDebugState(): SceneDebugState {
     preloaded: false,
     gameReady: false,
     ready: false,
-    sceneCounts: { BootScene: 0, PreloadScene: 0, GameScene: 0 },
+    sceneCounts: { BootScene: 0, PreloadScene: 0, GameScene: 0, PlayScene: 0 },
     menu: { visible: false, selectedAction: null, hasContinue: false },
     canvas: null,
     sizing: {
@@ -72,6 +85,11 @@ export function createInitialSceneDebugState(): SceneDebugState {
     },
     preload: null,
     save: createSaveDebugState({ status: 'empty', state: createDefaultSaveState() }),
+    input: createInitialInputDebugState(),
+    story: createInitialStoryDebugState(),
+    ui: createInitialNarrativeUiDebugState(),
+    character: createInitialCharacterDebugState(),
+    map: createInitialMapDebugState(),
   };
 }
 

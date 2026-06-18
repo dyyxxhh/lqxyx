@@ -32,7 +32,7 @@ describe("room render boundaries", () => {
       (door) => door.kind === "backgroundDoor",
     );
 
-    expect(fiveFloorBackgroundDoors).toHaveLength(4);
+    expect(fiveFloorBackgroundDoors).toHaveLength(8);
     expect(fiveFloorBackgroundDoors.every((door) => door.interaction.type !== "roomTransition")).toBe(true);
   });
 });

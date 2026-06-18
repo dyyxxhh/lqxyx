@@ -1,0 +1,452 @@
+[
+  {
+    "id": "杨云-红边-01",
+    "source": "杨云-红边.png",
+    "character": "杨云",
+    "color": "红边",
+    "index": 1,
+    "box": {
+      "x": 164,
+      "y": 60,
+      "w": 189,
+      "h": 304
+    },
+    "cropUrl": "/crops/杨云-红边-01.png",
+    "suggestedAction": "上-静止"
+  },
+  {
+    "id": "杨云-红边-02",
+    "source": "杨云-红边.png",
+    "character": "杨云",
+    "color": "红边",
+    "index": 2,
+    "box": {
+      "x": 467,
+      "y": 60,
+      "w": 184,
+      "h": 312
+    },
+    "cropUrl": "/crops/杨云-红边-02.png",
+    "suggestedAction": "下-静止"
+  },
+  {
+    "id": "杨云-红边-03",
+    "source": "杨云-红边.png",
+    "character": "杨云",
+    "color": "红边",
+    "index": 3,
+    "box": {
+      "x": 788,
+      "y": 60,
+      "w": 185,
+      "h": 312
+    },
+    "cropUrl": "/crops/杨云-红边-03.png",
+    "suggestedAction": "左-静止"
+  },
+  {
+    "id": "杨云-红边-04",
+    "source": "杨云-红边.png",
+    "character": "杨云",
+    "color": "红边",
+    "index": 4,
+    "box": {
+      "x": 200,
+      "y": 404,
+      "w": 183,
+      "h": 298
+    },
+    "cropUrl": "/crops/杨云-红边-04.png",
+    "suggestedAction": "右-静止"
+  },
+  {
+    "id": "杨云-红边-05",
+    "source": "杨云-红边.png",
+    "character": "杨云",
+    "color": "红边",
+    "index": 5,
+    "box": {
+      "x": 499,
+      "y": 404,
+      "w": 172,
+      "h": 300
+    },
+    "cropUrl": "/crops/杨云-红边-05.png",
+    "suggestedAction": "上-左腿"
+  },
+  {
+    "id": "杨云-红边-06",
+    "source": "杨云-红边.png",
+    "character": "杨云",
+    "color": "红边",
+    "index": 6,
+    "box": {
+      "x": 821,
+      "y": 404,
+      "w": 173,
+      "h": 300
+    },
+    "cropUrl": "/crops/杨云-红边-06.png",
+    "suggestedAction": "上-右腿"
+  },
+  {
+    "id": "杨云-红边-07",
+    "source": "杨云-红边.png",
+    "character": "杨云",
+    "color": "红边",
+    "index": 7,
+    "box": {
+      "x": 174,
+      "y": 746,
+      "w": 150,
+      "h": 289
+    },
+    "cropUrl": "/crops/杨云-红边-07.png",
+    "suggestedAction": "下-左腿"
+  },
+  {
+    "id": "杨云-红边-08",
+    "source": "杨云-红边.png",
+    "character": "杨云",
+    "color": "红边",
+    "index": 8,
+    "box": {
+      "x": 470,
+      "y": 746,
+      "w": 164,
+      "h": 285
+    },
+    "cropUrl": "/crops/杨云-红边-08.png",
+    "suggestedAction": "下-右腿"
+  },
+  {
+    "id": "杨云-红边-09",
+    "source": "杨云-红边.png",
+    "character": "杨云",
+    "color": "红边",
+    "index": 9,
+    "box": {
+      "x": 209,
+      "y": 1070,
+      "w": 122,
+      "h": 296
+    },
+    "cropUrl": "/crops/杨云-红边-09.png",
+    "suggestedAction": "左-迈腿"
+  },
+  {
+    "id": "杨云-红边-10",
+    "source": "杨云-红边.png",
+    "character": "杨云",
+    "color": "红边",
+    "index": 10,
+    "box": {
+      "x": 484,
+      "y": 1070,
+      "w": 149,
+      "h": 288
+    },
+    "cropUrl": "/crops/杨云-红边-10.png",
+    "suggestedAction": "右-迈腿"
+  },
+  {
+    "id": "杨云-蓝边-01",
+    "source": "杨云-蓝边.png",
+    "character": "杨云",
+    "color": "蓝边",
+    "index": 1,
+    "box": {
+      "x": 165,
+      "y": 62,
+      "w": 192,
+      "h": 306
+    },
+    "cropUrl": "/crops/杨云-蓝边-01.png",
+    "suggestedAction": "上-静止"
+  },
+  {
+    "id": "杨云-蓝边-02",
+    "source": "杨云-蓝边.png",
+    "character": "杨云",
+    "color": "蓝边",
+    "index": 2,
+    "box": {
+      "x": 468,
+      "y": 62,
+      "w": 188,
+      "h": 313
+    },
+    "cropUrl": "/crops/杨云-蓝边-02.png",
+    "suggestedAction": "下-静止"
+  },
+  {
+    "id": "杨云-蓝边-03",
+    "source": "杨云-蓝边.png",
+    "character": "杨云",
+    "color": "蓝边",
+    "index": 3,
+    "box": {
+      "x": 794,
+      "y": 62,
+      "w": 188,
+      "h": 313
+    },
+    "cropUrl": "/crops/杨云-蓝边-03.png",
+    "suggestedAction": "左-静止"
+  },
+  {
+    "id": "杨云-蓝边-04",
+    "source": "杨云-蓝边.png",
+    "character": "杨云",
+    "color": "蓝边",
+    "index": 4,
+    "box": {
+      "x": 201,
+      "y": 408,
+      "w": 184,
+      "h": 302
+    },
+    "cropUrl": "/crops/杨云-蓝边-04.png",
+    "suggestedAction": "右-静止"
+  },
+  {
+    "id": "杨云-蓝边-05",
+    "source": "杨云-蓝边.png",
+    "character": "杨云",
+    "color": "蓝边",
+    "index": 5,
+    "box": {
+      "x": 502,
+      "y": 408,
+      "w": 174,
+      "h": 303
+    },
+    "cropUrl": "/crops/杨云-蓝边-05.png",
+    "suggestedAction": "上-左腿"
+  },
+  {
+    "id": "杨云-蓝边-06",
+    "source": "杨云-蓝边.png",
+    "character": "杨云",
+    "color": "蓝边",
+    "index": 6,
+    "box": {
+      "x": 827,
+      "y": 408,
+      "w": 175,
+      "h": 304
+    },
+    "cropUrl": "/crops/杨云-蓝边-06.png",
+    "suggestedAction": "上-右腿"
+  },
+  {
+    "id": "杨云-蓝边-07",
+    "source": "杨云-蓝边.png",
+    "character": "杨云",
+    "color": "蓝边",
+    "index": 7,
+    "box": {
+      "x": 175,
+      "y": 753,
+      "w": 152,
+      "h": 291
+    },
+    "cropUrl": "/crops/杨云-蓝边-07.png",
+    "suggestedAction": "下-左腿"
+  },
+  {
+    "id": "杨云-蓝边-08",
+    "source": "杨云-蓝边.png",
+    "character": "杨云",
+    "color": "蓝边",
+    "index": 8,
+    "box": {
+      "x": 473,
+      "y": 753,
+      "w": 168,
+      "h": 288
+    },
+    "cropUrl": "/crops/杨云-蓝边-08.png",
+    "suggestedAction": "下-右腿"
+  },
+  {
+    "id": "杨云-蓝边-09",
+    "source": "杨云-蓝边.png",
+    "character": "杨云",
+    "color": "蓝边",
+    "index": 9,
+    "box": {
+      "x": 210,
+      "y": 1080,
+      "w": 123,
+      "h": 297
+    },
+    "cropUrl": "/crops/杨云-蓝边-09.png",
+    "suggestedAction": "左-迈腿"
+  },
+  {
+    "id": "杨云-蓝边-10",
+    "source": "杨云-蓝边.png",
+    "character": "杨云",
+    "color": "蓝边",
+    "index": 10,
+    "box": {
+      "x": 487,
+      "y": 1080,
+      "w": 151,
+      "h": 289
+    },
+    "cropUrl": "/crops/杨云-蓝边-10.png",
+    "suggestedAction": "右-迈腿"
+  },
+  {
+    "id": "董继豪-01",
+    "source": "董继豪.png",
+    "character": "董继豪",
+    "color": "",
+    "index": 1,
+    "box": {
+      "x": 140,
+      "y": 19,
+      "w": 165,
+      "h": 339
+    },
+    "cropUrl": "/crops/董继豪-01.png",
+    "suggestedAction": "上-静止"
+  },
+  {
+    "id": "董继豪-02",
+    "source": "董继豪.png",
+    "character": "董继豪",
+    "color": "",
+    "index": 2,
+    "box": {
+      "x": 467,
+      "y": 21,
+      "w": 163,
+      "h": 345
+    },
+    "cropUrl": "/crops/董继豪-02.png",
+    "suggestedAction": "下-静止"
+  },
+  {
+    "id": "董继豪-03",
+    "source": "董继豪.png",
+    "character": "董继豪",
+    "color": "",
+    "index": 3,
+    "box": {
+      "x": 771,
+      "y": 19,
+      "w": 162,
+      "h": 348
+    },
+    "cropUrl": "/crops/董继豪-03.png",
+    "suggestedAction": "左-静止"
+  },
+  {
+    "id": "董继豪-04",
+    "source": "董继豪.png",
+    "character": "董继豪",
+    "color": "",
+    "index": 4,
+    "box": {
+      "x": 141,
+      "y": 378,
+      "w": 159,
+      "h": 339
+    },
+    "cropUrl": "/crops/董继豪-04.png",
+    "suggestedAction": "右-静止"
+  },
+  {
+    "id": "董继豪-05",
+    "source": "董继豪.png",
+    "character": "董继豪",
+    "color": "",
+    "index": 5,
+    "box": {
+      "x": 470,
+      "y": 378,
+      "w": 159,
+      "h": 342
+    },
+    "cropUrl": "/crops/董继豪-05.png",
+    "suggestedAction": "上-左腿"
+  },
+  {
+    "id": "董继豪-06",
+    "source": "董继豪.png",
+    "character": "董继豪",
+    "color": "",
+    "index": 6,
+    "box": {
+      "x": 775,
+      "y": 378,
+      "w": 158,
+      "h": 341
+    },
+    "cropUrl": "/crops/董继豪-06.png",
+    "suggestedAction": "上-右腿"
+  },
+  {
+    "id": "董继豪-07",
+    "source": "董继豪.png",
+    "character": "董继豪",
+    "color": "",
+    "index": 7,
+    "box": {
+      "x": 166,
+      "y": 735,
+      "w": 135,
+      "h": 320
+    },
+    "cropUrl": "/crops/董继豪-07.png",
+    "suggestedAction": "下-左腿"
+  },
+  {
+    "id": "董继豪-08",
+    "source": "董继豪.png",
+    "character": "董继豪",
+    "color": "",
+    "index": 8,
+    "box": {
+      "x": 479,
+      "y": 732,
+      "w": 143,
+      "h": 321
+    },
+    "cropUrl": "/crops/董继豪-08.png",
+    "suggestedAction": "下-右腿"
+  },
+  {
+    "id": "董继豪-09",
+    "source": "董继豪.png",
+    "character": "董继豪",
+    "color": "",
+    "index": 9,
+    "box": {
+      "x": 147,
+      "y": 1069,
+      "w": 130,
+      "h": 322
+    },
+    "cropUrl": "/crops/董继豪-09.png",
+    "suggestedAction": "左-迈腿"
+  },
+  {
+    "id": "董继豪-10",
+    "source": "董继豪.png",
+    "character": "董继豪",
+    "color": "",
+    "index": 10,
+    "box": {
+      "x": 458,
+      "y": 1067,
+      "w": 158,
+      "h": 326
+    },
+    "cropUrl": "/crops/董继豪-10.png",
+    "suggestedAction": "右-迈腿"
+  }
+]

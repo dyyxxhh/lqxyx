@@ -31,6 +31,8 @@ test('preloads required first-act assets before entering GameScene', async ({ pa
 });
 
 test('shows a visible preload failure state when a required asset fails', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name === 'production-chromium', 'forced preload failure query is disabled in production builds');
+
   await page.goto('/?preloadFailAsset=floor.tile');
   await expect(page.locator('canvas')).toBeVisible();
 

@@ -8,6 +8,7 @@ import {
   markPreloadFailure,
   markPreloadProgress,
 } from '../scenes/preloadState';
+import { getForcedPreloadFailureKey, shouldAllowForcedPreloadFailure } from '../scenes/preloadDebugGate';
 
 describe('preload asset plan', () => {
   it('maps every manifest final asset to the public static final-asset directory', () => {
@@ -76,5 +77,15 @@ describe('preload debug state', () => {
     expect(afterProgress.status).toBe('failed');
     expect(afterProgress.failedAsset).toEqual({ key: 'floor.tile', url: '/assets/final/missing-floor.png' });
     expect(afterProgress.canEnterGame).toBe(false);
+  });
+});
+
+
+describe('preload forced failure debug hook', () => {
+  it('allows forced preload failure only outside production builds', () => {
+    expect(shouldAllowForcedPreloadFailure(false)).toBe(true);
+    expect(shouldAllowForcedPreloadFailure(true)).toBe(false);
+    expect(getForcedPreloadFailureKey('?preloadFailAsset=floor.tile', false)).toBe('floor.tile');
+    expect(getForcedPreloadFailureKey('?preloadFailAsset=floor.tile', true)).toBeNull();
   });
 });

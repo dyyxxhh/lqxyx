@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { schoolMaps } from "../data/maps";
 import { firstActCheckpoints, storyManifest, type StoryCommand } from "../data/story";
 
 const firstAct = storyManifest.acts.find((act) => act.id === "act-1");
@@ -57,6 +58,37 @@ describe("story manifest", () => {
 
     expect(JSON.stringify(firstAct?.characters)).not.toContain(forbiddenRedLabel);
     expect(JSON.stringify(firstAct?.characters)).not.toContain(forbiddenBlueLabel);
+  });
+
+  it("story-manifest: checkpoint A chains from 我要搓手 into checkpoint B", () => {
+    const checkpointA = firstActCheckpoints.find((checkpoint) => checkpoint.id === "A");
+    const finalCommands = checkpointA?.commands.slice(-2);
+
+    expect(finalCommands).toEqual([
+      { type: "dialogue", speaker: "杨云", text: "我要搓手。" },
+      { type: "gotoCheckpoint", id: "B" },
+    ]);
+  });
+
+  it("story-manifest: resolves the B-1 principal office interaction target to a real 5F map door", () => {
+    const b1 = firstAct?.branches.find((branch) => branch.id === "B-1");
+    const interaction = b1?.commands.find(
+      (command): command is Extract<StoryCommand, { type: "interaction" }> => command.type === "interaction",
+    );
+    const targets = schoolMaps.floors["5F"].corridor.doors
+      .filter((door) => door.storyTargetId === interaction?.target)
+      .map((door) => ({ id: door.id, label: door.label, roomId: door.roomId }));
+
+    expect(interaction).toEqual(
+      expect.objectContaining({
+        input: "F",
+        target: "五楼校长办公室门口",
+        result: "不进入，黑屏对白",
+      }),
+    );
+    expect(targets).toEqual([
+      { id: "principals-office-front-5f", label: "校长办公室", roomId: "principals-office-5f" },
+    ]);
   });
 
   it("act-boundary: reserves later acts as metadata without playable event chains", () => {

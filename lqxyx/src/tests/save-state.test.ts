@@ -27,6 +27,7 @@ function createCheckpointState(): SaveState {
       danYuxuanBodyProneAndBloody: true,
       qinHaoruiBodyBloodyOnGround: true,
       yangYunReplaysB2Actions: true,
+      communicationDisabled: true,
     },
     branchChoices: {
       'A-1': 'selected',
@@ -73,6 +74,20 @@ describe('checkpoint save state manager', () => {
     expect(parsed.status === 'valid' ? parsed.state.triggeredEvents : []).toEqual(checkpointState.triggeredEvents);
   });
 
+  it('save-state: accepts the real 5F principal office room in checkpoint saves', () => {
+    const principalOfficeState: SaveState = {
+      ...createCheckpointState(),
+      roomId: 'principals-office-5f',
+      position: { x: 760, y: 420, facing: 'left' },
+      task: '前往五楼校长办公室',
+    };
+
+    expect(deserializeSaveState(serializeSaveState(principalOfficeState))).toEqual({
+      status: 'valid',
+      state: principalOfficeState,
+    });
+  });
+
   it('save-state: reports no-save and uses safe defaults without a stored checkpoint', () => {
     expect(loadSaveState()).toEqual({ status: 'empty', state: createDefaultSaveState() });
     expect(hasValidSave()).toBe(false);
@@ -81,11 +96,11 @@ describe('checkpoint save state manager', () => {
       checkpointId: 'A',
       actId: 'act-1',
       floorId: '4F',
-      roomId: 'gt1-classroom',
-      position: { x: 760, y: 420, facing: 'left' },
-      controllableCharacterId: 'yangYunRed',
+      roomId: null,
+      position: { x: 560, y: 920, facing: 'down' },
+      controllableCharacterId: 'yangYunBlue',
       task: '无',
-      storyFlags: {},
+      storyFlags: { communicationDisabled: false },
       branchChoices: {},
       timers: {},
       inventory: [],

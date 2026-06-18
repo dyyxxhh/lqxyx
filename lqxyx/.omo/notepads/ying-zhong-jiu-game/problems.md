@@ -19,3 +19,9 @@
 ## 2026-06-06 Task 9: checkpoint save/load follow-up risks
 - Future event-engine tasks should reuse `SaveState` rather than introduce parallel runtime-save shapes, especially for branch choices, timer remaining time, and triggered event ids.
 - Continue-button implementation should read `SceneDebugState.menu.hasContinue` / `save.hasValidSave`; Task 9 intentionally did not add visible Continue UI.
+
+## 2026-06-06 Task 16: deployment follow-up risks
+- Later deployment QA should target `http://127.0.0.1:8949/` via pm2 app `ying-zhong-jiu-static`; avoid reintroducing `vite preview` or the Task 1 temporary `serve dist --single` surface.
+
+## 2026-06-06 Task 14: follow-up risks
+- Future asset additions must not clear a missing supplement blocker by moving it into final-complete status unless the blocker key has a real `最终素材/` supplied path or a recorded approved implementation.

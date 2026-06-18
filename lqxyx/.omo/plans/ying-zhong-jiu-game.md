@@ -384,7 +384,7 @@ Wave 5: T19 first-act content completion pass, T20 final blocker/asset handoff a
 
   **Commit**: YES | Message: `feat(runtime): add phaser scene shell` | Files: [src/game*, src/scenes*, tests]
 
-- [ ] 7. Implement desktop and mobile input manager
+- [x] 7. Implement desktop and mobile input manager
 
   **What to do**: Implement `InputManager` with keyboard movement, F/Q context actions, mobile fullscreen prompt, landscape-first orientation prompt, eight-direction joystick, and one mobile interact button that resolves to current context action replacing F/Q. Input must lock during dialogue, black screens, elevator fade, scripted movement, and endings unless an event explicitly allows advance.
   **Must NOT do**: Do not add configurable keybinds; do not add gamepad support; do not create two separate mobile F/Q buttons.
@@ -425,7 +425,7 @@ Wave 5: T19 first-act content completion pass, T20 final blocker/asset handoff a
 
   **Commit**: YES | Message: `feat(input): support desktop and mobile controls` | Files: [src/input*, src/ui/mobile*, tests]
 
-- [ ] 8. Implement game UI manager for task, dialogue, role prompt, timers, loading, and curtain
+- [x] 8. Implement game UI manager for task, dialogue, role prompt, timers, loading, and curtain
 
   **What to do**: Build UI overlays matching design needs: top-center main task hidden when task is `无`, dialogue box with portrait/name, “你现在是” role prompt inspired by `设计/“你现在是”的UI设计.jpg`, countdown timers, loading progress, fullscreen/orientation prompts, and final first-act curtain with `下一幕` + `敬请期待`. For 杨云 red/blue internal states, render the appropriate visual asset/edge but show user-facing name text as `杨云` only.
   **Must NOT do**: Do not overbuild settings/multilanguage menus; do not show main task when value is `无`; do not display red/blue border state names in user-facing text.
@@ -504,7 +504,7 @@ Wave 5: T19 first-act content completion pass, T20 final blocker/asset handoff a
 
   **Commit**: YES | Message: `feat(save): add checkpoint persistence` | Files: [src/state*, tests]
 
-- [ ] 10. Implement script/event engine with deterministic transitions
+- [x] 10. Implement script/event engine with deterministic transitions
 
   **What to do**: Implement a typed event engine that interprets story manifest commands: dialogue, wait, black screen, fade, setTask, setFlag, switchCharacter, moveLock, timer start/stop, branch choice, checkpoint save, ending curtain, room/floor transition, and failure/ending triggers. Add fake-timer tests for 500ms black-screen wait and elevator timing sequence.
   **Must NOT do**: Do not hardcode first-act event logic into scene update loops; do not allow repeated F/Q presses to double-trigger events.
@@ -543,7 +543,7 @@ Wave 5: T19 first-act content completion pass, T20 final blocker/asset handoff a
 
   **Commit**: YES | Message: `feat(story): add deterministic event engine` | Files: [src/story*, tests]
 
-- [ ] 11. Implement map rendering, collision, occlusion, doors, and elevator transitions
+- [x] 11. Implement map rendering, collision, occlusion, doors, and elevator transitions
 
   **What to do**: Render corridor and room scenes separately from map schema. Tile `地板.png`; render scaled desk/chair assets at about one-third character height where classrooms need furniture; define partial collision boxes and separate occlusion regions. Implement doors and room transitions from schema. Implement elevator interaction with 0.5s fade out, floor switch, 0.5s fade in. Ensure 4F/5F right-side door differences.
   **Must NOT do**: Do not render classrooms while corridor active; do not use full `桌椅.png` rectangle collision; do not add 5F office front door.
@@ -584,7 +584,7 @@ Wave 5: T19 first-act content completion pass, T20 final blocker/asset handoff a
 
   **Commit**: YES | Message: `feat(map): render school rooms and transitions` | Files: [src/map*, src/scenes*, tests]
 
-- [ ] 12. Implement character resource mapping and movement animations
+- [x] 12. Implement character resource mapping and movement animations
 
   **What to do**: Register character sprites/portraits. Implement walking animations for 杨云 internal blue-border state, 杨云 internal red-border state, and 董继豪 using up/down/left/right assets. Implement diagonal movement rule: northeast/southeast and northwest/southwest use up/down animation as appropriate while movement vector is diagonal. Register but do not make freely walkable the story/dead/body-part sprites for 但宇轩 and 秦浩睿/秦浩瑞. Add alias mapping so UI/story display uses `秦浩睿` while asset path may contain `秦浩瑞`. Add display-name mapping so both 杨云 red/blue resource states display as `杨云` in user-facing text.
   **Must NOT do**: Do not invent four-direction walking for 但宇轩/秦浩睿; do not rename source assets casually.
@@ -626,7 +626,7 @@ Wave 5: T19 first-act content completion pass, T20 final blocker/asset handoff a
 
   **Commit**: YES | Message: `feat(characters): map sprites and animations` | Files: [src/characters*, tests]
 
-- [ ] 13. Implement first-act playable events, interactions, timers, branches, failures, and endings
+- [x] 13. Implement first-act playable events, interactions, timers, branches, failures, and endings
 
   **What to do**: Wire the first-act story manifest into the playable world. Implement checkpoint A-I progression, GT1/GT2/office/communication interactions, F/Q contexts, 10s/120s/30s timers, 杨云复现/追逐/failure behavior as specified by script manifest, character control switches, task text updates, black screens, and all first-act endings. Ensure ending curtain shows `下一幕` + `敬请期待` and no later act gameplay starts.
   **Must NOT do**: Do not rewrite script meaning; do not skip branches; do not implement second-act content.
@@ -667,7 +667,7 @@ Wave 5: T19 first-act content completion pass, T20 final blocker/asset handoff a
 
   **Commit**: YES | Message: `feat(story): make first act playable` | Files: [src/story*, src/scenes*, src/data*, tests]
 
-- [ ] 14. Integrate missing-asset blocker gates and supplement handoff
+- [x] 14. Integrate missing-asset blocker gates and supplement handoff
 
   **What to do**: Add build/test gates that report missing production art supplement items from T2/T14 and prevent them from being marked complete as final art. For scenes that require missing assets, either block final visual acceptance until supplied or render only approved non-production debug labels in development mode with clear `NOT_PRODUCTION_ART` marking. Production screenshots/evidence must not present debug labels as final visuals; if required first-act art is missing, final handoff must mark visual production completion blocked until supplied. Produce a handoff list with exact desired dimensions/usages for each missing asset.
   **Must NOT do**: Do not ship debug placeholders as production art; do not conceal missing assets in screenshots/evidence.
@@ -706,7 +706,7 @@ Wave 5: T19 first-act content completion pass, T20 final blocker/asset handoff a
 
   **Commit**: YES | Message: `feat(assets): gate missing production art` | Files: [src/data/assets*, scripts/report*, tests]
 
-- [ ] 15. Harden mobile landscape/fullscreen/touch layout
+- [x] 15. Harden mobile landscape/fullscreen/touch layout
 
   **What to do**: Polish mobile behavior: show fullscreen prompt on entry; if user refuses or fullscreen fails, keep game playable and record state; show rotate-to-landscape prompt in portrait; handle viewport resize/safe area; ensure joystick and interact button support simultaneous touches; maintain readable dialogue/task UI in landscape.
   **Must NOT do**: Do not force unplayable fullscreen-only behavior; do not add left/right hand settings unless required.
@@ -746,7 +746,7 @@ Wave 5: T19 first-act content completion pass, T20 final blocker/asset handoff a
 
   **Commit**: YES | Message: `feat(mobile): harden landscape controls` | Files: [src/input*, src/ui*, tests/e2e]
 
-- [ ] 16. Implement production static server and pm2 8949 deployment
+- [x] 16. Implement production static server and pm2 8949 deployment
 
   **What to do**: Add a minimal Node static server serving `dist/` on port 8949 with SPA fallback, correct static caching basics, and a health endpoint if implemented. Add `ecosystem.config.cjs` for pm2. Add scripts/documentation for build and pm2 start/status/restart. Verify production build, not dev server.
   **Must NOT do**: Do not use Vite preview for production; do not introduce Docker/Nginx unless user later asks.
@@ -786,7 +786,7 @@ Wave 5: T19 first-act content completion pass, T20 final blocker/asset handoff a
 
   **Commit**: YES | Message: `chore(deploy): add pm2 production server` | Files: [server/static-server*, ecosystem.config*, package scripts]
 
-- [ ] 17. Build Playwright E2E coverage for desktop, mobile, save/load, elevator, ending, and deploy
+- [x] 17. Build Playwright E2E coverage for desktop, mobile, save/load, elevator, ending, and deploy
 
   **What to do**: Add Playwright tests and fixtures for desktop gameplay, mobile landscape controls, fullscreen prompt refusal, save/load checkpoint restore, elevator fade/floor switch, task visibility, first-act ending curtain, and deployed production URL on 8949. Capture screenshots/videos/traces into `.omo/evidence` or Playwright artifacts copied there.
   **Must NOT do**: Do not only test page load; do not skip mobile interactions; do not rely on manual observation.
@@ -827,7 +827,7 @@ Wave 5: T19 first-act content completion pass, T20 final blocker/asset handoff a
 
   **Commit**: YES | Message: `test(e2e): cover gameplay and deployment` | Files: [playwright config/tests/artifact scripts]
 
-- [ ] 18. Harden production QA: asset 404s, performance sanity, resize, and failure recovery
+- [x] 18. Harden production QA: asset 404s, performance sanity, resize, and failure recovery
 
   **What to do**: Add QA checks for network 404s, preload progress, large asset loading sanity, localStorage corruption, viewport resize, portrait/landscape switch, repeated input spam during locked states, and static server refresh. Capture evidence and fix issues found.
   **Must NOT do**: Do not claim production ready with only unit tests; do not ignore flaky mobile/resize issues.
@@ -866,7 +866,7 @@ Wave 5: T19 first-act content completion pass, T20 final blocker/asset handoff a
 
   **Commit**: YES | Message: `test(qa): harden production surfaces` | Files: [tests/e2e, fixes]
 
-- [ ] 19. Run first-act content completion pass against script and manifest
+- [x] 19. Run first-act content completion pass against script and manifest
 
   **What to do**: Audit the playable game against `第一幕剧本.txt` and the story manifest. Verify each checkpoint A-I, branch, required dialogue, timer, character switch, task UI update, black-screen wait, ending, and “下一幕 / 敬请期待” curtain. Fix omissions. Produce a coverage report showing manifest nodes and their test/evidence mapping.
   **Must NOT do**: Do not add new story content; do not modify dialogue meaning; do not mark missing art blockers as complete.
@@ -906,7 +906,7 @@ Wave 5: T19 first-act content completion pass, T20 final blocker/asset handoff a
 
   **Commit**: YES | Message: `test(story): verify first act coverage` | Files: [coverage reports, tests, fixes]
 
-- [ ] 20. Consolidate production handoff, supplement list, and evidence package
+- [x] 20. Consolidate production handoff, supplement list, and evidence package
 
   **What to do**: Prepare final delivery notes inside allowed project docs/files created by implementation agent: how to install, build, test, run with pm2 on 8949, where evidence lives, known missing supplement assets, and exact replacement procedure for future supplied art/audio. Confirm no `其他/` dependencies in production files. Ensure all QA evidence paths exist.
   **Must NOT do**: Do not claim full final-art completion while supplement blockers remain; do not delete evidence; do not modify `其他/`.
@@ -950,10 +950,10 @@ Wave 5: T19 first-act content completion pass, T20 final blocker/asset handoff a
 > 4 review agents run in PARALLEL. ALL must APPROVE. Present consolidated results to user and get explicit "okay" before completing.
 > **Do NOT auto-proceed after verification. Wait for user's explicit approval before marking work complete.**
 > **Never mark F1-F4 as checked before getting user's okay.** Rejection or user feedback -> fix -> re-run -> present again -> wait for okay.
-- [ ] F1. Plan Compliance Audit — oracle
-- [ ] F2. Code Quality Review — unspecified-high
-- [ ] F3. Real Manual QA — unspecified-high (+ playwright)
-- [ ] F4. Scope Fidelity Check — deep
+- [x] F1. Plan Compliance Audit — oracle
+- [x] F2. Code Quality Review — unspecified-high
+- [x] F3. Real Manual QA — unspecified-high (+ playwright)
+- [x] F4. Scope Fidelity Check — deep
 
 ### Final Verification Acceptance Contracts
 - **F1 Plan Compliance Audit — oracle**: Return `APPROVE` only if every key requirement in this plan has corresponding implementation evidence path; otherwise return `REJECT WITH FIXES` listing missing requirement → missing/failing evidence.

@@ -8,7 +8,8 @@ export type RoomId =
   | "class-1-1"
   | "class-1-2"
   | "office-4f"
-  | "communication-control-5f";
+  | "communication-control-5f"
+  | "principals-office-5f";
 
 export type DoorId =
   | "4f-gt2-front"
@@ -26,8 +27,13 @@ export type DoorId =
   | "5f-background-class-1-back"
   | "5f-background-class-2-front"
   | "5f-background-class-2-back"
+  | "5f-background-class-3-front"
+  | "5f-background-class-3-back"
+  | "5f-background-class-4-front"
+  | "5f-background-class-4-back"
   | "5f-communication-control-back"
-  | "5f-elevator";
+  | "5f-elevator"
+  | "principals-office-front-5f";
 
 export interface MapPoint {
   x: number;
@@ -73,6 +79,36 @@ export interface CorridorDoor {
   storyTargetId?: string;
 }
 
+export type RoomInteractionTargetRenderMetadata =
+  | {
+      assetKey: "communication.steelInteractable";
+      material: "steel";
+      shape: "communicationConsole";
+      color: "#8f9aa3";
+    }
+  | {
+      assetKey: "prop.phone";
+      material: "phone";
+      shape: "deskPhone";
+      color: "#1f1410";
+    };
+
+export interface RoomInteractionTarget {
+  id: string;
+  label: string;
+  bounds: MapRectangle;
+  visible: true;
+  storyTargetId: string;
+  render: RoomInteractionTargetRenderMetadata;
+}
+
+export interface InRoomDoor {
+  entryDoorId: DoorId;
+  visible: true;
+  bounds: MapRectangle;
+  render: DoorRenderMetadata;
+}
+
 export interface FloorTileMetadata {
   assetKey: "floor.tile";
   tileWidth: number;
@@ -104,6 +140,8 @@ export interface RoomArea extends MapArea {
   kind: Exclude<AreaKind, "corridor">;
   entityScope: "roomOnly";
   entryDoorIds: DoorId[];
+  inRoomDoors: InRoomDoor[];
+  interactionTargets: RoomInteractionTarget[];
 }
 
 export interface RenderContextBoundary {
@@ -144,8 +182,24 @@ const doorRender: DoorRenderMetadata = {
 
 const floorTile: FloorTileMetadata = {
   assetKey: "floor.tile",
-  tileWidth: 64,
-  tileHeight: 64,
+  tileWidth: 192,
+  tileHeight: 192,
+};
+
+const DOOR_HEIGHT = 128;
+
+const communicationDeviceRender: RoomInteractionTargetRenderMetadata = {
+  assetKey: "communication.steelInteractable",
+  material: "steel",
+  shape: "communicationConsole",
+  color: "#8f9aa3",
+};
+
+const officePhoneRender: RoomInteractionTargetRenderMetadata = {
+  assetKey: "prop.phone",
+  material: "phone",
+  shape: "deskPhone",
+  color: "#1f1410",
 };
 
 function rect(x: number, y: number, width: number, height: number): MapRectangle {
@@ -222,6 +276,29 @@ function elevatorDoor(id: DoorId, floorId: FloorId, targetFloorId: FloorId, orde
   };
 }
 
+function createInRoomDoors(
+  kind: RoomArea["kind"],
+  entryDoorIds: DoorId[],
+  spawnPoints: SpawnPoint[],
+): InRoomDoor[] {
+  if (kind === "classroom") {
+    return [
+      { entryDoorId: entryDoorIds[0]!, visible: true, bounds: rect(840, 80, 24, DOOR_HEIGHT), render: doorRender },
+      { entryDoorId: entryDoorIds[1]!, visible: true, bounds: rect(840, 1072, 24, DOOR_HEIGHT), render: doorRender },
+    ];
+  }
+
+  return entryDoorIds.flatMap((entryDoorId) => {
+    const spawnPoint = spawnPoints.find((candidate) => candidate.id.includes(entryDoorId.replace(/^\d+f-/, "").replace(/-5f$/, "")));
+    const matchingSpawnPoint = spawnPoint ?? spawnPoints.find((candidate) => candidate.id.endsWith("entry"));
+    if (!matchingSpawnPoint) return [];
+    const isLeftWallExit = matchingSpawnPoint.facing === "right";
+    const x = isLeftWallExit ? 96 : 840;
+    const y = matchingSpawnPoint.y - DOOR_HEIGHT / 2;
+    return [{ entryDoorId, visible: true, bounds: rect(x, y, 24, DOOR_HEIGHT), render: doorRender }];
+  });
+}
+
 function room(
   id: RoomId,
   label: string,
@@ -229,20 +306,24 @@ function room(
   kind: RoomArea["kind"],
   entryDoorIds: DoorId[],
   spawnPoints: SpawnPoint[],
+  interactionTargets: RoomInteractionTarget[] = [],
 ): RoomArea {
+  const isClassroom = kind === "classroom";
   return {
     id,
     label,
     floorId,
     kind,
     entityScope: "roomOnly",
-    bounds: rect(0, 0, 960, 540),
-    walkableBounds: [rect(96, 96, 768, 360)],
+    bounds: isClassroom ? rect(0, 0, 960, 1280) : rect(0, 0, 960, 540),
+    walkableBounds: [isClassroom ? rect(12, 12, 936, 1256) : rect(96, 96, 768, 360)],
     collisionZones: [rect(128, 128, 192, 96), rect(512, 128, 192, 96)],
     occlusionZones: [rect(128, 96, 192, 48), rect(512, 96, 192, 48)],
     spawnPoints,
     floorTile,
     entryDoorIds,
+    inRoomDoors: createInRoomDoors(kind, entryDoorIds, spawnPoints),
+    interactionTargets,
   };
 }
 
@@ -250,61 +331,79 @@ const corridorBounds = rect(0, 0, 1280, 1920);
 const corridorWalkable = [rect(300, 80, 520, 1760)];
 const corridorCollision = [rect(0, 0, 260, 1920), rect(860, 0, 420, 1920), rect(260, 0, 600, 56), rect(260, 1864, 600, 56)];
 const corridorOcclusion = [rect(260, 0, 600, 96), rect(260, 1824, 600, 96)];
+const fifthFloorCorridorBounds = rect(0, 0, 1280, 2280);
+const fifthFloorCorridorWalkable = [rect(300, 80, 520, 2120)];
+const fifthFloorCorridorCollision = [rect(0, 0, 260, 2280), rect(860, 0, 420, 2280), rect(260, 0, 600, 56), rect(260, 2224, 600, 56)];
+const fifthFloorCorridorOcclusion = [rect(260, 0, 600, 96), rect(260, 2184, 600, 96)];
 
 const fourthFloorLeftDoors: CorridorDoor[] = [
-  roomDoor("4f-gt2-front", "GT2前门", "4F", "left", 1, rect(240, 180, 128, 24), "gt2-classroom", "gt2-front-entry", "GT2 classroom front door"),
-  roomDoor("4f-gt2-back", "GT2后门", "4F", "left", 2, rect(240, 320, 128, 24), "gt2-classroom", "gt2-back-entry"),
-  roomDoor("4f-gt1-front", "GT1前门", "4F", "left", 3, rect(240, 520, 128, 24), "gt1-classroom", "gt1-front-entry", "GT1 classroom front door"),
-  roomDoor("4f-gt1-back", "GT1后门", "4F", "left", 4, rect(240, 660, 128, 24), "gt1-classroom", "gt1-back-entry"),
-  roomDoor("4f-class-1-1-front", "高一一班前门", "4F", "left", 5, rect(240, 900, 128, 24), "class-1-1", "class-1-1-front-entry"),
-  roomDoor("4f-class-1-1-back", "高一一班后门", "4F", "left", 6, rect(240, 1040, 128, 24), "class-1-1", "class-1-1-back-entry"),
-  roomDoor("4f-class-1-2-front", "高一二班前门", "4F", "left", 7, rect(240, 1280, 128, 24), "class-1-2", "class-1-2-front-entry"),
-  roomDoor("4f-class-1-2-back", "高一二班后门", "4F", "left", 8, rect(240, 1420, 128, 24), "class-1-2", "class-1-2-back-entry"),
+  roomDoor("4f-gt2-front", "GT2前门", "4F", "left", 1, rect(276, 100, 24, DOOR_HEIGHT), "gt2-classroom", "gt2-front-entry", "GT2 classroom front door"),
+  roomDoor("4f-gt2-back", "GT2后门", "4F", "left", 2, rect(276, 260, 24, DOOR_HEIGHT), "gt2-classroom", "gt2-back-entry"),
+  roomDoor("4f-gt1-front", "GT1前门", "4F", "left", 3, rect(276, 516, 24, DOOR_HEIGHT), "gt1-classroom", "gt1-front-entry", "GT1 classroom front door"),
+  roomDoor("4f-gt1-back", "GT1后门", "4F", "left", 4, rect(276, 676, 24, DOOR_HEIGHT), "gt1-classroom", "gt1-back-entry"),
+  roomDoor("4f-class-1-1-front", "高一一班前门", "4F", "left", 5, rect(276, 932, 24, DOOR_HEIGHT), "class-1-1", "class-1-1-front-entry"),
+  roomDoor("4f-class-1-1-back", "高一一班后门", "4F", "left", 6, rect(276, 1092, 24, DOOR_HEIGHT), "class-1-1", "class-1-1-back-entry"),
+  roomDoor("4f-class-1-2-front", "高一二班前门", "4F", "left", 7, rect(276, 1348, 24, DOOR_HEIGHT), "class-1-2", "class-1-2-front-entry"),
+  roomDoor("4f-class-1-2-back", "高一二班后门", "4F", "left", 8, rect(276, 1508, 24, DOOR_HEIGHT), "class-1-2", "class-1-2-back-entry"),
 ];
 
 const fourthFloorDoors: CorridorDoor[] = [
   ...fourthFloorLeftDoors,
-  roomDoor("4f-office-front", "办公室前门", "4F", "right", 1, rect(800, 980, 128, 24), "office-4f", "office-front-entry", "office front door"),
-  roomDoor("4f-office-back", "办公室后门", "4F", "right", 2, rect(800, 1140, 128, 24), "office-4f", "office-back-entry", "office back door"),
-  elevatorDoor("4f-elevator", "4F", "5F", 3, rect(800, 1540, 128, 24)),
+  elevatorDoor("4f-elevator", "4F", "5F", 1, rect(820, 388, 24, DOOR_HEIGHT)),
+  roomDoor("4f-office-front", "办公室前门", "4F", "right", 2, rect(820, 804, 24, DOOR_HEIGHT), "office-4f", "office-front-entry", "office front door"),
+  roomDoor("4f-office-back", "办公室后门", "4F", "right", 3, rect(820, 964, 24, DOOR_HEIGHT), "office-4f", "office-back-entry", "office back door"),
 ];
 
 const fifthFloorDoors: CorridorDoor[] = [
-  backgroundDoor("5f-background-class-1-front", "五楼普通班级一前门", "5F", 1, rect(240, 360, 128, 24)),
-  backgroundDoor("5f-background-class-1-back", "五楼普通班级一后门", "5F", 2, rect(240, 520, 128, 24)),
-  backgroundDoor("5f-background-class-2-front", "五楼普通班级二前门", "5F", 3, rect(240, 760, 128, 24)),
-  backgroundDoor("5f-background-class-2-back", "五楼普通班级二后门", "5F", 4, rect(240, 920, 128, 24)),
-  roomDoor("5f-communication-control-back", "学校通信控制室后门", "5F", "right", 1, rect(800, 1140, 128, 24), "communication-control-5f", "communication-control-back-entry", "five-floor communication control back door"),
-  elevatorDoor("5f-elevator", "5F", "4F", 2, rect(800, 1540, 128, 24)),
+  backgroundDoor("5f-background-class-1-front", "五楼普通班级一前门", "5F", 1, rect(276, 100, 24, DOOR_HEIGHT)),
+  backgroundDoor("5f-background-class-1-back", "五楼普通班级一后门", "5F", 2, rect(276, 260, 24, DOOR_HEIGHT)),
+  backgroundDoor("5f-background-class-2-front", "五楼普通班级二前门", "5F", 3, rect(276, 516, 24, DOOR_HEIGHT)),
+  backgroundDoor("5f-background-class-2-back", "五楼普通班级二后门", "5F", 4, rect(276, 676, 24, DOOR_HEIGHT)),
+  backgroundDoor("5f-background-class-3-front", "五楼普通班级三前门", "5F", 5, rect(276, 932, 24, DOOR_HEIGHT)),
+  backgroundDoor("5f-background-class-3-back", "五楼普通班级三后门", "5F", 6, rect(276, 1092, 24, DOOR_HEIGHT)),
+  backgroundDoor("5f-background-class-4-front", "五楼普通班级四前门", "5F", 7, rect(276, 1348, 24, DOOR_HEIGHT)),
+  backgroundDoor("5f-background-class-4-back", "五楼普通班级四后门", "5F", 8, rect(276, 1508, 24, DOOR_HEIGHT)),
+  roomDoor("principals-office-front-5f", "校长办公室", "5F", "left", 9, rect(276, 1948, 24, 128), "principals-office-5f", "principals-office-front-entry", "五楼校长办公室门口"),
+  elevatorDoor("5f-elevator", "5F", "4F", 1, rect(820, 360, 24, 128)),
+  roomDoor("5f-communication-control-back", "学校通信控制室后门", "5F", "right", 2, rect(820, 1140, 24, 128), "communication-control-5f", "communication-control-back-entry", "five-floor communication control back door"),
 ];
 
-const fourthFloorRooms: Record<Exclude<RoomId, "communication-control-5f">, RoomArea> = {
+const fourthFloorRooms: Record<Exclude<RoomId, "communication-control-5f" | "principals-office-5f">, RoomArea> = {
   "gt2-classroom": room("gt2-classroom", "GT2教室", "4F", "classroom", ["4f-gt2-front", "4f-gt2-back"], [
-    spawn("gt2-front-entry", 760, 420, "left"),
-    spawn("gt2-back-entry", 760, 260, "left"),
+    spawn("gt2-front-entry", 772, 144, "left"),
+    spawn("gt2-back-entry", 772, 1136, "left"),
     spawn("gt2-phone-cabinet", 160, 260, "right"),
   ]),
   "gt1-classroom": room("gt1-classroom", "GT1教室", "4F", "classroom", ["4f-gt1-front", "4f-gt1-back"], [
-    spawn("gt1-front-entry", 760, 420, "left"),
-    spawn("gt1-back-entry", 760, 260, "left"),
+    spawn("gt1-front-entry", 772, 144, "left"),
+    spawn("gt1-back-entry", 772, 1136, "left"),
     spawn("gt1-phone-cabinet", 160, 260, "right"),
   ]),
   "class-1-1": room("class-1-1", "高一一班", "4F", "classroom", ["4f-class-1-1-front", "4f-class-1-1-back"], [
-    spawn("class-1-1-front-entry", 760, 420, "left"),
-    spawn("class-1-1-back-entry", 760, 260, "left"),
+    spawn("class-1-1-front-entry", 772, 144, "left"),
+    spawn("class-1-1-back-entry", 772, 1136, "left"),
   ]),
   "class-1-2": room("class-1-2", "高一二班", "4F", "classroom", ["4f-class-1-2-front", "4f-class-1-2-back"], [
-    spawn("class-1-2-front-entry", 760, 420, "left"),
-    spawn("class-1-2-back-entry", 760, 260, "left"),
+    spawn("class-1-2-front-entry", 772, 144, "left"),
+    spawn("class-1-2-back-entry", 772, 1136, "left"),
   ]),
   "office-4f": room("office-4f", "四楼办公室", "4F", "office", ["4f-office-front", "4f-office-back"], [
-    spawn("office-front-entry", 160, 420, "right"),
-    spawn("office-back-entry", 160, 260, "right"),
+    spawn("office-front-entry", 160, 260, "right"),
+    spawn("office-back-entry", 160, 420, "right"),
     spawn("office-phone", 620, 180, "up"),
+  ], [
+    {
+      id: "office-phone",
+      label: "办公室电话",
+      bounds: rect(572, 144, 96, 72),
+      visible: true,
+      storyTargetId: "office-phone",
+      render: officePhoneRender,
+    },
   ]),
 };
 
-const fifthFloorRooms: Pick<Record<RoomId, RoomArea>, "communication-control-5f"> = {
+const fifthFloorRooms: Pick<Record<RoomId, RoomArea>, "communication-control-5f" | "principals-office-5f"> = {
   "communication-control-5f": room(
     "communication-control-5f",
     "学校通信控制室",
@@ -312,22 +411,39 @@ const fifthFloorRooms: Pick<Record<RoomId, RoomArea>, "communication-control-5f"
     "communicationControl",
     ["5f-communication-control-back"],
     [spawn("communication-control-back-entry", 160, 260, "right"), spawn("communication-device", 620, 240, "up")],
+    [
+      {
+        id: "communication-device",
+        label: "钢制通信设备",
+        bounds: rect(572, 184, 96, 72),
+        visible: true,
+        storyTargetId: "communication-device",
+        render: communicationDeviceRender,
+      },
+    ],
   ),
+  "principals-office-5f": room("principals-office-5f", "校长办公室", "5F", "office", ["principals-office-front-5f"], [
+    spawn("principals-office-front-entry", 760, 420, "left"),
+  ]),
 };
 
 function corridor(id: string, label: string, floorId: FloorId, doors: CorridorDoor[]): CorridorArea {
+  const elevatorDoor = doors.find((door) => door.kind === "elevator");
+  const elevatorArrivalY = elevatorDoor
+    ? elevatorDoor.bounds.y + elevatorDoor.bounds.height / 2
+    : 920;
   return {
     id,
     label,
     floorId,
     kind: "corridor",
     entityScope: "corridorOnly",
-    bounds: corridorBounds,
-    walkableBounds: corridorWalkable,
-    collisionZones: corridorCollision,
-    occlusionZones: corridorOcclusion,
+    bounds: floorId === "5F" ? fifthFloorCorridorBounds : corridorBounds,
+    walkableBounds: floorId === "5F" ? fifthFloorCorridorWalkable : corridorWalkable,
+    collisionZones: floorId === "5F" ? fifthFloorCorridorCollision : corridorCollision,
+    occlusionZones: floorId === "5F" ? fifthFloorCorridorOcclusion : corridorOcclusion,
     spawnPoints: [
-      spawn(`${floorId.toLowerCase()}-elevator-arrival`, 740, 1540, "left"),
+      spawn(`${floorId.toLowerCase()}-elevator-arrival`, 796, elevatorArrivalY, "left"),
       spawn(`${floorId.toLowerCase()}-corridor-center`, 560, 920, "down"),
     ],
     floorTile,

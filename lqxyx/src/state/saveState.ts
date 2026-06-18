@@ -25,7 +25,7 @@ export interface SaveState {
   readonly checkpointId: CheckpointId;
   readonly actId: ActId;
   readonly floorId: FloorId;
-  readonly roomId: RoomId;
+  readonly roomId: RoomId | null;
   readonly position: SavePosition;
   readonly controllableCharacterId: CharacterId;
   readonly task: string;
@@ -38,6 +38,10 @@ export interface SaveState {
 }
 
 export type InvalidSaveReason = 'corrupt-json' | 'version-mismatch' | 'invalid-shape';
+
+export const DEFAULT_STORY_FLAGS: Readonly<Record<string, boolean>> = {
+  communicationDisabled: false,
+};
 
 export type SaveLoadResult =
   | { readonly status: 'valid'; readonly state: SaveState }
@@ -64,6 +68,7 @@ const validRooms: readonly RoomId[] = [
   'class-1-2',
   'office-4f',
   'communication-control-5f',
+  'principals-office-5f',
 ];
 const validCharacters: readonly CharacterId[] = ['yangYunBlue', 'yangYunRed', 'dongJihao', 'danYuxuan', 'qinHaorui', 'unknown'];
 const validFacings: readonly SpawnPoint['facing'][] = ['up', 'down', 'left', 'right'];
@@ -77,11 +82,11 @@ export function createDefaultSaveState(): SaveState {
     checkpointId: 'A',
     actId: 'act-1',
     floorId: '4F',
-    roomId: 'gt1-classroom',
-    position: { x: 760, y: 420, facing: 'left' },
-    controllableCharacterId: 'yangYunRed',
+    roomId: null,
+    position: { x: 560, y: 920, facing: 'down' },
+    controllableCharacterId: 'yangYunBlue',
     task: '无',
-    storyFlags: {},
+    storyFlags: { ...DEFAULT_STORY_FLAGS },
     branchChoices: {},
     timers: {},
     inventory: [],
@@ -177,7 +182,7 @@ function toSaveState(value: unknown): SaveState | null {
     !isOneOf(value.checkpointId, validCheckpoints) ||
     !isOneOf(value.actId, validActs) ||
     !isOneOf(value.floorId, validFloors) ||
-    !isOneOf(value.roomId, validRooms) ||
+    (value.roomId !== null && !isOneOf(value.roomId, validRooms)) ||
     !isOneOf(value.controllableCharacterId, validCharacters) ||
     typeof value.task !== 'string'
   ) {
@@ -205,7 +210,7 @@ function toSaveState(value: unknown): SaveState | null {
     position,
     controllableCharacterId: value.controllableCharacterId,
     task: value.task,
-    storyFlags,
+    storyFlags: { ...DEFAULT_STORY_FLAGS, ...storyFlags },
     branchChoices,
     timers,
     inventory,

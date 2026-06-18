@@ -1,44 +1,202 @@
 import Phaser from 'phaser';
 
-import { GAME_HEIGHT, GAME_WIDTH, markGameSceneReady, markSceneStarted, refreshCanvasDebugState } from '../game/scaffoldState';
+import {
+  GAME_HEIGHT,
+  GAME_WIDTH,
+  getSceneDebugState,
+  markGameSceneReady,
+  markSceneStarted,
+  refreshCanvasDebugState,
+} from '../game/scaffoldState';
+import { InputManager } from '../input/InputManager';
+import { MapRenderer } from '../map/MapRenderer';
+import { clearSaveState } from '../state/saveState';
+import { NarrativeUIManager } from '../ui/NarrativeUIManager';
+import { UI_THEME, applyPixelStrokeStyle, applyPixelTextStyle } from '../ui/uiTheme';
 
 export class GameScene extends Phaser.Scene {
+  private inputManager: InputManager | null = null;
+  private narrativeUI: NarrativeUIManager | null = null;
+  private mapRenderer: MapRenderer | null = null;
+  private startButton!: Phaser.GameObjects.Rectangle;
+  private continueButton: Phaser.GameObjects.Rectangle | null = null;
+  private readonly UI_BASE_DEPTH = 980;
+  private readonly UI_TEXT_DEPTH = 981;
+
   public constructor() {
     super('GameScene');
   }
 
   public create(): void {
+    this.shutdown();
+    this.events.off(Phaser.Scenes.Events.SHUTDOWN, this.shutdown, this);
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.shutdown, this);
+
     markSceneStarted('GameScene');
     refreshCanvasDebugState();
-    markGameSceneReady();
+    const sceneState = markGameSceneReady();
+    const hasContinue = sceneState.menu.hasContinue;
 
+    this.inputManager = new InputManager(this);
+    if (typeof window !== 'undefined') {
+      (window as unknown as Record<string, unknown>).__YING_ZHONG_JIU_INPUT_MANAGER__ = this.inputManager;
+    }
+
+    this.narrativeUI = new NarrativeUIManager(this);
+    if (typeof window !== 'undefined') {
+      (window as unknown as Record<string, unknown>).__YING_ZHONG_JIU_NARRATIVE_UI__ = this.narrativeUI;
+      (window as unknown as Record<string, unknown>).__YING_ZHONG_JIU_NARRATIVE_UI_MANAGER__ = this.narrativeUI;
+    }
+
+    this.mapRenderer = new MapRenderer(this, '4F');
+    this.mapRenderer.renderCorridor('4F');
+    if (typeof window !== 'undefined') {
+      (window as unknown as Record<string, unknown>).__YING_ZHONG_JIU_MAP_RENDERER__ = this.mapRenderer;
+    }
+
+    // ── Title ──────────────────────────────────────────────────
     this.add
+      .rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2 + 8, 560, 360, UI_THEME.colors.surface, 0.58)
+      .setOrigin(0.5)
+      .setDepth(this.UI_BASE_DEPTH - 1);
+
+    applyPixelTextStyle(this.add
       .text(GAME_WIDTH / 2, GAME_HEIGHT / 2 - 120, '影中咎', {
         align: 'center',
-        color: '#f2f2f2',
-        fontFamily: 'sans-serif',
-        fontSize: '56px',
+        color: UI_THEME.colors.text,
+        fontFamily: UI_THEME.font.ui,
+        fontSize: '60px',
+        fontStyle: 'bold',
       })
-      .setOrigin(0.5);
+    )
+      .setOrigin(0.5)
+      .setDepth(this.UI_TEXT_DEPTH);
 
-    this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2 + 8, 360, 72, 0x9b1420).setOrigin(0.5);
+    // ── Start button ───────────────────────────────────────────
+    this.startButton = this.add
+      .rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2 + 8, 360, 72, UI_THEME.colors.accent)
+      .setOrigin(0.5)
+      .setDepth(this.UI_BASE_DEPTH)
+      .setInteractive({ useHandCursor: true });
+    applyPixelStrokeStyle(this.startButton, UI_THEME.stroke.medium, UI_THEME.colors.gold, 0.95);
 
-    this.add
+    applyPixelTextStyle(this.add
       .text(GAME_WIDTH / 2, GAME_HEIGHT / 2 + 8, '开始新游戏', {
         align: 'center',
-        color: '#ffffff',
-        fontFamily: 'sans-serif',
+        color: UI_THEME.colors.text,
+        fontFamily: UI_THEME.font.ui,
         fontSize: '32px',
+        fontStyle: 'bold',
       })
-      .setOrigin(0.5);
+    )
+      .setOrigin(0.5)
+      .setDepth(this.UI_TEXT_DEPTH);
 
-    this.add
-      .text(GAME_WIDTH / 2, GAME_HEIGHT / 2 + 104, '运行时外壳已就绪，后续任务接入第一幕系统。', {
+    applyPixelTextStyle(this.add
+      .text(GAME_WIDTH / 2, GAME_HEIGHT / 2 + (hasContinue ? 188 : 104), '第一幕 · 影中咎', {
         align: 'center',
-        color: '#cfcfcf',
-        fontFamily: 'sans-serif',
+        color: UI_THEME.colors.textMuted,
+        fontFamily: UI_THEME.font.ui,
         fontSize: '24px',
       })
-      .setOrigin(0.5);
+    )
+      .setOrigin(0.5)
+      .setDepth(this.UI_BASE_DEPTH);
+
+    if (hasContinue) {
+      this.continueButton = this.add
+        .rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2 + 108, 360, 72, UI_THEME.colors.surfaceMuted)
+        .setOrigin(0.5)
+        .setDepth(this.UI_BASE_DEPTH)
+        .setInteractive({ useHandCursor: true });
+      applyPixelStrokeStyle(this.continueButton, UI_THEME.stroke.medium, UI_THEME.colors.gold, 0.88);
+
+      applyPixelTextStyle(this.add
+        .text(GAME_WIDTH / 2, GAME_HEIGHT / 2 + 108, '继续游戏', {
+          align: 'center',
+          color: UI_THEME.colors.text,
+          fontFamily: UI_THEME.font.ui,
+          fontSize: '32px',
+          fontStyle: 'bold',
+        })
+      )
+        .setOrigin(0.5)
+        .setDepth(this.UI_TEXT_DEPTH);
+
+      this.continueButton.on('pointerover', () => {
+        this.continueButton?.setFillStyle(UI_THEME.colors.accentHover);
+      });
+      this.continueButton.on('pointerout', () => {
+        this.continueButton?.setFillStyle(UI_THEME.colors.surfaceMuted);
+      });
+      this.continueButton.on('pointerdown', () => {
+        this.continueGame();
+      });
+    }
+
+    // ── Button handlers ────────────────────────────────────────
+    this.startButton.on('pointerover', () => {
+      this.startButton.setFillStyle(UI_THEME.colors.accentHover);
+    });
+    this.startButton.on('pointerout', () => {
+      this.startButton.setFillStyle(UI_THEME.colors.accent);
+    });
+    this.startButton.on('pointerdown', () => {
+      this.startNewGame();
+    });
+
+    // Also allow keyboard F/Enter to start
+    if (this.input.keyboard) {
+      this.input.keyboard.on('keydown-F', this.handleKeyboardF);
+      this.input.keyboard.on('keydown-ENTER', this.handleKeyboardEnter);
+      this.input.keyboard.on('keydown-C', this.handleKeyboardC);
+      this.continueAvailable = hasContinue;
+    }
+  }
+
+  public update(): void {
+    this.inputManager?.update();
+    void this.narrativeUI;
+    void this.mapRenderer;
+  }
+
+  private continueAvailable = false;
+
+  private handleKeyboardF = (): void => {
+    if (!this.scene?.isActive()) return;
+    this.startNewGame();
+  };
+
+  private handleKeyboardEnter = (): void => {
+    if (!this.scene?.isActive()) return;
+    this.startNewGame();
+  };
+
+  private handleKeyboardC = (): void => {
+    if (!this.scene?.isActive()) return;
+    if (this.continueAvailable) this.continueGame();
+  };
+
+  private startNewGame(): void {
+    clearSaveState();
+    getSceneDebugState().menu = { visible: true, selectedAction: 'new-game', hasContinue: false };
+
+    this.scene.start('PlayScene');
+  }
+
+  private continueGame(): void {
+    getSceneDebugState().menu = { ...getSceneDebugState().menu, selectedAction: 'continue' };
+    this.scene.start('PlayScene');
+  }
+
+  public shutdown(): void {
+    this.input?.keyboard?.removeAllListeners();
+    this.inputManager?.destroy();
+    (this.narrativeUI as { destroy?: () => void } | null)?.destroy?.();
+    this.mapRenderer?.destroy();
+    this.inputManager = null;
+    this.narrativeUI = null;
+    this.mapRenderer = null;
+    this.continueButton = null;
   }
 }

@@ -40,3 +40,10 @@
 ## 2026-06-06 Task 9: checkpoint save/load issues
 - Vite build still reports the known Phaser bundle-size warning over 500 kB; build exits 0 and Task 9 did not change chunking.
 - Review-work skill was loaded because Task 9 touched more than three files, but this harness exposes no compatible reviewer-spawn tools from that skill; verification was completed with local tests, typecheck, build, LSP, and Playwright evidence.
+
+## 2026-06-06 Task 16: production deployment issues
+- Vite build still reports the known Phaser bundle-size warning over 500 kB; build exits 0 and Task 16 did not change chunking.
+
+## 2026-06-06 Task 14: supplement blocker gate issues
+- `rg` is unavailable in this environment, so scoped Python searches were used for blocker/report pattern discovery while avoiding traversal of the forbidden source directory.
+- Vite build may still emit the known Phaser bundle-size warning; this remains non-blocking when build exits 0.

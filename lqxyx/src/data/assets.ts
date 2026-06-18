@@ -219,7 +219,7 @@ export const assetManifest = [
     mimeType: "image/png",
     width: 128,
     height: 128,
-    usage: "Ground-object/pickup body-part art for 秦浩睿; action asset filename uses 秦浩瑞.",
+    usage: "Ground-object/pickup body-part art for 秦浩睿.",
     productionStatus: "FINAL_ASSET",
   },
   {
@@ -229,7 +229,7 @@ export const assetManifest = [
     mimeType: "image/png",
     width: 128,
     height: 128,
-    usage: "Ground-object/pickup head-part art for 秦浩睿; action asset filename uses 秦浩瑞.",
+    usage: "Ground-object/pickup head-part art for 秦浩睿.",
     productionStatus: "FINAL_ASSET",
   },
   {
@@ -239,7 +239,7 @@ export const assetManifest = [
     mimeType: "image/png",
     width: 128,
     height: 128,
-    usage: "Story-only lying bloody sprite for 秦浩睿; action asset filename uses 秦浩瑞.",
+    usage: "Story-only lying bloody sprite for 秦浩睿.",
     productionStatus: "FINAL_ASSET",
   },
   {
@@ -249,7 +249,7 @@ export const assetManifest = [
     mimeType: "image/png",
     width: 128,
     height: 128,
-    usage: "Story-only lying clean sprite for 秦浩睿; action asset filename uses 秦浩瑞.",
+    usage: "Story-only lying clean sprite for 秦浩睿.",
     productionStatus: "FINAL_ASSET",
   },
   {
@@ -259,7 +259,7 @@ export const assetManifest = [
     mimeType: "image/png",
     width: 128,
     height: 128,
-    usage: "Story-only standing-right sprite for 秦浩睿; action asset filename uses 秦浩瑞.",
+    usage: "Story-only standing-right sprite for 秦浩睿.",
     productionStatus: "FINAL_ASSET",
   },
   {
@@ -607,11 +607,112 @@ export const approvedProgrammaticAssets = [
   },
 ] as const satisfies readonly ApprovedImplementation[];
 
-export const qinAssetAlias = {
-  displayName: "秦浩睿",
-  actionAssetName: "秦浩瑞",
-  portraitAssetName: "秦浩睿",
-} as const;
+export interface ProductionArtGateInput {
+  readonly finalAssets: readonly AssetManifestEntry[];
+  readonly approvedImplementations: readonly ApprovedImplementation[];
+  readonly missingBlockers: readonly MissingAssetBlocker[];
+  readonly markFinalComplete: boolean;
+}
+
+export function validateProductionArtGate(input: ProductionArtGateInput): string[] {
+  const finalAssetKeys = new Set(input.finalAssets.map((asset) => asset.key));
+  const approvedImplementationKeys = new Set(input.approvedImplementations.map((asset) => asset.key));
+  const availableKeys = new Set([...finalAssetKeys, ...approvedImplementationKeys]);
+  const failures: string[] = [];
+
+  const missingRequiredKeys = requiredFirstActAssetKeys.filter((key) => !availableKeys.has(key));
+  if (missingRequiredKeys.length > 0) {
+    failures.push(
+      `Required first-act production art keys are not final assets or approved implementations: ${missingRequiredKeys.join(", ")}`,
+    );
+  }
+
+  const unresolvedBlockerKeys = input.missingBlockers
+    .filter((blocker) => !finalAssetKeys.has(blocker.key))
+    .map((blocker) => blocker.key);
+
+  if (input.markFinalComplete && unresolvedBlockerKeys.length > 0) {
+    failures.push(
+      `Cannot mark first-act production art final complete while missing supplement blockers remain: ${unresolvedBlockerKeys.join(", ")}`,
+    );
+  }
+
+  return failures;
+}
+
+export function buildSupplementAssetReport(): string {
+  const finalAssetByKey = new Map(assetManifest.map((asset) => [asset.key, asset]));
+  const approvedImplementationByKey = new Map(approvedProgrammaticAssets.map((asset) => [asset.key, asset]));
+  const blockers = getMissingAssetBlockers();
+  const gateFailures = validateProductionArtGate({
+    finalAssets: assetManifest,
+    approvedImplementations: approvedProgrammaticAssets,
+    missingBlockers: blockers,
+    markFinalComplete: true,
+  });
+
+  const lines = [
+    "# Task 14 Supplement Asset Report",
+    "",
+    "Current known status:",
+    `- Final supplied assets: ${assetManifest.length}`,
+    `- Approved programmatic/reuse/derived implementations: ${approvedProgrammaticAssets.length}`,
+    `- Current first-act supplement blockers: ${
+      blockers.length === 0 ? "empty" : blockers.map((blocker) => blocker.key).join(", ")
+    }`,
+    "",
+    "Required supplement status:",
+    formatRequiredStatus("doors.wallWoodBars", finalAssetByKey, approvedImplementationByKey),
+    formatRequiredStatus("communication.steelInteractable", finalAssetByKey, approvedImplementationByKey),
+    formatRequiredStatus("officeFurniture.reuseDeskChairs", finalAssetByKey, approvedImplementationByKey),
+    formatRequiredStatus("prop.phone", finalAssetByKey, approvedImplementationByKey),
+    formatRequiredStatus("prop.phoneCabinetFront", finalAssetByKey, approvedImplementationByKey),
+    formatRequiredStatus("prop.phoneCabinetAngled", finalAssetByKey, approvedImplementationByKey),
+    formatRequiredStatus("prop.celery", finalAssetByKey, approvedImplementationByKey),
+    formatRequiredStatus("prop.ruler", finalAssetByKey, approvedImplementationByKey),
+    "",
+    "Gate result:",
+    gateFailures.length === 0
+      ? "- PASS: no newly discovered missing first-act art remains, and the blocker mechanism is preserved."
+      : `- BLOCKED: ${gateFailures.join("; ")}`,
+  ];
+
+  return lines.join("\n");
+}
+
+function formatRequiredStatus(
+  key: string,
+  finalAssetByKey: ReadonlyMap<string, AssetManifestEntry>,
+  approvedImplementationByKey: ReadonlyMap<string, ApprovedImplementation>,
+): string {
+  const finalAsset = finalAssetByKey.get(key);
+  if (finalAsset !== undefined) {
+    return `- ${key}: supplied final asset at ${finalAsset.path}`;
+  }
+
+  const approvedImplementation = approvedImplementationByKey.get(key);
+  if (approvedImplementation !== undefined) {
+    return `- ${key}: ${formatApprovedImplementationStatus(approvedImplementation)}`;
+  }
+
+  return `- ${key}: missing supplement blocker`;
+}
+
+function formatApprovedImplementationStatus(approvedImplementation: ApprovedImplementation): string {
+  if (approvedImplementation.key === "doors.wallWoodBars") {
+    return "approved programmatic wood wall bars";
+  }
+
+  if (approvedImplementation.key === "communication.steelInteractable") {
+    return "approved programmatic steel interactable";
+  }
+
+  if (approvedImplementation.key === "officeFurniture.reuseDeskChairs") {
+    return "approved reuse of furniture.classroomDeskChairs";
+  }
+
+  return approvedImplementation.implementation;
+}
 
 export const requiredFirstActAssetKeys = [
   "floor.tile",

@@ -4,7 +4,6 @@ import {
   approvedProgrammaticAssets,
   assetManifest,
   getMissingAssetBlockers,
-  qinAssetAlias,
   requiredFirstActAssetKeys,
   validateAssetManifest,
 } from "./assets";
@@ -122,8 +121,7 @@ describe("asset manifest", () => {
     );
   });
 
-  it("records Qin display-name alias separately from asset filename spelling", () => {
-    expect(qinAssetAlias).toEqual({ displayName: "秦浩睿", actionAssetName: "秦浩瑞", portraitAssetName: "秦浩睿" });
+  it("includes qinHaorui action assets (disk filenames use 秦浩瑞) and portrait (uses 秦浩睿)", () => {
     expect(assetManifest.some((asset) => asset.path.includes("秦浩瑞-头部部件"))).toBe(true);
     expect(assetManifest.some((asset) => asset.path.includes("立绘/秦浩睿"))).toBe(true);
   });

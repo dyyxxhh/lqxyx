@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { schoolMaps, type DoorInteraction, type InRoomDoor, type RoomArea } from "../data/maps";
+import { schoolMaps, type DoorInteraction, type InRoomDoor, type RoomArea, type RoomId } from "../data/maps";
 
 interface RoomAreaWithDoors extends RoomArea {
   inRoomDoors: InRoomDoor[];
@@ -298,6 +298,26 @@ describe("map schema", () => {
         render: expect.objectContaining({ assetKey: "communication.steelInteractable", material: "steel" }),
       }),
     ]);
+  });
+
+  it("map-schema: non-classroom rooms (office, principals office, communication control) have no desk collision/occlusion zones and walkable bounds fill the room", () => {
+    const nonClassroomIds: RoomId[] = ["office-4f", "principals-office-5f", "communication-control-5f"];
+
+    for (const roomId of nonClassroomIds) {
+      const room = allRooms().find((candidate) => candidate.id === roomId);
+      expect(room, `room ${roomId} missing`).toBeDefined();
+      expect(room!.kind).not.toBe("classroom");
+      expect(room!.collisionZones).toEqual([]);
+      expect(room!.occlusionZones).toEqual([]);
+      // walkable should reach within wallThickness (12) of room bounds, eliminating the bottom "air wall"
+      const walkable = room!.walkableBounds[0]!;
+      expect(walkable.x).toBeLessThanOrEqual(12);
+      expect(walkable.y).toBeLessThanOrEqual(12);
+      expect(walkable.x + walkable.width).toBeGreaterThanOrEqual(room!.bounds.width - 12);
+      expect(walkable.y + walkable.height).toBeGreaterThanOrEqual(room!.bounds.height - 12);
+      // bounds height should be a multiple of the rendered floor tile size (120) so the bottom row does not overflow past the wall
+      expect(room!.bounds.height % 120).toBe(0);
+    }
   });
 
   it("map-schema: same-class 4F front/back door gap is exactly 32px", () => {

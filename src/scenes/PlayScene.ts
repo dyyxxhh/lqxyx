@@ -66,6 +66,11 @@ export class PlayScene extends Phaser.Scene {
   // Black screen overlay (separate from curtain for mid-scene blackscreens)
   private blackOverlay: Phaser.GameObjects.Rectangle | null = null;
 
+  // Story-driven fade overlay (fade out / fade in story commands)
+  // Sits below the dialogue UI so dialogue can render on top of the black fade.
+  private fadeOverlay: Phaser.GameObjects.Rectangle | null = null;
+  private fadeTween: Phaser.Tweens.Tween | null = null;
+
   constructor() {
     super('PlayScene');
   }
@@ -139,6 +144,15 @@ export class PlayScene extends Phaser.Scene {
     this.blackOverlay = this.add
       .rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, GAME_WIDTH, GAME_HEIGHT, 0x000000, 1)
       .setDepth(1500)
+      .setScrollFactor(0)
+      .setVisible(false);
+
+    // ── Fade overlay for story `fade in/out` commands ──────────
+    // Depth 999 keeps it BELOW dialogue UI (1000+) so dialogue stays
+    // visible on the black screen the script asks for in B-1.
+    this.fadeOverlay = this.add
+      .rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, GAME_WIDTH, GAME_HEIGHT, 0x000000, 0)
+      .setDepth(999)
       .setScrollFactor(0)
       .setVisible(false);
 
@@ -866,11 +880,37 @@ export class PlayScene extends Phaser.Scene {
   }
 
   private handleFade(direction: 'in' | 'out', durationMs: number): void {
-    const camera = this.cameras.main;
+    const overlay = this.fadeOverlay;
+    if (!overlay) return;
+
+    if (this.fadeTween) {
+      this.fadeTween.stop();
+      this.fadeTween = null;
+    }
+
     if (direction === 'out') {
-      camera.fadeOut(durationMs);
+      overlay.setVisible(true);
+      this.fadeTween = this.tweens.add({
+        targets: overlay,
+        alpha: 1,
+        duration: durationMs,
+        ease: 'Linear',
+        onComplete: () => {
+          this.fadeTween = null;
+        },
+      });
     } else {
-      camera.fadeIn(durationMs);
+      overlay.setVisible(true);
+      this.fadeTween = this.tweens.add({
+        targets: overlay,
+        alpha: 0,
+        duration: durationMs,
+        ease: 'Linear',
+        onComplete: () => {
+          overlay.setVisible(false);
+          this.fadeTween = null;
+        },
+      });
     }
   }
 
@@ -920,5 +960,11 @@ export class PlayScene extends Phaser.Scene {
     this.inputManager?.destroy();
     this.mapRenderer?.destroy();
     this.hideBranchChoices();
+    if (this.fadeTween) {
+      this.fadeTween.stop();
+      this.fadeTween = null;
+    }
+    this.fadeOverlay = null;
+    this.blackOverlay = null;
   }
 }

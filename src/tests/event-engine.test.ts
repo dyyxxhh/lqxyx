@@ -683,6 +683,46 @@ describe('EventEngine — switchView location state', () => {
       roomId: 'office-4f',
     });
   });
+
+  it('A-1 plays "秦浩睿: 杨云？杨云？！你不要过来啊！！" BEFORE the scripted walk to 秦浩睿', () => {
+    const branch = firstActBranches.find((b) => b.id === 'A-1')!;
+    const dialogueIndex = branch.commands.findIndex(
+      (cmd) => cmd.type === 'dialogue' && cmd.text === '杨云？杨云？！你不要过来啊！！',
+    );
+    const setControlIndex = branch.commands.findIndex(
+      (cmd) => cmd.type === 'setControl' && cmd.scriptedMovementId === 'yang-yun-to-qin-haorui-body',
+    );
+    expect(dialogueIndex).toBeGreaterThan(-1);
+    expect(setControlIndex).toBeGreaterThan(-1);
+    expect(dialogueIndex).toBeLessThan(setControlIndex);
+  });
+
+  it('A-2 plays "秦浩睿: 杨云？杨云？！你不要过来啊！！" BEFORE the scripted walk to 秦浩睿', () => {
+    const branch = firstActBranches.find((b) => b.id === 'A-2')!;
+    const dialogueIndex = branch.commands.findIndex(
+      (cmd) => cmd.type === 'dialogue' && cmd.text === '杨云？杨云？！你不要过来啊！！',
+    );
+    const setControlIndex = branch.commands.findIndex(
+      (cmd) => cmd.type === 'setControl' && cmd.scriptedMovementId === 'yang-yun-to-qin-haorui-body',
+    );
+    expect(dialogueIndex).toBeGreaterThan(-1);
+    expect(setControlIndex).toBeGreaterThan(-1);
+    expect(dialogueIndex).toBeLessThan(setControlIndex);
+  });
+
+  it('B-1 ends with a fade-in before checkpoint G so the screen recovers after the split-in-two ending', () => {
+    const branch = firstActBranches.find((b) => b.id === 'B-1')!;
+    const endingIndex = branch.commands.findIndex(
+      (cmd) => cmd.type === 'ending' && cmd.id === 'split-in-two',
+    );
+    const checkpointGIndex = branch.commands.findIndex(
+      (cmd) => cmd.type === 'checkpoint' && cmd.id === 'G',
+    );
+    expect(endingIndex).toBeGreaterThan(-1);
+    expect(checkpointGIndex).toBeGreaterThan(endingIndex);
+    const between = branch.commands.slice(endingIndex + 1, checkpointGIndex);
+    expect(between).toContainEqual(expect.objectContaining({ type: 'fade', direction: 'in' }));
+  });
 });
 
 describe('EventEngine — input lock/unlock', () => {
@@ -865,6 +905,8 @@ describe('EventEngine — death flash timing', () => {
     engine.updatePlayerPosition({ x: 700, y: 220 });
     engine.updatePlayerPosition({ x: 760, y: 220 });
     engine.update(16);
+    // Proximity satisfied → switchCharacter → dialogue 秦浩睿 "你不要过来啊！！" (awaiting_advance)
+    engine.advance(); // past 秦浩睿 dialogue → setControl scripted movement
     expect(completedMovements).toHaveLength(1);
     completeMovement?.(completedMovements[0]!.target);
     engine.advance();
@@ -1812,6 +1854,9 @@ describe('EventEngine — Qin scripted movement gated on GT2 proximity', () => {
     engine.updatePlayerPosition({ x: 760, y: 220 });
     engine.update(16);
 
+    // Proximity → setFlag → switchCharacter → dialogue 秦浩睿 (awaiting_advance) → setControl scripted movement
+    expect(engine.getCurrentState()).toBe('awaiting_advance');
+    engine.advance(); // past 秦浩睿 "你不要过来啊！！"
     expect(scriptedMovements).toHaveLength(1);
     expect(scriptedMovements[0]!.target).toEqual({ x: 760, y: 330 });
   });
@@ -1866,6 +1911,9 @@ describe('EventEngine — Qin scripted movement gated on GT2 proximity', () => {
     engine.updatePlayerPosition({ x: 760, y: 220 });
     engine.update(16);
 
+    // Proximity → setFlag → switchCharacter → dialogue 秦浩睿 (awaiting_advance) → setControl scripted movement
+    expect(engine.getCurrentState()).toBe('awaiting_advance');
+    engine.advance(); // past 秦浩睿 "你不要过来啊！！"
     expect(scriptedMovements).toHaveLength(1);
     expect(scriptedMovements[0]!.target).toEqual({ x: 760, y: 330 });
   });

@@ -629,6 +629,45 @@ describe('EventEngine — switchView location state', () => {
     expect(uiLog.taskTexts).toEqual(['无', '前往五楼关闭学校通信']);
   });
 
+  it('checkpoint E plays "我操！真的假的？芹菜你别吓我。" BEFORE the scripted walk to 秦浩睿尸体', () => {
+    const checkpointE = storyManifest.acts[0]!.checkpoints.find((c) => c.id === 'E')!;
+    const ourcryIndex = checkpointE.commands.findIndex(
+      (cmd) => cmd.type === 'dialogue' && cmd.text === '我操！真的假的？芹菜你别吓我。',
+    );
+    const setControlIndex = checkpointE.commands.findIndex(
+      (cmd) => cmd.type === 'setControl' && cmd.scriptedMovementId === 'dong-jihao-to-qin-haorui-body',
+    );
+    const lateryIndex = checkpointE.commands.findIndex(
+      (cmd) => cmd.type === 'dialogue' && cmd.text === '真的……',
+    );
+
+    expect(ourcryIndex).toBeGreaterThan(-1);
+    expect(setControlIndex).toBeGreaterThan(-1);
+    expect(lateryIndex).toBeGreaterThan(-1);
+    // Ordering: outcry → scripted-walk → grief
+    expect(ourcryIndex).toBeLessThan(setControlIndex);
+    expect(setControlIndex).toBeLessThan(lateryIndex);
+  });
+
+  it('checkpoint F transitions to checkpoint G after the "……坏了。" dialogue advances', () => {
+    const onCheckpointReached = vi.fn();
+    const { engine } = createEngine({ onCheckpointReached });
+
+    engine.startFromCheckpoint('F');
+    expect(engine.getCurrentState()).toBe('awaiting_interaction');
+
+    engine.updateLocation('4F', 'office-4f');
+    engine.updatePlayerPosition({ x: 620, y: 180 });
+    engine.completeInteraction('F');
+    expect(engine.getCurrentState()).toBe('awaiting_advance');
+
+    engine.advance(); // past "……坏了。"
+    // task "无" → gotoCheckpoint G → checkpoint G + branches → awaiting_branch
+    expect(onCheckpointReached).toHaveBeenCalledWith('G');
+    expect(engine.getCurrentState()).toBe('awaiting_branch');
+    expect(engine.getPendingBranchIds()).toEqual(['B-1', 'B-2']);
+  });
+
   it('checkpoint H switchView sets Dong Jihao in the office room', () => {
     const { engine } = createEngine({
       saveState: {
@@ -1546,6 +1585,7 @@ describe('EventEngine — proximity and scripted movement contracts', () => {
 
     engine.startFromCheckpoint('E');
     engine.update(500);
+    engine.advance(); // past "我操！真的假的？芹菜你别吓我。" → setControl scripted movement
 
     expect(scriptedMovements).toHaveLength(1);
     const movement = scriptedMovements[0]!;
@@ -1554,7 +1594,8 @@ describe('EventEngine — proximity and scripted movement contracts', () => {
     expect(movement.target).toEqual({ x: 760, y: 330 });
     expect(movement.tolerancePx).toBe(16);
     expect(inputLog.lockCalls.some((c) => c.reason === 'scriptedMovement')).toBe(true);
-    expect(engine.getCurrentState()).toBe('awaiting_advance');
+    // sync stub overshoots through the post-movement dialogue into fade-out (production stays at awaiting_advance because Phaser tween defers completion)
+    expect(engine.getCurrentState()).not.toBe('awaiting_scripted_movement');
   });
 });
 

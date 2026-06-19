@@ -265,8 +265,8 @@ export const firstActCheckpoints: StoryCheckpoint[] = [
       { type: "switchView", characterId: "dongJihao", location: "GT2 班内前门", locationState: { floorId: "4F", roomId: "gt2-classroom" }, position: { x: 772, y: 144 }, facing: "left" },
       { type: "fade", direction: "in", durationMs: 500 },
       { type: "switchCharacter", characterId: "dongJihao", visibleName: "董继豪", control: "scripted" },
-      { type: "setControl", enabled: false, reason: "董继豪自动走向秦浩睿尸体", scriptedMovementId: "dong-jihao-to-qin-haorui-body" },
       { type: "dialogue", speaker: "董继豪", text: "我操！真的假的？芹菜你别吓我。" },
+      { type: "setControl", enabled: false, reason: "董继豪自动走向秦浩睿尸体", scriptedMovementId: "dong-jihao-to-qin-haorui-body" },
       { type: "dialogue", speaker: "董继豪", text: "真的……", tone: "震惊、悲痛地" },
       { type: "fade", direction: "out", durationMs: 500 },
       { type: "switchView", characterId: "yangYunRed", location: "办公室门口，人物朝向向左", locationState: { floorId: "4F", roomId: null }, position: { x: 796, y: 868 }, facing: "left" },
@@ -297,6 +297,7 @@ export const firstActCheckpoints: StoryCheckpoint[] = [
       { type: "interaction", input: "F", target: "办公室电话", result: "拨打 9110", physicalTarget: { floorId: "4F", roomId: "office-4f", points: [{ x: 620, y: 180, radiusPx: 48 }] } },
       { type: "dialogue", speaker: "董继豪", text: "……坏了。", bodyAction: "按 9110" },
       { type: "task", text: "无" },
+      { type: "gotoCheckpoint", id: "G" },
     ],
   },
   {

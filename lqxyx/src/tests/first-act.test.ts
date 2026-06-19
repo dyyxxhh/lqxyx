@@ -547,7 +547,8 @@ describe('First Act — Input Lock States', () => {
   it('setControl(enabled=false) locks input as scriptedMovement', () => {
     const { engine, inputLog } = createEngine();
     engine.startFromCheckpoint('E');
-    engine.update(500); // past fade in
+    engine.update(500); // past fade in → dialogue "我操！..." (awaiting_advance)
+    engine.advance();   // past dialogue → setControl(false) scripted movement
 
     // After setControl(false) for dongJihao scripted movement
     expect(inputLog.lockCalls.some((c) => c.reason === 'scriptedMovement')).toBe(true);

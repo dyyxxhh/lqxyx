@@ -150,8 +150,11 @@ export class PlayScene extends Phaser.Scene {
     // ── Fade overlay for story `fade in/out` commands ──────────
     // Depth 999 keeps it BELOW dialogue UI (1000+) so dialogue stays
     // visible on the black screen the script asks for in B-1.
+    // fillAlpha=1 so the rectangle is fully opaque; we control visibility
+    // via the gameobject's alpha (tweened by handleFade).
     this.fadeOverlay = this.add
-      .rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, GAME_WIDTH, GAME_HEIGHT, 0x000000, 0)
+      .rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, GAME_WIDTH, GAME_HEIGHT, 0x000000, 1)
+      .setAlpha(0)
       .setDepth(999)
       .setScrollFactor(0)
       .setVisible(false);

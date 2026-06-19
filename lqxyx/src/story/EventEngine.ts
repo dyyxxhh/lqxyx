@@ -320,6 +320,13 @@ export class EventEngine {
     const targets: readonly StoryPhysicalTarget[] = Array.isArray(this.pendingInteractionPhysicalTarget)
       ? this.pendingInteractionPhysicalTarget
       : [this.pendingInteractionPhysicalTarget];
+
+    // If the interaction can be satisfied across more than one distinct
+    // (floor, room) location, the player legitimately needs to use doors /
+    // the elevator to walk between them — do NOT block doors.
+    const distinctLocations = new Set(targets.map((t) => `${t.floorId}::${String(t.roomId)}`));
+    if (distinctLocations.size > 1) return false;
+
     return targets.some(
       (candidate) =>
         candidate.floorId === this.mutable.floorId && candidate.roomId === this.mutable.roomId,
@@ -566,6 +573,11 @@ export class EventEngine {
   private handleSwitchCharacter(command: Extract<StoryCommand, { type: 'switchCharacter' }>): void {
     this.mutable.controllableCharacterId = command.characterId;
     this.currentControlState = command.control;
+    if (command.control === 'hidden') {
+      // Hiding a character is not a "you are now [X]" transition — skip the role prompt entirely.
+      this.restoreControlLock();
+      return;
+    }
     this.narrativeUI.setRolePrompt(command.characterId, command.visibleName);
     const rolePromptController = this.narrativeUI as unknown as { isRolePromptBlocking?: () => boolean };
     if (rolePromptController.isRolePromptBlocking?.() === true) {

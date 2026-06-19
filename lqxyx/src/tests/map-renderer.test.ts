@@ -343,7 +343,7 @@ describe('map renderer', () => {
     expect(setMapDebugState({}).currentRoomId).toBeNull();
   });
 
-  it('map-renderer: pointer room-door interaction reports the door through callback', () => {
+  it('map-renderer: room-door pointerdown is intentionally unbound — interaction is F-key only', () => {
     const mock = createMockScene();
     const onDoorInteraction = vi.fn();
     const renderer = new MapRenderer(mock.scene as never, '4F', onDoorInteraction);
@@ -355,13 +355,12 @@ describe('map renderer', () => {
     );
 
     expect(gt1FrontHitArea).toBeDefined();
-    (gt1FrontHitArea!.eventHandlers as Map<string, () => void>).get('pointerdown')?.();
+    const pointerDownHandler = (gt1FrontHitArea!.eventHandlers as Map<string, () => void>).get('pointerdown');
+    expect(pointerDownHandler).toBeUndefined();
 
-    expect(onDoorInteraction).toHaveBeenCalledTimes(1);
-    expect(onDoorInteraction).toHaveBeenCalledWith(expect.objectContaining({
-      id: '4f-gt1-front',
-      interaction: expect.objectContaining({ spawnPointId: 'gt1-front-entry' }),
-    }));
+    // Even invoking the (absent) handler must not produce a callback.
+    pointerDownHandler?.();
+    expect(onDoorInteraction).not.toHaveBeenCalled();
     expect(setMapDebugState({}).currentRoomId).toBeNull();
   });
 

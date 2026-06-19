@@ -7,7 +7,7 @@ import {
   setStoryDebugState,
 } from '../story/eventState';
 import { resetSceneDebugState, getSceneDebugState, createInitialSceneDebugState } from '../game/scaffoldState';
-import { firstActBranches, storyManifest } from '../data/story';
+import { firstActBranches, storyManifest, type StoryCommand } from '../data/story';
 import { buildStoryEntityDebugEntries } from '../scenes/storyEntities';
 import { createDefaultSaveState } from '../state/saveState';
 import { SAVE_STATE_STORAGE_KEY } from '../state/saveState';
@@ -723,6 +723,81 @@ describe('EventEngine — switchView location state', () => {
     const between = branch.commands.slice(endingIndex + 1, checkpointGIndex);
     expect(between).toContainEqual(expect.objectContaining({ type: 'fade', direction: 'in' }));
   });
+
+  it('B-2 requires picking up BOTH heads at body positions and chains to checkpoint H via gotoCheckpoint', () => {
+    const branch = firstActBranches.find((b) => b.id === 'B-2')!;
+    const interactions = branch.commands.filter(
+      (cmd): cmd is Extract<StoryCommand, { type: 'interaction' }> => cmd.type === 'interaction' && cmd.input === 'Q',
+    );
+    expect(interactions).toHaveLength(2);
+
+    const danPickup = interactions.find((cmd) => cmd.target.includes('但宇轩'));
+    const qinPickup = interactions.find((cmd) => cmd.target.includes('秦浩睿'));
+    expect(danPickup).toBeDefined();
+    expect(qinPickup).toBeDefined();
+
+    const danTarget = danPickup!.physicalTarget;
+    const qinTarget = qinPickup!.physicalTarget;
+    expect(Array.isArray(danTarget)).toBe(false);
+    expect(Array.isArray(qinTarget)).toBe(false);
+    expect(danTarget).toMatchObject({ floorId: '4F', roomId: 'gt1-classroom', points: [{ x: 760, y: 520 }] });
+    expect(qinTarget).toMatchObject({ floorId: '4F', roomId: 'gt2-classroom', points: [{ x: 760, y: 330 }] });
+
+    // Ends with gotoCheckpoint H (not a bare checkpoint annotation that would leave the engine idle).
+    const last = branch.commands[branch.commands.length - 1];
+    expect(last).toMatchObject({ type: 'gotoCheckpoint', id: 'H' });
+  });
+
+  it('B-2 hides 董继豪 with control="hidden" before switching to 杨云 so the role prompt does NOT briefly say "你现在是董继豪"', () => {
+    const branch = firstActBranches.find((b) => b.id === 'B-2')!;
+    const dongJihaoHide = branch.commands.findIndex(
+      (cmd) => cmd.type === 'switchCharacter' && cmd.characterId === 'dongJihao' && cmd.control === 'hidden',
+    );
+    const yangYunSwitch = branch.commands.findIndex(
+      (cmd) => cmd.type === 'switchCharacter' && cmd.characterId === 'yangYunRed' && cmd.control === 'player',
+    );
+    expect(dongJihaoHide).toBeGreaterThan(-1);
+    expect(yangYunSwitch).toBeGreaterThan(dongJihaoHide);
+  });
+
+  it('checkpoint E runs switchCharacter BEFORE the fade-in so the role prompt and the fade-in render as one transition', () => {
+    const checkpoint = storyManifest.acts[0]!.checkpoints.find((c) => c.id === 'E')!;
+    // First fade-in / switchCharacter pair (董继豪)
+    const dongFadeIn = checkpoint.commands.findIndex(
+      (cmd) => cmd.type === 'fade' && cmd.direction === 'in',
+    );
+    const dongSwitch = checkpoint.commands.findIndex(
+      (cmd) => cmd.type === 'switchCharacter' && cmd.characterId === 'dongJihao',
+    );
+    expect(dongSwitch).toBeGreaterThan(-1);
+    expect(dongFadeIn).toBeGreaterThan(-1);
+    expect(dongSwitch).toBeLessThan(dongFadeIn);
+
+    // Second fade-in / switchCharacter pair (yangYunRed)
+    const lastFadeIn = checkpoint.commands.findLastIndex(
+      (cmd) => cmd.type === 'fade' && cmd.direction === 'in',
+    );
+    const yangSwitch = checkpoint.commands.findIndex(
+      (cmd) => cmd.type === 'switchCharacter' && cmd.characterId === 'yangYunRed',
+    );
+    expect(yangSwitch).toBeGreaterThan(-1);
+    expect(lastFadeIn).toBeGreaterThan(-1);
+    expect(yangSwitch).toBeLessThan(lastFadeIn);
+  });
+
+  it('switchCharacter with control="hidden" does NOT raise a role prompt or block the engine', () => {
+    const manifest = createSingleCheckpointManifest([
+      { type: 'switchCharacter', characterId: 'dongJihao', visibleName: '董继豪', control: 'hidden' },
+      { type: 'task', text: 'sentinel' },
+    ]);
+    const { engine, uiLog } = createEngine({ manifest });
+
+    engine.startFromCheckpoint('A');
+
+    // The engine drains both commands without entering a wait/awaiting state for the hidden switch.
+    expect(uiLog.rolePrompts).toEqual([]);
+    expect(uiLog.taskTexts).toContain('sentinel');
+  });
 });
 
 describe('EventEngine — input lock/unlock', () => {
@@ -1428,19 +1503,30 @@ describe('EventEngine — checkpoint H communication branching', () => {
 
     engine.startFromCheckpoint('G');
     engine.selectBranch('B-2');
-    engine.update(3000);
-    engine.advance();
-    engine.advance();
-    engine.update(500);
-    engine.update(500);
-    engine.advance();
+    engine.update(3000);            // 思索 wait → dialogue 1 awaiting_advance
+    engine.advance();               // dialogue 2 awaiting_advance
+    engine.advance();               // fade out → waiting
+    engine.update(500);             // fade out done → switchCharacter hidden (non-blocking) → switchView → switchCharacter player (role prompt 2s waiting)
+    engine.update(2000);            // role prompt done → fade in → waiting
+    engine.update(500);             // fade in done → dialogue "我好像忘了点啥" awaiting_advance
+    engine.advance();               // past dialogue → task → interaction Q at GT1 awaiting_interaction
 
     expect(engine.getCurrentState()).toBe('awaiting_interaction');
+
+    // Pickup 但宇轩's head at GT1 body position
     engine.updateLocation('4F', 'gt1-classroom');
-    engine.updatePlayerPosition({ x: 720, y: 360 });
+    engine.updatePlayerPosition({ x: 760, y: 520 });
     engine.completeInteraction('Q');
-    engine.advance();
-    engine.update(500);
+
+    // Pickup 秦浩睿's head at GT2 body position
+    engine.updateLocation('4F', 'gt2-classroom');
+    engine.updatePlayerPosition({ x: 760, y: 330 });
+    engine.completeInteraction('Q');
+
+    // dialogue "材料够了。" awaiting_advance
+    engine.advance();               // past "材料够了。" → setFlag → fade out → waiting
+    engine.update(500);             // fade out done → gotoCheckpoint H → H's task/hidden/switchView (non-blocking) → fade in (waiting)
+    engine.update(500);             // fade in done → checkpoint H runs → save persisted
 
     const stored = localStorage.getItem(SAVE_STATE_STORAGE_KEY);
     expect(stored).not.toBeNull();
@@ -2126,7 +2212,7 @@ describe('EventEngine — Bug Fixes (Round 3)', () => {
     expect(engine.isInteractionTargetInCurrentLocation()).toBe(false);
   });
 
-  it('isInteractionTargetInCurrentLocation: returns true when ANY of multiple physical targets matches current location', () => {
+  it('isInteractionTargetInCurrentLocation: returns false for multi-room targets so the player can use doors to walk between them', () => {
     const manifest = createSingleCheckpointManifest([
       {
         type: 'interaction',
@@ -2142,13 +2228,35 @@ describe('EventEngine — Bug Fixes (Round 3)', () => {
     const { engine } = createEngine({ manifest });
     engine.startFromCheckpoint('A');
 
+    // Multi-room target: never blocks doors regardless of which room the player is in,
+    // so they can walk between GT1 and GT2 freely while the interaction is pending.
     engine.updateLocation('4F', 'gt1-classroom');
-    expect(engine.isInteractionTargetInCurrentLocation()).toBe(true);
+    expect(engine.isInteractionTargetInCurrentLocation()).toBe(false);
 
     engine.updateLocation('4F', 'gt2-classroom');
-    expect(engine.isInteractionTargetInCurrentLocation()).toBe(true);
+    expect(engine.isInteractionTargetInCurrentLocation()).toBe(false);
 
     engine.updateLocation('4F', null);
+    expect(engine.isInteractionTargetInCurrentLocation()).toBe(false);
+  });
+
+  it('isInteractionTargetInCurrentLocation: returns true for single-room targets to block teleport-via-door', () => {
+    const manifest = createSingleCheckpointManifest([
+      {
+        type: 'interaction',
+        input: 'F',
+        target: 'office phone (single-room target)',
+        result: 'pickup',
+        physicalTarget: { floorId: '4F', roomId: 'office-4f', points: [{ x: 620, y: 180, radiusPx: 48 }] },
+      },
+    ]);
+    const { engine } = createEngine({ manifest });
+    engine.startFromCheckpoint('A');
+
+    engine.updateLocation('4F', 'office-4f');
+    expect(engine.isInteractionTargetInCurrentLocation()).toBe(true);
+
+    engine.updateLocation('4F', 'gt1-classroom');
     expect(engine.isInteractionTargetInCurrentLocation()).toBe(false);
   });
 });

@@ -43,6 +43,8 @@ export class MapRenderer {
   private transitioning = false;
   private transitionRecoveryTimeout: ReturnType<typeof setTimeout> | null = null;
   private readonly onDoorInteraction: DoorInteractionHandler | undefined;
+  // Reserved for future use; in-room door clicks are intentionally not bound (F-key only).
+  // @ts-expect-error -- preserved on the constructor to keep callers stable
   private readonly onExitRoomRequested: RoomExitHandler | undefined;
 
   constructor(
@@ -316,6 +318,10 @@ export class MapRenderer {
     this.corridorObjects.push(labelText);
 
     // Interaction zone — only for non-background, interactive doors
+    // Clicks/taps are intentionally not bound: per design, doors are
+    // entered only via the F key (or the on-screen interact button on
+    // mobile, which is also F). The hit area is kept around purely for
+    // visual hover affordance on desktop.
     const interaction = door.interaction;
     if (interaction.type !== 'none') {
       const hitArea = this.scene.add.rectangle(
@@ -327,31 +333,9 @@ export class MapRenderer {
         0,
       );
       hitArea.setDepth(8);
-      hitArea.setInteractive({ useHandCursor: true });
+      hitArea.setInteractive();
 
-      if (interaction.type === 'elevator') {
-        hitArea.on('pointerdown', () => {
-          this.handleDoorInteraction(door);
-        });
-        hitArea.on('pointerover', () => {
-          gfx.clear();
-          gfx.fillStyle(DOOR_HOVER_COLOR, 1);
-          gfx.fillRect(bounds.x, bounds.y, bounds.width, bounds.height);
-          gfx.lineStyle(DOOR_STROKE_WIDTH, DOOR_STROKE_COLOR, 1);
-          gfx.strokeRect(bounds.x, bounds.y, bounds.width, bounds.height);
-        });
-        hitArea.on('pointerout', () => {
-          gfx.clear();
-          gfx.fillStyle(DOOR_FILL_COLOR, 1);
-          gfx.fillRect(bounds.x, bounds.y, bounds.width, bounds.height);
-          gfx.lineStyle(DOOR_STROKE_WIDTH, DOOR_STROKE_COLOR, 1);
-          gfx.strokeRect(bounds.x, bounds.y, bounds.width, bounds.height);
-        });
-        this.interactiveDoorMap.set(door.id, hitArea);
-      } else if (interaction.type === 'roomTransition') {
-        hitArea.on('pointerdown', () => {
-          this.handleDoorInteraction(door);
-        });
+      if (interaction.type === 'elevator' || interaction.type === 'roomTransition') {
         hitArea.on('pointerover', () => {
           gfx.clear();
           gfx.fillStyle(DOOR_HOVER_COLOR, 1);
@@ -390,20 +374,9 @@ export class MapRenderer {
     doorRect.setStrokeStyle(IN_ROOM_DOOR_STROKE_WIDTH, IN_ROOM_DOOR_STROKE_COLOR, 1);
     this.roomObjects.push(doorRect);
 
-    const hitArea = this.scene.add.rectangle(
-      bounds.x + bounds.width / 2,
-      bounds.y + bounds.height / 2,
-      bounds.width + 16,
-      bounds.height + 16,
-      0xffffff,
-      0,
-    );
-    hitArea.setDepth(8);
-    hitArea.setInteractive({ useHandCursor: true });
-    hitArea.on('pointerdown', () => {
-      this.onExitRoomRequested?.(door.entryDoorId);
-    });
-    this.roomObjects.push(hitArea);
+    // No clickable hit area: room exit happens only when the player
+    // walks up to the door and presses F (or the on-screen interact
+    // button). Click/tap-to-exit was disabled per design.
   }
 
   private renderCommunicationDevice(target: RoomInteractionTarget): void {

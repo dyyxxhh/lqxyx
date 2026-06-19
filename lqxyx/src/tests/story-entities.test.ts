@@ -28,20 +28,41 @@ describe('story entity visibility from flags', () => {
     ]);
   });
 
-  it('renders Qin Haorui body and both head pickup parts without blocking movement', () => {
+  it('renders Qin Haorui body and Dan Yuxuan standing without blocking movement', () => {
     const entries = buildStoryEntityDebugEntries({
       qinHaoruiBodyBloodyOnGround: true,
-      headPickupPartsVisible: true,
       danYuxuanStandingVisible: true,
     });
 
     expect(entries).toEqual([
       expect.objectContaining({ id: 'danYuxuanStanding' }),
       expect.objectContaining({ id: 'qinHaoruiProneBloody', textureKey: 'sprite.qinHaorui.lyingBloody' }),
-      expect.objectContaining({ id: 'danYuxuanHeadPickup', textureKey: 'sprite.danYuxuan.headPart' }),
-      expect.objectContaining({ id: 'qinHaoruiHeadPickup', textureKey: 'sprite.qinHaorui.headPart' }),
     ]);
     expect(entries.every((entry) => entry.blocksMovement === false)).toBe(true);
+  });
+
+  it('renders headless body parts after head pickup; suppresses Dan Yuxuan body when A-2 ate it', () => {
+    const danYuxuanAfterPickup = buildStoryEntityDebugEntries({
+      danYuxuanBodyProneAndBloody: true,
+      danYuxuanHeadPickedUp: true,
+    });
+    expect(danYuxuanAfterPickup).toEqual([
+      expect.objectContaining({ id: 'danYuxuanBodyOnly', textureKey: 'sprite.danYuxuan.bodyPart' }),
+    ]);
+
+    const danYuxuanAfterA2Pickup = buildStoryEntityDebugEntries({
+      danYuxuanBodyGoneHeadOnly: true,
+      danYuxuanHeadPickedUp: true,
+    });
+    expect(danYuxuanAfterA2Pickup).toEqual([]);
+
+    const qinHaoruiAfterPickup = buildStoryEntityDebugEntries({
+      qinHaoruiBodyBloodyOnGround: true,
+      qinHaoruiHeadPickedUp: true,
+    });
+    expect(qinHaoruiAfterPickup).toEqual([
+      expect.objectContaining({ id: 'qinHaoruiBodyOnly', textureKey: 'sprite.qinHaorui.bodyPart' }),
+    ]);
   });
 
   it('hides room-owned story entities while rendering the corridor', () => {
@@ -50,7 +71,6 @@ describe('story entity visibility from flags', () => {
         danYuxuanStandingVisible: true,
         danYuxuanBodyProneAndBloody: true,
         qinHaoruiBodyBloodyOnGround: true,
-        headPickupPartsVisible: true,
       },
       { floorId: '4F', roomId: null },
     );

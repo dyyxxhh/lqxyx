@@ -92,6 +92,7 @@ function createMockNarrativeUI(): { ui: NarrativeUIManager; log: MockNarrativeCa
       log.timerCalls.push({ remainingMs, visible });
     }),
     setVisible: vi.fn(),
+    setMinorEnding: vi.fn(),
     isRolePromptBlocking: vi.fn(() => false),
     getDisplayName: vi.fn((id: string) => id),
     getPortraitKey: vi.fn(() => undefined),
@@ -1330,6 +1331,8 @@ describe('EventEngine — physical target validation', () => {
     engine.startFromCheckpoint('H');
     engine.update(500);
 
+    engine.advance();
+
     engine.updateLocation('4F', null);
     engine.updatePlayerPosition({ x: 160, y: 260 });
 
@@ -1446,35 +1449,7 @@ describe('EventEngine — checkpoint H communication branching', () => {
     resetSceneDebugState();
   });
 
-  it('checkpoint H with communicationDisabled=false resolves to blocked phone-cabinet path and asks for fifth floor', () => {
-    const saveState: SaveState = {
-      ...createDefaultSaveState(),
-      checkpointId: 'H',
-      controllableCharacterId: 'dongJihao',
-      storyFlags: { communicationDisabled: false },
-    };
-    const { engine, inputLog, uiLog, onCheckpointReached } = createEngine({ saveState });
-
-    engine.startFromCheckpoint('H');
-    engine.update(500);
-
-    expect(inputLog.interactContexts).toEqual(['F']);
-    expect(engine.getCurrentState()).toBe('awaiting_interaction');
-
-    engine.updateLocation('4F', 'gt1-classroom');
-    engine.updatePlayerPosition({ x: 160, y: 260 });
-    engine.completeInteraction('F');
-
-    expect(uiLog.dialogues[uiLog.dialogues.length - 1]).toMatchObject({ speaker: '董继豪', text: '信号屏蔽器？这对吗？' });
-    expect(onCheckpointReached).not.toHaveBeenCalledWith('I');
-
-    engine.advance();
-
-    expect(uiLog.taskTexts[uiLog.taskTexts.length - 1]).toBe('去五楼开启学校通信');
-    expect(onCheckpointReached).not.toHaveBeenCalledWith('I');
-  });
-
-  it('checkpoint H with communicationDisabled=true resolves to enabled phone-cabinet path and enters checkpoint I', () => {
+  it('checkpoint H with communicationDisabled=true (comms jammed) resolves to 5F device path and asks to open comms', () => {
     const saveState: SaveState = {
       ...createDefaultSaveState(),
       checkpointId: 'H',
@@ -1489,6 +1464,32 @@ describe('EventEngine — checkpoint H communication branching', () => {
     expect(inputLog.interactContexts).toEqual(['F']);
     expect(engine.getCurrentState()).toBe('awaiting_interaction');
 
+    engine.updateLocation('5F', 'communication-control-5f');
+    engine.updatePlayerPosition({ x: 620, y: 240 });
+    engine.completeInteraction('F');
+
+    expect(uiLog.dialogues[uiLog.dialogues.length - 1]).toMatchObject({ speaker: '董继豪', text: '搞定了。' });
+    expect(onCheckpointReached).not.toHaveBeenCalledWith('I');
+  });
+
+  it('checkpoint H with communicationDisabled=false (comms online) resolves to enabled phone-cabinet path and enters checkpoint I', () => {
+    const saveState: SaveState = {
+      ...createDefaultSaveState(),
+      checkpointId: 'H',
+      controllableCharacterId: 'dongJihao',
+      storyFlags: { communicationDisabled: false },
+    };
+    const { engine, uiLog, onCheckpointReached } = createEngine({ saveState });
+
+    engine.startFromCheckpoint('H');
+    engine.update(500);
+
+    expect(engine.getCurrentState()).toBe('awaiting_advance');
+
+    engine.advance();
+
+    expect(engine.getCurrentState()).toBe('awaiting_interaction');
+
     engine.updateLocation('4F', 'gt1-classroom');
     engine.updatePlayerPosition({ x: 160, y: 260 });
     engine.completeInteraction('F');
@@ -1498,7 +1499,7 @@ describe('EventEngine — checkpoint H communication branching', () => {
     expect(engine.getCurrentState()).toBe('awaiting_advance');
   });
 
-  it('selecting B-2 persists communicationDisabled before checkpoint H save', () => {
+  it('selecting B-2 leaves communicationDisabled unchanged at checkpoint H save (default false; comms-closed flag is owned by checkpoint E)', () => {
     const { engine } = createEngine();
 
     engine.startFromCheckpoint('G');
@@ -1532,12 +1533,13 @@ describe('EventEngine — checkpoint H communication branching', () => {
     expect(stored).not.toBeNull();
     const parsed = JSON.parse(stored!);
     expect(parsed.checkpointId).toBe('H');
-    expect(parsed.storyFlags.communicationDisabled).toBe(true);
+    expect(parsed.storyFlags.communicationDisabled).toBe(false);
 
     const loadedSaveState = parsed as SaveState;
     const { engine: loadedEngine, onCheckpointReached } = createEngine({ saveState: loadedSaveState });
     loadedEngine.startFromCheckpoint('H');
     loadedEngine.update(500);
+    loadedEngine.advance();
     loadedEngine.updateLocation('4F', 'gt1-classroom');
     loadedEngine.updatePlayerPosition({ x: 160, y: 260 });
     loadedEngine.completeInteraction('F');

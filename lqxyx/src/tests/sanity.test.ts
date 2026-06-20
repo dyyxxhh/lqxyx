@@ -77,6 +77,8 @@ describe('Phaser app scaffold', () => {
         curtainVisible: false,
         curtainTitle: '下一幕',
         curtainSubtitle: '敬请期待',
+        minorEndingVisible: false,
+        minorEndingBody: '',
       },
       map: {
         currentFloorId: null,

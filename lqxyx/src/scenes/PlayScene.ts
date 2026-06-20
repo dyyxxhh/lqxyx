@@ -28,6 +28,7 @@ import { UI_THEME, applyPixelStrokeStyle, applyPixelTextStyle } from '../ui/uiTh
 import { DeathFlashManager } from './DeathFlashManager';
 import { isRectInCameraView } from './cameraView';
 import { buildStoryEntityDebugEntries, type StoryEntityDebugEntry } from './storyEntities';
+import { YangYunReplayManager } from './YangYunReplayManager';
 
 const PLAYER_SPEED = 200; // px/s
 const MAX_MOVEMENT_DELTA_MS = 50;
@@ -53,6 +54,10 @@ export class PlayScene extends Phaser.Scene {
   private currentRoom: RoomId | null = null;
   private scriptedMovementActive = false;
   private deathFlashManager!: DeathFlashManager;
+  private replayManager!: YangYunReplayManager;
+  private replayChaseFlagPrev = false;
+  private replayActiveFlagPrev = false;
+  private replayRecordingFlagPrev = false;
   private storyEntitySprites: Phaser.GameObjects.Image[] = [];
   private storyEntityDebugEntries: StoryEntityDebugEntry[] = [];
   private storyEntitySignature = '';
@@ -139,6 +144,8 @@ export class PlayScene extends Phaser.Scene {
     applyPixelStrokeStyle(this.branchBg, UI_THEME.stroke.medium, UI_THEME.colors.border, 0.98);
 
     this.deathFlashManager = new DeathFlashManager(this);
+    this.replayManager = new YangYunReplayManager(this);
+    this.replayManager.restoreBuffer();
 
     // ── Black overlay for mid-scene black screens ──────────────
     this.blackOverlay = this.add
@@ -220,6 +227,7 @@ export class PlayScene extends Phaser.Scene {
     // Update event engine (drives timers, waits, state transitions)
     this.eventEngine.update(delta);
     this.refreshStoryEntities();
+    this.updateYangYunReplay(_time, delta);
 
     // Handle black screen overlay visibility based on lock reason
     this.updateBlackOverlay();
@@ -392,6 +400,16 @@ export class PlayScene extends Phaser.Scene {
       return false;
     }
 
+    // Block door entry while the story engine is mid-sequence (waiting on a fade,
+    // blackScreen, deathFlash, or any timed wait). Otherwise a stray F press could
+    // trigger a roomTransition during the 500ms fade-out at e.g. branch B-1's
+    // principal-office door, briefly rendering the room interior before the
+    // black screen takes effect.
+    const engineState = this.eventEngine.getCurrentState();
+    if (engineState === 'waiting' || engineState === 'executing') {
+      return false;
+    }
+
     if (interaction.type === 'elevator') {
       const targetFloor = interaction.targetFloorId;
       this.mapRenderer.startElevatorTransition(targetFloor, () => {
@@ -521,9 +539,12 @@ export class PlayScene extends Phaser.Scene {
   }
 
   private handleQInteract(): void {
-    // Q is used for contextual interactions (e.g., picking up heads in B-2 branch)
     if (this.advanceDialogueIfAwaiting()) return;
-    this.eventEngine.completeInteraction('Q');
+    if (this.eventEngine.completeInteraction('Q')) return;
+    if (this.enterNearestDoor()) return;
+    if (this.inRoom) {
+      this.returnToCorridor();
+    }
   }
 
   private movePlayerToElevatorArrival(floorId: FloorId): void {
@@ -852,6 +873,7 @@ export class PlayScene extends Phaser.Scene {
 
   private triggerEnding(_endingId: string): void {
     this.endingActive = true;
+    this.eventEngine.stopAllTimers();
     this.inputManager.lock('ending');
     this.narrativeUI.setCurtain(true, '臊子', '');
   }
@@ -918,6 +940,9 @@ export class PlayScene extends Phaser.Scene {
   }
 
   private isVisibilityTargetInView(visibilityTargetId: string): boolean {
+    if (visibilityTargetId === 'yang-yun-current-screen') {
+      return this.replayManager.isOnCamera(this.cameras.main);
+    }
     const act = storyManifest.acts.find((a) => a.status === 'playable');
     const target = act?.visibilityTargets?.find((candidate) => candidate.id === visibilityTargetId);
     if (!target) return false;
@@ -926,6 +951,44 @@ export class PlayScene extends Phaser.Scene {
     if (target.roomId !== this.currentRoom) return false;
 
     return isRectInCameraView(this.cameras.main, target.rect);
+  }
+
+  private updateYangYunReplay(time: number, delta: number): void {
+    const flags = this.eventEngine.getStoryFlags();
+    const recording = flags.yangYunRecordingActive === true;
+    const replaying = flags.yangYunReplaysB2Actions === true;
+    const chase = flags.yangYunAutoTracksAfterReplay === true;
+
+    if (recording && !this.replayRecordingFlagPrev) {
+      this.replayManager.startRecording(time);
+    }
+    if (!recording && this.replayRecordingFlagPrev) {
+      this.replayManager.stopRecording();
+    }
+    if (recording && this.currentCharacter === 'yangYunRed') {
+      this.replayManager.recordFrame(time, this.playerPosition.x, this.playerPosition.y, this.currentFloor, this.currentRoom, this.currentDirection);
+    }
+
+    const dongSnapshot = {
+      x: this.playerPosition.x,
+      y: this.playerPosition.y,
+      floorId: this.currentFloor,
+      roomId: this.currentRoom,
+    };
+
+    if (replaying && !this.replayActiveFlagPrev) {
+      this.replayManager.startReplay(time, dongSnapshot);
+    }
+    if (chase !== this.replayChaseFlagPrev) {
+      this.replayManager.setChaseEnabled(chase);
+    }
+    if (replaying) {
+      this.replayManager.update(time, delta, dongSnapshot);
+    }
+
+    this.replayRecordingFlagPrev = recording;
+    this.replayActiveFlagPrev = replaying;
+    this.replayChaseFlagPrev = chase;
   }
 
   private refreshStoryEntities(): void {
@@ -954,6 +1017,7 @@ export class PlayScene extends Phaser.Scene {
 
   shutdown(): void {
     this.deathFlashManager?.cleanup();
+    this.replayManager?.destroy();
     for (const sprite of this.storyEntitySprites) {
       sprite.destroy();
     }

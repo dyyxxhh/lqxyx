@@ -711,18 +711,13 @@ describe('EventEngine — switchView location state', () => {
     expect(dialogueIndex).toBeLessThan(setControlIndex);
   });
 
-  it('B-1 ends with a fade-in before checkpoint G so the screen recovers after the split-in-two ending', () => {
+  it('B-1 split-in-two ending returns by restarting checkpoint G instead of branch-local fake checkpoint commands', () => {
     const branch = firstActBranches.find((b) => b.id === 'B-1')!;
     const endingIndex = branch.commands.findIndex(
       (cmd) => cmd.type === 'ending' && cmd.id === 'split-in-two',
     );
-    const checkpointGIndex = branch.commands.findIndex(
-      (cmd) => cmd.type === 'checkpoint' && cmd.id === 'G',
-    );
     expect(endingIndex).toBeGreaterThan(-1);
-    expect(checkpointGIndex).toBeGreaterThan(endingIndex);
-    const between = branch.commands.slice(endingIndex + 1, checkpointGIndex);
-    expect(between).toContainEqual(expect.objectContaining({ type: 'fade', direction: 'in' }));
+    expect(branch.commands.slice(endingIndex + 1)).toEqual([]);
   });
 
   it('B-2 requires picking up BOTH heads at body positions and chains to checkpoint H via gotoCheckpoint', () => {
@@ -2307,6 +2302,25 @@ describe('EventEngine — blockDoor / unblockDoor (door blocker mechanism)', () 
 
     const dialogueCountAfter = uiLog.dialogues.filter((d) => d.text === '滚去前门！').length;
     expect(dialogueCountAfter).toBe(dialogueCountBefore);
+  });
+
+  it('dismissing 滚去前门 keeps movement and interact unlocked while awaiting front-door proximity', () => {
+    const manifest = createSingleCheckpointManifest([
+      { type: 'blockDoor', doorId: '4f-gt2-back', message: '滚去前门！', speaker: '？？？' },
+      { type: 'interaction', input: 'proximity', target: 'test', result: 'test', proximityTargetId: 'checkpoint-c-gt2-front-entry' },
+    ]);
+    const { engine, inputLog } = createEngine({ manifest });
+    engine.startFromCheckpoint('A');
+
+    expect(engine.getCurrentState()).toBe('awaiting_proximity');
+    engine.attemptBlockedDoor('4f-gt2-back');
+    expect(inputLog.lockCalls[inputLog.lockCalls.length - 1]?.reason).toBe('dialogue');
+
+    engine.dismissAmbientDialogue();
+
+    expect(engine.getCurrentState()).toBe('awaiting_proximity');
+    expect(inputLog.locked).toBe(false);
+    expect(inputLog.interactContexts[inputLog.interactContexts.length - 1]).toBe('F');
   });
 
   it('unblockDoor removes the block', () => {

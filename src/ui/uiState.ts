@@ -71,6 +71,8 @@ export interface NarrativeUiDebugState {
   curtainVisible: boolean;
   curtainTitle: string;
   curtainSubtitle: string;
+  minorEndingVisible: boolean;
+  minorEndingBody: string;
 }
 
 export function createInitialNarrativeUiDebugState(): NarrativeUiDebugState {
@@ -89,6 +91,8 @@ export function createInitialNarrativeUiDebugState(): NarrativeUiDebugState {
     curtainVisible: false,
     curtainTitle: '下一幕',
     curtainSubtitle: '敬请期待',
+    minorEndingVisible: false,
+    minorEndingBody: '',
   };
 }
 

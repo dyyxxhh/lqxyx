@@ -158,6 +158,7 @@ export function hasValidSave(storage: Storage = localStorage): boolean {
 
 export function clearSaveState(storage: Storage = localStorage): void {
   storage.removeItem(SAVE_STATE_STORAGE_KEY);
+  storage.removeItem('ying-zhong-jiu.replay-buffer.v1');
 }
 
 export function createSaveDebugState(result: SaveLoadResult): SaveDebugState {

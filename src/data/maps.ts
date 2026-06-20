@@ -202,6 +202,13 @@ const officePhoneRender: RoomInteractionTargetRenderMetadata = {
   color: "#1f1410",
 };
 
+const phoneCabinetRender: RoomInteractionTargetRenderMetadata = {
+  assetKey: "prop.phone",
+  material: "phone",
+  shape: "deskPhone",
+  color: "#1f1410",
+};
+
 function rect(x: number, y: number, width: number, height: number): MapRectangle {
   return { x, y, width, height };
 }
@@ -373,11 +380,29 @@ const fourthFloorRooms: Record<Exclude<RoomId, "communication-control-5f" | "pri
     spawn("gt2-front-entry", 772, 144, "left"),
     spawn("gt2-back-entry", 772, 1136, "left"),
     spawn("gt2-phone-cabinet", 160, 260, "right"),
+  ], [
+    {
+      id: "gt2-phone-cabinet",
+      label: "GT2 手机柜",
+      bounds: rect(112, 220, 96, 72),
+      visible: true,
+      storyTargetId: "gt2-phone-cabinet",
+      render: phoneCabinetRender,
+    },
   ]),
   "gt1-classroom": room("gt1-classroom", "GT1教室", "4F", "classroom", ["4f-gt1-front", "4f-gt1-back"], [
     spawn("gt1-front-entry", 772, 144, "left"),
     spawn("gt1-back-entry", 772, 1136, "left"),
     spawn("gt1-phone-cabinet", 160, 260, "right"),
+  ], [
+    {
+      id: "gt1-phone-cabinet",
+      label: "GT1 手机柜",
+      bounds: rect(112, 220, 96, 72),
+      visible: true,
+      storyTargetId: "gt1-phone-cabinet",
+      render: phoneCabinetRender,
+    },
   ]),
   "class-1-1": room("class-1-1", "高一一班", "4F", "classroom", ["4f-class-1-1-front", "4f-class-1-1-back"], [
     spawn("class-1-1-front-entry", 772, 144, "left"),
@@ -388,8 +413,9 @@ const fourthFloorRooms: Record<Exclude<RoomId, "communication-control-5f" | "pri
     spawn("class-1-2-back-entry", 772, 1136, "left"),
   ]),
   "office-4f": room("office-4f", "四楼办公室", "4F", "office", ["4f-office-front", "4f-office-back"], [
-    spawn("office-front-entry", 160, 260, "right"),
-    spawn("office-back-entry", 160, 420, "right"),
+    // spawn.y = corner_y + DOOR_HEIGHT/2 → 144 = 80+64 (top-left), 540 = 476+64 (bottom-left).
+    spawn("office-front-entry", 160, 144, "right"),
+    spawn("office-back-entry", 160, 540, "right"),
     spawn("office-phone", 620, 180, "up"),
   ], [
     {
@@ -410,7 +436,7 @@ const fifthFloorRooms: Pick<Record<RoomId, RoomArea>, "communication-control-5f"
     "5F",
     "communicationControl",
     ["5f-communication-control-back"],
-    [spawn("communication-control-back-entry", 160, 260, "right"), spawn("communication-device", 620, 240, "up")],
+    [spawn("communication-control-back-entry", 160, 144, "right"), spawn("communication-device", 620, 240, "up")],
     [
       {
         id: "communication-device",

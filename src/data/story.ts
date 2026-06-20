@@ -10,6 +10,8 @@ export interface StoryCommandCondition {
   equals: boolean;
 }
 
+export type StoryCommandConditionRequirement = StoryCommandCondition | readonly StoryCommandCondition[];
+
 export interface StoryPoint {
   x: number;
   y: number;
@@ -69,7 +71,7 @@ export type StoryCommand = (
   | { type: "blackScreen"; durationMs: number; asset?: string }
   | { type: "deathFlash"; id: "celery" | "ruler"; sequence: DeathFlashFrame[] }
   | { type: "branch"; id: BranchId; trigger: string }
-  | { type: "timer"; id: string; action: "start" | "stop" | "reset"; durationMs?: number; trigger?: string; visibilityTargetId?: string }
+  | { type: "timer"; id: string; action: "start" | "stop" | "reset"; durationMs?: number; trigger?: string; visibilityTargetId?: string; visibilityRequiresContinuous?: boolean }
   | { type: "awaitView"; visibilityTargetId: string; reason: string }
   | { type: "interaction"; input: "F" | "Q" | "choice" | "proximity" | "timer"; target: string; result: string; proximityTargetId?: string; physicalTarget?: StoryPhysicalTargetRequirement }
   | { type: "setFlag"; id: string; value: boolean }
@@ -78,11 +80,11 @@ export type StoryCommand = (
   | { type: "curtain"; title: "下一幕"; subtitle: "敬请期待" }
   | { type: "blockDoor"; doorId: string; message: string; speaker?: string }
   | { type: "unblockDoor"; doorId: string }
-) & { condition?: StoryCommandCondition };
+) & { condition?: StoryCommandConditionRequirement };
 
 export interface DeathFlashFrame {
   background: "bloodBlack" | "white" | "black";
-  image?: "blackCelery" | "whiteCelery" | "largeBlackCelery" | "largeWhiteCelery" | "ruler";
+  image?: "blackCelery" | "whiteCelery" | "largeBlackCelery" | "largeWhiteCelery" | "blackRuler" | "whiteRuler" | "largeBlackRuler" | "largeWhiteRuler";
   durationMs: number;
 }
 
@@ -164,10 +166,18 @@ const celeryDeathFlash: DeathFlashFrame[] = [
 ];
 
 const rulerDeathFlash: DeathFlashFrame[] = [
-  { background: "black", durationMs: 1_000 },
-  { background: "white", image: "ruler", durationMs: 500 },
-  { background: "black", image: "ruler", durationMs: 500 },
-  { background: "black", durationMs: 1_000 },
+  { background: "bloodBlack", durationMs: 1_000 },
+  { background: "white", image: "blackRuler", durationMs: 500 },
+  { background: "black", image: "whiteRuler", durationMs: 500 },
+  { background: "white", image: "blackRuler", durationMs: 300 },
+  { background: "black", image: "whiteRuler", durationMs: 300 },
+  { background: "white", image: "largeBlackRuler", durationMs: 100 },
+  { background: "black", image: "largeWhiteRuler", durationMs: 100 },
+  { background: "white", image: "largeBlackRuler", durationMs: 100 },
+  { background: "black", image: "largeWhiteRuler", durationMs: 100 },
+  { background: "white", image: "largeBlackRuler", durationMs: 100 },
+  { background: "black", image: "largeWhiteRuler", durationMs: 100 },
+  { background: "bloodBlack", durationMs: 1_000 },
 ];
 
 export const firstActCheckpoints: StoryCheckpoint[] = [
@@ -275,11 +285,13 @@ export const firstActCheckpoints: StoryCheckpoint[] = [
       { type: "dialogue", speaker: "杨云", text: "搞定了" },
       { type: "task", text: "前往五楼关闭学校通信" },
       { type: "interaction", input: "F", target: "五楼学校通信", result: "关闭学校通信", physicalTarget: { floorId: "5F", roomId: "communication-control-5f", points: [{ x: 620, y: 240, radiusPx: 48 }] } },
+      { type: "setFlag", id: "communicationDisabled", value: true },
       { type: "task", text: "无" },
       { type: "dialogue", speaker: "杨云", text: "让我猜猜，还有谁？" },
       { type: "fade", direction: "out", durationMs: 500 },
       { type: "switchCharacter", characterId: "yangYunRed", visibleName: "杨云", control: "hidden" },
       { type: "switchView", characterId: "dongJihao", location: "GT2 秦浩睿尸体附近", visibility: "董继豪位置不变", locationState: { floorId: "4F", roomId: "gt2-classroom" }, position: { x: 760, y: 330 }, facing: "down" },
+      { type: "switchCharacter", characterId: "dongJihao", visibleName: "董继豪", control: "player" },
       { type: "fade", direction: "in", durationMs: 500 },
       { type: "gotoCheckpoint", id: "F" },
     ],
@@ -292,7 +304,6 @@ export const firstActCheckpoints: StoryCheckpoint[] = [
     playableCharacter: "dongJihao",
     commands: [
       { type: "checkpoint", id: "F" },
-      { type: "switchCharacter", characterId: "dongJihao", visibleName: "董继豪", control: "player" },
       { type: "task", text: "前往办公室报警" },
       { type: "interaction", input: "F", target: "办公室电话", result: "拨打 9110", physicalTarget: { floorId: "4F", roomId: "office-4f", points: [{ x: 620, y: 180, radiusPx: 48 }] } },
       { type: "dialogue", speaker: "董继豪", text: "……坏了。", bodyAction: "按 9110" },
@@ -322,13 +333,23 @@ export const firstActCheckpoints: StoryCheckpoint[] = [
       { type: "task", text: "无" },
       { type: "switchCharacter", characterId: "yangYunRed", visibleName: "杨云", control: "hidden" },
       { type: "switchView", characterId: "dongJihao", location: "办公室", visibility: "0.5s 屏幕渐亮", locationState: { floorId: "4F", roomId: "office-4f" } },
+      { type: "switchCharacter", characterId: "dongJihao", visibleName: "董继豪", control: "player" },
       { type: "fade", direction: "in", durationMs: 500 },
       { type: "checkpoint", id: "H" },
-      { type: "switchCharacter", characterId: "dongJihao", visibleName: "董继豪", control: "player" },
       { type: "task", text: "去班里偷同学手机报警" },
       { type: "setFlag", id: "yangYunReplaysB2Actions", value: true },
-      { type: "timer", id: "yang-yun-visible-failure-window", action: "start", durationMs: 3_000, trigger: "杨云连续出现在用户屏幕内3s执行F-B" },
+      { type: "timer", id: "yang-yun-visible-failure-window", action: "start", durationMs: 3_000, trigger: "杨云连续出现在用户屏幕内3s执行F-B", visibilityTargetId: "yang-yun-current-screen", visibilityRequiresContinuous: true },
       { type: "timer", id: "survival-route-countdown", action: "start", durationMs: 120_000, trigger: "倒计时≤0时执行F-B" },
+      {
+        type: "interaction",
+        input: "F",
+        target: "五楼学校通信，开启",
+        result: "开启学校通信",
+        physicalTarget: { floorId: "5F", roomId: "communication-control-5f", points: [{ x: 620, y: 240, radiusPx: 48 }] },
+        condition: { flag: "communicationDisabled", equals: true },
+      },
+      { type: "setFlag", id: "communicationDisabled", value: false },
+      { type: "dialogue", speaker: "董继豪", text: "搞定了。", condition: { flag: "communicationDisabled", equals: false } },
       {
         type: "interaction",
         input: "F",
@@ -338,11 +359,14 @@ export const firstActCheckpoints: StoryCheckpoint[] = [
           { floorId: "4F", roomId: "gt1-classroom", points: [{ x: 160, y: 260, radiusPx: 48 }] },
           { floorId: "4F", roomId: "gt2-classroom", points: [{ x: 160, y: 260, radiusPx: 48 }] },
         ],
-        condition: { flag: "communicationDisabled", equals: false },
+        condition: [
+          { flag: "communicationDisabled", equals: true },
+          { flag: "phoneCabinetInteractionDisabled", equals: false },
+        ],
       },
-      { type: "dialogue", speaker: "董继豪", text: "信号屏蔽器？这对吗？", condition: { flag: "communicationDisabled", equals: false } },
-      { type: "task", text: "去五楼开启学校通信", condition: { flag: "communicationDisabled", equals: false } },
-      { type: "task", text: "去班里偷同学手机报警", condition: { flag: "communicationDisabled", equals: true } },
+      { type: "dialogue", speaker: "董继豪", text: "信号屏蔽器？这对吗？", condition: { flag: "communicationDisabled", equals: true } },
+      { type: "task", text: "去五楼开启学校通信", condition: { flag: "communicationDisabled", equals: true } },
+      { type: "task", text: "去班里偷同学手机报警", condition: { flag: "communicationDisabled", equals: false } },
       {
         type: "interaction",
         input: "F",
@@ -352,9 +376,19 @@ export const firstActCheckpoints: StoryCheckpoint[] = [
           { floorId: "4F", roomId: "gt1-classroom", points: [{ x: 160, y: 260, radiusPx: 48 }] },
           { floorId: "4F", roomId: "gt2-classroom", points: [{ x: 160, y: 260, radiusPx: 48 }] },
         ],
-        condition: { flag: "communicationDisabled", equals: true },
+        condition: [
+          { flag: "communicationDisabled", equals: false },
+          { flag: "phoneCabinetInteractionDisabled", equals: false },
+        ],
       },
-      { type: "gotoCheckpoint", id: "I", condition: { flag: "communicationDisabled", equals: true } },
+      {
+        type: "gotoCheckpoint",
+        id: "I",
+        condition: [
+          { flag: "communicationDisabled", equals: false },
+          { flag: "phoneCabinetInteractionDisabled", equals: false },
+        ],
+      },
     ],
   },
   {
@@ -394,6 +428,8 @@ export const firstActBranches: StoryBranch[] = [
       { type: "switchCharacter", characterId: "yangYunRed", visibleName: "杨云", control: "scripted" },
       { type: "dialogue", speaker: "秦浩睿", text: "杨云？杨云？！你不要过来啊！！" },
       { type: "setControl", enabled: false, reason: "杨云进班自动走向秦浩睿", scriptedMovementId: "yang-yun-to-qin-haorui-body" },
+      { type: "setFlag", id: "qinHaoruiStandingVisible", value: false },
+      { type: "setFlag", id: "qinHaoruiBodyBloodyOnGround", value: true },
       { type: "deathFlash", id: "celery", sequence: celeryDeathFlash },
       { type: "task", text: "无" },
       { type: "unblockDoor", doorId: "4f-gt2-back" },
@@ -425,6 +461,8 @@ export const firstActBranches: StoryBranch[] = [
       { type: "switchCharacter", characterId: "yangYunRed", visibleName: "杨云", control: "scripted" },
       { type: "dialogue", speaker: "秦浩睿", text: "杨云？杨云？！你不要过来啊！！" },
       { type: "setControl", enabled: false, reason: "杨云进班自动走向秦浩睿", scriptedMovementId: "yang-yun-to-qin-haorui-body" },
+      { type: "setFlag", id: "qinHaoruiStandingVisible", value: false },
+      { type: "setFlag", id: "qinHaoruiBodyBloodyOnGround", value: true },
       { type: "deathFlash", id: "celery", sequence: celeryDeathFlash },
       { type: "task", text: "无" },
       { type: "unblockDoor", doorId: "4f-gt2-back" },
@@ -465,9 +503,10 @@ export const firstActBranches: StoryBranch[] = [
       { type: "dialogue", speaker: "董继豪", text: "我知道了！" },
       { type: "fade", direction: "out", durationMs: 500 },
       { type: "switchCharacter", characterId: "dongJihao", visibleName: "董继豪", control: "hidden" },
-      { type: "switchView", characterId: "yangYunRed", location: "杨云视角" },
+      { type: "switchView", characterId: "yangYunRed", location: "5F 通信控制室内部", locationState: { floorId: "5F", roomId: "communication-control-5f" }, position: { x: 620, y: 240 }, facing: "up" },
       { type: "switchCharacter", characterId: "yangYunRed", visibleName: "杨云", control: "player" },
       { type: "fade", direction: "in", durationMs: 500 },
+      { type: "setFlag", id: "yangYunRecordingActive", value: true },
       { type: "dialogue", speaker: "杨云", text: "我好像忘了点啥" },
       { type: "task", text: "拾取但宇轩和秦浩睿的头颅" },
       { type: "interaction", input: "Q", target: "但宇轩头颅", result: "拾取但宇轩头颅", physicalTarget: { floorId: "4F", roomId: "gt1-classroom", points: [{ x: 760, y: 520, radiusPx: 96 }] } },
@@ -475,7 +514,7 @@ export const firstActBranches: StoryBranch[] = [
       { type: "interaction", input: "Q", target: "秦浩睿头颅", result: "拾取秦浩睿头颅", physicalTarget: { floorId: "4F", roomId: "gt2-classroom", points: [{ x: 760, y: 330, radiusPx: 96 }] } },
       { type: "setFlag", id: "qinHaoruiHeadPickedUp", value: true },
       { type: "dialogue", speaker: "杨云", text: "材料够了。" },
-      { type: "setFlag", id: "communicationDisabled", value: true },
+      { type: "setFlag", id: "yangYunRecordingActive", value: false },
       { type: "fade", direction: "out", durationMs: 500 },
       { type: "gotoCheckpoint", id: "H" },
     ],

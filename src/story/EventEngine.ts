@@ -91,7 +91,7 @@ export class EventEngine {
   private visibilityPredicate: VisibilityPredicate = () => false;
 
   // ── Game timers (runtime countdowns separate from save-state snapshots) ─
-  private gameTimers: Map<string, { remainingMs: number; visibilityTargetId: string | null }> = new Map();
+  private gameTimers: Map<string, { remainingMs: number; visibilityTargetId: string | null; visibilityRequiresContinuous: boolean; durationMs: number }> = new Map();
 
   // ── Blocked doors (story-driven, in-memory only) ────────────────
   private blockedDoors: Map<string, { message: string; speaker: string; shown: boolean }> = new Map();
@@ -192,6 +192,9 @@ export class EventEngine {
 
     if (this.state === 'awaiting_advance') {
       this.narrativeUI.setVisible('dialogue', false);
+      // Tear down the minor-ending overlay if it is currently parked here.
+      // Safe no-op when the overlay is already hidden.
+      this.narrativeUI.setMinorEnding(false);
       this.state = 'executing';
       this.restoreControlLock();
       this.commandIndex++;
@@ -235,7 +238,12 @@ export class EventEngine {
 
     const timerEntries = Array.from(this.gameTimers.entries());
     for (const [, timer] of timerEntries) {
-      if (timer.visibilityTargetId && !this.visibilityPredicate(timer.visibilityTargetId)) continue;
+      if (timer.visibilityTargetId && !this.visibilityPredicate(timer.visibilityTargetId)) {
+        if (timer.visibilityRequiresContinuous) {
+          timer.remainingMs = timer.durationMs;
+        }
+        continue;
+      }
       timer.remainingMs -= delta;
     }
 
@@ -261,8 +269,8 @@ export class EventEngine {
       }
     }
 
-    // Update UI timer display
-    const activeGameTimer = this.gameTimers.size > 0 ? this.gameTimers.values().next().value : undefined;
+    const preferredTimer = this.gameTimers.get('survival-route-countdown');
+    const activeGameTimer = preferredTimer ?? (this.gameTimers.size > 0 ? this.gameTimers.values().next().value : undefined);
     if (activeGameTimer) {
       this.narrativeUI.setTimer(activeGameTimer.remainingMs, true);
     } else if (this.mutable.timers) {
@@ -515,7 +523,10 @@ export class EventEngine {
 
       case 'ending':
         this.handleEnding(command);
-        return false; // non-blocking so curtain can follow
+        // Minor endings (returnsToCheckpoint) park at awaiting_advance and
+        // block until the player confirms via the "返回检查点" button.
+        // Major endings stay non-blocking so a curtain command can follow.
+        return this.state === 'awaiting_advance';
 
       case 'curtain':
         this.handleCurtain(command);
@@ -538,7 +549,8 @@ export class EventEngine {
 
   private shouldExecuteCommand(command: StoryCommand): boolean {
     if (!command.condition) return true;
-    return (this.mutable.storyFlags[command.condition.flag] ?? false) === command.condition.equals;
+    const conditions = Array.isArray(command.condition) ? command.condition : [command.condition];
+    return conditions.every((c) => (this.mutable.storyFlags[c.flag] ?? false) === c.equals);
   }
 
   private handleCheckpoint(command: Extract<StoryCommand, { type: 'checkpoint' }>): void {
@@ -660,13 +672,22 @@ export class EventEngine {
     this.narrativeUI.setTimer(0, false);
   }
 
+  public stopAllTimers(): void {
+    this.stopActiveTimers();
+  }
+
   private handleTimer(command: Extract<StoryCommand, { type: 'timer' }>): void {
     const id = command.id;
 
     switch (command.action) {
       case 'start': {
         const durationMs = command.durationMs ?? 0;
-        this.gameTimers.set(id, { remainingMs: durationMs, visibilityTargetId: command.visibilityTargetId ?? null });
+        this.gameTimers.set(id, {
+          remainingMs: durationMs,
+          visibilityTargetId: command.visibilityTargetId ?? null,
+          visibilityRequiresContinuous: command.visibilityRequiresContinuous === true,
+          durationMs,
+        });
         this.mutable.timers[id] = {
           status: 'running',
           durationMs,
@@ -685,7 +706,12 @@ export class EventEngine {
       }
       case 'reset': {
         const durationMs = command.durationMs ?? 0;
-        this.gameTimers.set(id, { remainingMs: durationMs, visibilityTargetId: command.visibilityTargetId ?? null });
+        this.gameTimers.set(id, {
+          remainingMs: durationMs,
+          visibilityTargetId: command.visibilityTargetId ?? null,
+          visibilityRequiresContinuous: command.visibilityRequiresContinuous === true,
+          durationMs,
+        });
         this.mutable.timers[id] = {
           status: 'running',
           durationMs,
@@ -819,6 +845,17 @@ export class EventEngine {
     this.inputManager.lock('ending');
     this.mutable.triggeredEvents = [...this.mutable.triggeredEvents, `ending-${command.id}`];
     this.onEndingReached(command.id);
+
+    if (command.returnsToCheckpoint) {
+      // Minor ending: show "小结局" overlay with the ending's title as body
+      // and a "返回检查点" button that advances the engine when clicked.
+      // The state is parked at awaiting_advance so the engine pauses until
+      // advance() is called (either via the button or programmatically in
+      // headless tests).
+      this.narrativeUI.setMinorEnding(true, command.title, () => this.advance());
+      this.state = 'awaiting_advance';
+    }
+
     this.syncDebugState();
   }
 

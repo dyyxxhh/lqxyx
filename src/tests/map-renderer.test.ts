@@ -549,7 +549,7 @@ describe('map renderer', () => {
     const mock = createMockScene();
     const renderer = new MapRenderer(mock.scene as never, '4F');
 
-    renderer.renderRoom('gt2-classroom');
+    renderer.renderRoom('class-1-1');
 
     const strokeRects = mock.graphicsOps.filter((op) => op.op === 'strokeRect');
     expect(strokeRects).toHaveLength(0);

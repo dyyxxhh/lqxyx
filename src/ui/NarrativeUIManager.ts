@@ -69,6 +69,15 @@ export class NarrativeUIManager {
   private curtainTitleText: Phaser.GameObjects.Text;
   private curtainSubtitleText: Phaser.GameObjects.Text;
 
+  // Minor ending overlay (shown after returnsToCheckpoint endings, blocks until
+  // the player clicks the "返回检查点" button).
+  private minorEndingBg: Phaser.GameObjects.Rectangle;
+  private minorEndingTitleText: Phaser.GameObjects.Text;
+  private minorEndingBodyText: Phaser.GameObjects.Text;
+  private minorEndingButtonBg: Phaser.GameObjects.Rectangle;
+  private minorEndingButtonText: Phaser.GameObjects.Text;
+  private minorEndingOnConfirm: (() => void) | null = null;
+
   public constructor(scene: Phaser.Scene) {
     this.scene = scene;
     // --- Task UI ---
@@ -235,6 +244,80 @@ export class NarrativeUIManager {
       .setDepth(CURTAIN_TEXT_DEPTH)
       .setVisible(false);
 
+    // --- Minor ending overlay ---
+    // Sits above curtain (depth +5) so it overlays even if a curtain was last
+    // raised. Title "小结局" + body text + single "返回检查点" button.
+    this.minorEndingBg = scene.add
+      .rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, GAME_WIDTH, GAME_HEIGHT, 0x000000, 1)
+      .setOrigin(0.5)
+      .setScrollFactor(0)
+      .setDepth(CURTAIN_DEPTH + 5)
+      .setVisible(false);
+
+    this.minorEndingTitleText = applyPixelTextStyle(scene.add
+      .text(GAME_WIDTH / 2, GAME_HEIGHT / 2 - 140, '小结局', {
+        align: 'center',
+        color: UI_THEME.colors.textGold,
+        fontFamily: UI_THEME.font.ui,
+        fontSize: '60px',
+        fontStyle: 'bold',
+      })
+    )
+      .setOrigin(0.5)
+      .setScrollFactor(0)
+      .setDepth(CURTAIN_DEPTH + 6)
+      .setVisible(false);
+
+    this.minorEndingBodyText = applyPixelTextStyle(scene.add
+      .text(GAME_WIDTH / 2, GAME_HEIGHT / 2 - 30, '', {
+        align: 'center',
+        color: UI_THEME.colors.text,
+        fontFamily: UI_THEME.font.ui,
+        fontSize: '36px',
+      })
+    )
+      .setOrigin(0.5)
+      .setScrollFactor(0)
+      .setDepth(CURTAIN_DEPTH + 6)
+      .setVisible(false);
+
+    this.minorEndingButtonBg = scene.add
+      .rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2 + 100, 280, 64, UI_THEME.colors.surfaceRaised, UI_THEME.alpha.panelStrong)
+      .setOrigin(0.5)
+      .setScrollFactor(0)
+      .setDepth(CURTAIN_DEPTH + 6)
+      .setVisible(false);
+    applyPixelStrokeStyle(this.minorEndingButtonBg, UI_THEME.stroke.medium, UI_THEME.colors.gold, 1);
+
+    this.minorEndingButtonText = applyPixelTextStyle(scene.add
+      .text(GAME_WIDTH / 2, GAME_HEIGHT / 2 + 100, '返回检查点', {
+        align: 'center',
+        color: UI_THEME.colors.textGold,
+        fontFamily: UI_THEME.font.ui,
+        fontSize: '24px',
+        fontStyle: 'bold',
+      })
+    )
+      .setOrigin(0.5)
+      .setScrollFactor(0)
+      .setDepth(CURTAIN_DEPTH + 7)
+      .setVisible(false);
+
+    this.minorEndingButtonBg.setInteractive({ useHandCursor: true });
+    this.minorEndingButtonBg.on('pointerover', () => {
+      this.minorEndingButtonBg.setFillStyle(UI_THEME.colors.surfaceMuted, UI_THEME.alpha.controlActive);
+    });
+    this.minorEndingButtonBg.on('pointerout', () => {
+      this.minorEndingButtonBg.setFillStyle(UI_THEME.colors.surfaceRaised, UI_THEME.alpha.panelStrong);
+    });
+    this.minorEndingButtonBg.on('pointerdown', () => {
+      const handler = this.minorEndingOnConfirm;
+      // Defer the callback to avoid firing while the input event is still
+      // being dispatched (and to let the caller hide the UI before it runs
+      // engine logic).
+      if (handler) handler();
+    });
+
     // Expose on window for e2e tests
     if (typeof window !== 'undefined') {
       (window as unknown as Record<string, unknown>).__YING_ZHONG_JIU_NARRATIVE_UI__ = this;
@@ -361,7 +444,29 @@ export class NarrativeUIManager {
     });
   }
 
-  public setVisible(element: 'task' | 'dialogue' | 'rolePrompt' | 'timer' | 'curtain', visible: boolean): void {
+  public setMinorEnding(visible: boolean, body?: string, onConfirm?: () => void): void {
+    this.minorEndingBg.setVisible(visible);
+    this.minorEndingTitleText.setVisible(visible);
+    this.minorEndingBodyText.setVisible(visible);
+    this.minorEndingButtonBg.setVisible(visible);
+    this.minorEndingButtonText.setVisible(visible);
+
+    if (visible) {
+      this.minorEndingBodyText.setText(body ?? '');
+      this.minorEndingOnConfirm = onConfirm ?? null;
+      // Reset hover fill so re-shows start in a clean state
+      this.minorEndingButtonBg.setFillStyle(UI_THEME.colors.surfaceRaised, UI_THEME.alpha.panelStrong);
+    } else {
+      this.minorEndingOnConfirm = null;
+    }
+
+    setNarrativeUiDebugState({
+      minorEndingVisible: visible,
+      minorEndingBody: visible ? body ?? '' : '',
+    });
+  }
+
+  public setVisible(element: 'task' | 'dialogue' | 'rolePrompt' | 'timer' | 'curtain' | 'minorEnding', visible: boolean): void {
     switch (element) {
       case 'task':
         this.taskBg.setVisible(visible);
@@ -387,6 +492,17 @@ export class NarrativeUIManager {
         this.curtainBg.setVisible(visible);
         this.curtainTitleText.setVisible(visible);
         this.curtainSubtitleText.setVisible(visible);
+        break;
+      case 'minorEnding':
+        this.minorEndingBg.setVisible(visible);
+        this.minorEndingTitleText.setVisible(visible);
+        this.minorEndingBodyText.setVisible(visible);
+        this.minorEndingButtonBg.setVisible(visible);
+        this.minorEndingButtonText.setVisible(visible);
+        if (!visible) {
+          this.minorEndingOnConfirm = null;
+        }
+        setNarrativeUiDebugState({ minorEndingVisible: visible });
         break;
     }
   }

@@ -11,6 +11,7 @@ function chainableObject(extra: Record<string, unknown> = {}): Record<string, un
   object.setDisplaySize = vi.fn(() => object);
   object.setScale = vi.fn(() => object);
   object.setTint = vi.fn(() => object);
+  object.setTintMode = vi.fn(() => object);
   object.setAlpha = vi.fn(() => object);
   object.setVisible = vi.fn((visible: boolean) => {
     object.visible = visible;

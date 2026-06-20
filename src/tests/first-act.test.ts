@@ -75,6 +75,7 @@ function createMockNarrative(): { ui: NarrativeUIManager; log: MockNarrativeLog 
     setRolePrompt: vi.fn((characterId: string, displayName?: string) => { log.rolePrompts.push({ characterId, displayName }); }),
     setTimer: vi.fn((remainingMs: number, visible: boolean) => { log.timerCalls.push({ remainingMs, visible }); }),
     setVisible: vi.fn(),
+    setMinorEnding: vi.fn(),
     getDisplayName: vi.fn((id: string) => id),
     getPortraitKey: vi.fn(() => undefined),
   } as unknown as NarrativeUIManager;
@@ -331,7 +332,7 @@ describe('First Act — Branch Selection', () => {
     engine.updatePlayerPosition({ x: 288, y: 2012 });
     engine.completeInteraction('F');
 
-    // B-1: task, interaction(F), fade(500), bsdw(500), dialogue, wait(3s), dialogue, blackScreen(1s), deathFlash, blackScreen(1s), ending, checkpoint G
+    // B-1: task, interaction(F), fade(500), bsdw(500), dialogue, wait(3s), dialogue, blackScreen(1s), deathFlash(4200), blackScreen(1s), ending(blocking), advance, fade(500), checkpoint G
     // Engine is in awaiting_advance after first dialogue
     engine.update(500); // fade
 
@@ -348,13 +349,18 @@ describe('First Act — Branch Selection', () => {
 
     // blackScreen 1s
     engine.update(1000);
-    // deathFlash (ruler ≈ 3000ms)
-    engine.update(3000);
+    // deathFlash (ruler now mirrors celery polish ≈ 4200ms)
+    engine.update(4200);
     // blackScreen 1s
     engine.update(1000);
 
-    // ending "split-in-two" + checkpoint G
+    // ending "split-in-two" parks at awaiting_advance until the player confirms
+    // via the "返回检查点" button — simulated here with advance().
     expect(onEndingReached).toHaveBeenCalledWith('split-in-two');
+    expect(engine.getCurrentState()).toBe('awaiting_advance');
+    engine.advance();
+    engine.update(500); // fade in
+
     expect(onCheckpointReached).toHaveBeenCalledWith('G');
   });
 
@@ -449,7 +455,7 @@ describe('First Act — Endings and Curtain', () => {
     engine.updatePlayerPosition({ x: 288, y: 2012 });
     engine.completeInteraction('F');
 
-    // Pump through B-1: fade500 → bsdw1000 → adv dialogue → wait3000 → adv → black1000 → death3000 → black1000 → ending → checkpoint G
+    // Pump through B-1: fade500 → bsdw1000 → adv dialogue → wait3000 → adv → black1000 → death4200 → black1000 → ending(blocking) → advance → fade500 → checkpoint G
     engine.update(500);
     engine.update(500);
     engine.update(500);
@@ -457,11 +463,20 @@ describe('First Act — Endings and Curtain', () => {
     engine.update(3000);
     engine.advance();
     engine.update(1000);
-    engine.update(3000);
+    engine.update(4200); // ruler death flash now mirrors celery (4200ms)
     engine.update(1000);
 
     expect(onEndingReached).toHaveBeenCalledWith('split-in-two');
-    expect(onCheckpointReached).toHaveBeenCalledWith('G');
+    // Minor ending parks at awaiting_advance until the player confirms via
+    // the "返回检查点" button — simulated here via advance().
+    expect(engine.getCurrentState()).toBe('awaiting_advance');
+    const checkpointGCallsBeforeConfirm = onCheckpointReached.mock.calls.filter((args) => args[0] === 'G').length;
+
+    engine.advance();
+    engine.update(500); // fade in
+
+    const checkpointGCallsAfterConfirm = onCheckpointReached.mock.calls.filter((args) => args[0] === 'G').length;
+    expect(checkpointGCallsAfterConfirm).toBe(checkpointGCallsBeforeConfirm + 1);
   });
 
   it('ending survival-false-report (I) triggers curtain with 下一幕 + 敬请期待', () => {

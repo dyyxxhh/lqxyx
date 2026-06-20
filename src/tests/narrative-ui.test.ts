@@ -39,6 +39,13 @@ function chainableUiObject(extra: Record<string, unknown> = {}): Record<string, 
     object.displayHeight = height;
     return object;
   };
+  object.setFillStyle = (color: number, alpha?: number) => {
+    object.fillColor = color;
+    object.fillAlpha = alpha;
+    return object;
+  };
+  object.setInteractive = () => object;
+  object.on = () => object;
   object.getBounds = () => ({ x: 0, y: 0, width: 0, height: 0 });
   return object;
 }
@@ -153,6 +160,8 @@ describe('narrative UI debug state', () => {
       curtainVisible: false,
       curtainTitle: '下一幕',
       curtainSubtitle: '敬请期待',
+      minorEndingVisible: false,
+      minorEndingBody: '',
     });
   });
 

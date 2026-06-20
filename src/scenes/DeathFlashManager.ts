@@ -13,6 +13,9 @@ export interface DeathFlashFrameLogEntry {
 }
 
 const DEPTH = 1700;
+// Phaser.TintModes.FILL = 1; imported as a literal here so this module stays
+// type-only on Phaser and remains loadable in vitest without a Canvas runtime.
+const TINT_MODE_FILL = 1;
 
 export class DeathFlashManager {
   private readonly scene: Phaser.Scene;
@@ -109,15 +112,20 @@ export class DeathFlashManager {
       .setScrollFactor(0)
       .setOrigin(0.5);
 
-    if (imageKey.includes('Celery')) {
-      image.setTint(imageKey.includes('white') || imageKey.includes('White') ? 0xffffff : 0x000000);
+    // The source celery/ruler texture is a black silhouette on transparent
+    // alpha. setTintFill REPLACES the visible color (preserving alpha) so the
+    // black source can render as pure white against the black background frame
+    // — setTint multiplies and leaves a black silhouette black, which would
+    // make it invisible on the black background.
+    if (imageKey.includes('Celery') || imageKey.includes('Ruler')) {
+      const isWhiteVariant = imageKey.includes('white') || imageKey.includes('White');
+      image.setTint(isWhiteVariant ? 0xffffff : 0x000000);
+      image.setTintMode(TINT_MODE_FILL);
       image.setAlpha(1);
     }
 
     if (imageKey.startsWith('large')) {
       image.setScale(0.7);
-    } else if (imageKey === 'ruler') {
-      image.setDisplaySize(GAME_WIDTH * 0.72, GAME_HEIGHT * 0.48);
     } else {
       image.setScale(0.42);
     }
@@ -134,5 +142,5 @@ export class DeathFlashManager {
 }
 
 function textureKeyForFrameImage(image: NonNullable<DeathFlashFrame['image']>): string {
-  return image === 'ruler' ? 'prop.ruler' : 'prop.celery';
+  return image.includes('Ruler') ? 'prop.ruler' : 'prop.celery';
 }

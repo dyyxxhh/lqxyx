@@ -5,6 +5,7 @@ import { EventEngine, type ScriptedMovementRequest } from '../story/EventEngine'
 import { resetSceneDebugState } from '../game/scaffoldState';
 import { storyManifest, type StoryManifest } from '../data/story';
 import { createDefaultSaveState, type SaveState } from '../state/saveState';
+import { schoolMaps } from '../data/maps';
 
 interface MockInputCallLog {
   lockCalls: { reason: string }[];
@@ -60,6 +61,7 @@ function createMockNarrativeUI(): { ui: NarrativeUIManager; log: MockNarrativeCa
     setRolePrompt: vi.fn((characterId: string, displayName?: string) => { log.rolePrompts.push({ characterId, displayName }); }),
     setTimer: vi.fn((remainingMs: number, visible: boolean) => { log.timerCalls.push({ remainingMs, visible }); }),
     setVisible: vi.fn(),
+    setMinorEnding: vi.fn(),
     getDisplayName: vi.fn((id: string) => id),
     getPortraitKey: vi.fn(() => undefined),
   } as unknown as NarrativeUIManager;
@@ -242,5 +244,211 @@ describe('Bug Fixes — A-1 door fall-through + switchView position', () => {
     engine.startFromCheckpoint('A');
 
     expect(onSwitchView).toHaveBeenCalledWith('4F', null, undefined, undefined);
+  });
+
+  it('Bug (B-2 position): branch B-2 switchView places Yang Yun inside 5F communication-control-5f, where he last stood at the end of checkpoint E', () => {
+    const onSwitchView = vi.fn();
+    const { engine } = createEngine({ onSwitchView });
+
+    engine.startFromCheckpoint('G');
+    expect(engine.getPendingBranchIds()).toEqual(['B-1', 'B-2']);
+    engine.selectBranch('B-2');
+
+    engine.update(3000);
+    engine.advance();
+    engine.advance();
+    engine.update(500);
+
+    expect(onSwitchView).toHaveBeenCalledWith(
+      '5F',
+      'communication-control-5f',
+      { x: 620, y: 240 },
+      'up',
+    );
+  });
+
+  it('Bug (communicationDisabled timing): checkpoint E sets communicationDisabled=true after Yang Yun completes the 5F shutdown F-interaction', () => {
+    const saveState: SaveState = {
+      ...createDefaultSaveState(),
+      checkpointId: 'E',
+      controllableCharacterId: 'yangYunRed',
+      storyFlags: { ...createDefaultSaveState().storyFlags, communicationDisabled: false },
+    };
+    const { engine } = createEngine({
+      saveState,
+      onScriptedMovement: (_movement, complete) => complete({ x: 760, y: 330 }),
+    });
+
+    engine.startFromCheckpoint('E');
+    while (engine.getCurrentState() === 'awaiting_advance' || engine.getCurrentState() === 'waiting') {
+      if (engine.getCurrentState() === 'awaiting_advance') engine.advance();
+      else engine.update(1000);
+    }
+    expect(engine.getCurrentState()).toBe('awaiting_interaction');
+
+    engine.updateLocation('5F', 'communication-control-5f');
+    engine.updatePlayerPosition({ x: 620, y: 240 });
+    expect(engine.getStoryFlags().communicationDisabled).toBe(false);
+
+    engine.completeInteraction('F');
+    expect(engine.getStoryFlags().communicationDisabled).toBe(true);
+  });
+
+  it('Bug (B-2 recording): B-2 toggles yangYunRecordingActive around the player-controlled pickup segment', () => {
+    const { engine } = createEngine();
+
+    engine.startFromCheckpoint('G');
+    engine.selectBranch('B-2');
+    engine.update(3000);
+    engine.advance();
+    engine.advance();
+    engine.update(500);
+    engine.update(2000);
+    engine.update(500);
+    expect(engine.getStoryFlags().yangYunRecordingActive).toBe(true);
+  });
+
+  it('Bug (multi-flag condition): a command with an array condition runs only when ALL flags match', () => {
+    const onSwitchView = vi.fn();
+    const manifest = createSingleCheckpointManifest([
+      { type: 'setFlag', id: 'a', value: true },
+      { type: 'setFlag', id: 'b', value: false },
+      {
+        type: 'switchView',
+        characterId: 'yangYunBlue',
+        location: 'gated',
+        locationState: { floorId: '4F', roomId: null },
+        condition: [
+          { flag: 'a', equals: true },
+          { flag: 'b', equals: false },
+        ],
+      },
+      { type: 'setFlag', id: 'b', value: true },
+      {
+        type: 'switchView',
+        characterId: 'yangYunBlue',
+        location: 'should-not-fire',
+        locationState: { floorId: '5F', roomId: null },
+        condition: [
+          { flag: 'a', equals: true },
+          { flag: 'b', equals: false },
+        ],
+      },
+    ]);
+    const { engine } = createEngine({ manifest, onSwitchView });
+    engine.startFromCheckpoint('A');
+
+    expect(onSwitchView).toHaveBeenCalledTimes(1);
+    expect(onSwitchView).toHaveBeenCalledWith('4F', null, undefined, undefined);
+  });
+
+  it('Bug (continuous visibility): timer with visibilityRequiresContinuous resets to durationMs whenever predicate goes false', () => {
+    let visible = true;
+    const visibilityPredicate = (id: string) => id === 'test-target' && visible;
+    const onTimerExpired = vi.fn();
+    const manifest = createSingleCheckpointManifest([
+      { type: 'timer', id: 'continuous-3s', action: 'start', durationMs: 3_000, trigger: 't', visibilityTargetId: 'test-target', visibilityRequiresContinuous: true },
+      { type: 'dialogue', speaker: '系统', text: 'wait' },
+    ]);
+    const { engine } = createEngine({ manifest, visibilityPredicate, onTimerExpired });
+    engine.startFromCheckpoint('A');
+
+    engine.update(1500);
+    visible = false;
+    engine.update(2000);
+    visible = true;
+    engine.update(2000);
+    expect(onTimerExpired).not.toHaveBeenCalled();
+
+    engine.update(1100);
+    expect(onTimerExpired).toHaveBeenCalledWith('continuous-3s');
+  });
+
+  it('Bug (cumulative visibility): timer without visibilityRequiresContinuous accumulates visible time across pauses', () => {
+    let visible = true;
+    const visibilityPredicate = (id: string) => id === 'test-target' && visible;
+    const onTimerExpired = vi.fn();
+    const manifest = createSingleCheckpointManifest([
+      { type: 'timer', id: 'cumulative-3s', action: 'start', durationMs: 3_000, trigger: 't', visibilityTargetId: 'test-target' },
+      { type: 'dialogue', speaker: '系统', text: 'wait' },
+    ]);
+    const { engine } = createEngine({ manifest, visibilityPredicate, onTimerExpired });
+    engine.startFromCheckpoint('A');
+
+    engine.update(1500);
+    visible = false;
+    engine.update(5000);
+    visible = true;
+    engine.update(1600);
+
+    expect(onTimerExpired).toHaveBeenCalledWith('cumulative-3s');
+  });
+
+  it('Bug (phone cabinet condition): phoneCabinetInteractionDisabled=true blocks the GT phone-cabinet F-interaction in H', () => {
+    const saveState: SaveState = {
+      ...createDefaultSaveState(),
+      checkpointId: 'H',
+      controllableCharacterId: 'dongJihao',
+      storyFlags: { communicationDisabled: false, phoneCabinetInteractionDisabled: true },
+    };
+    const { engine, onCheckpointReached } = createEngine({ saveState });
+
+    engine.startFromCheckpoint('H');
+    engine.update(500);
+    engine.advance();
+
+    engine.updateLocation('4F', 'gt1-classroom');
+    engine.updatePlayerPosition({ x: 160, y: 260 });
+    engine.completeInteraction('F');
+
+    expect(onCheckpointReached).not.toHaveBeenCalledWith('I');
+  });
+
+  it('Bug (replay buffer persistence): YangYunReplayManager persists buffer to localStorage on stopRecording and restores it on demand', async () => {
+    const { YangYunReplayManager } = await import('../scenes/YangYunReplayManager');
+    const stubScene = {
+      add: { sprite: () => ({ setOrigin: () => ({ setDepth: () => ({ setVisible: () => ({}) }) }), setVisible: () => undefined, setPosition: () => undefined, setTexture: () => undefined, destroy: () => undefined, visible: false }) },
+      textures: { exists: () => true },
+    } as unknown as Phaser.Scene;
+
+    const writer = new YangYunReplayManager(stubScene);
+    writer.startRecording(0);
+    writer.recordFrame(100, 100, 200, '4F', 'gt1-classroom', 'down');
+    writer.recordFrame(200, 110, 200, '4F', 'gt1-classroom', 'right');
+    writer.stopRecording();
+
+    expect(localStorage.getItem('ying-zhong-jiu.replay-buffer.v1')).not.toBeNull();
+
+    const reader = new YangYunReplayManager(stubScene);
+    reader.restoreBuffer();
+    expect(reader.getDebugState().bufferLength).toBe(2);
+  });
+
+  it('Bug (H phone cabinet rendering): GT1 and GT2 classrooms have phoneCabinet interactionTargets at the cabinet spawn point', () => {
+    const gt1 = Object.values(schoolMaps.floors).flatMap((f) => Object.values(f.rooms)).find((r) => r?.id === 'gt1-classroom');
+    const gt2 = Object.values(schoolMaps.floors).flatMap((f) => Object.values(f.rooms)).find((r) => r?.id === 'gt2-classroom');
+    expect(gt1?.interactionTargets.some((t) => t.id === 'gt1-phone-cabinet')).toBe(true);
+    expect(gt2?.interactionTargets.some((t) => t.id === 'gt2-phone-cabinet')).toBe(true);
+  });
+
+  it('Bug (H comms online dialogue): after opening 5F comms, Dong Jihao says "搞定了。" before the cabinet task', () => {
+    const saveState: SaveState = {
+      ...createDefaultSaveState(),
+      checkpointId: 'H',
+      controllableCharacterId: 'dongJihao',
+      storyFlags: { communicationDisabled: true },
+    };
+    const { engine, uiLog } = createEngine({ saveState });
+
+    engine.startFromCheckpoint('H');
+    engine.update(500);
+
+    expect(engine.getCurrentState()).toBe('awaiting_interaction');
+
+    engine.updateLocation('5F', 'communication-control-5f');
+    engine.updatePlayerPosition({ x: 620, y: 240 });
+    engine.completeInteraction('F');
+
+    expect(uiLog.dialogues.some((d) => d.speaker === '董继豪' && d.text === '搞定了。')).toBe(true);
   });
 });

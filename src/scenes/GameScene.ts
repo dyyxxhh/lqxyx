@@ -7,10 +7,11 @@ import {
   markGameSceneReady,
   markSceneStarted,
   refreshCanvasDebugState,
+  refreshSaveDebugState,
 } from '../game/scaffoldState';
 import { InputManager } from '../input/InputManager';
 import { MapRenderer } from '../map/MapRenderer';
-import { clearSaveState } from '../state/saveState';
+import { clearSaveState, exportSaveCode, importSaveCode } from '../state/saveState';
 import { NarrativeUIManager } from '../ui/NarrativeUIManager';
 import { UI_THEME, applyPixelStrokeStyle, applyPixelTextStyle } from '../ui/uiTheme';
 
@@ -20,8 +21,12 @@ export class GameScene extends Phaser.Scene {
   private mapRenderer: MapRenderer | null = null;
   private startButton!: Phaser.GameObjects.Rectangle;
   private continueButton: Phaser.GameObjects.Rectangle | null = null;
+  private saveCodeStatusText: Phaser.GameObjects.Text | null = null;
   private readonly UI_BASE_DEPTH = 980;
   private readonly UI_TEXT_DEPTH = 981;
+  private readonly CONTINUE_Y = GAME_HEIGHT / 2 + 108;
+  private readonly SETTINGS_TITLE_Y = GAME_HEIGHT / 2 + 172;
+  private readonly SETTINGS_BUTTON_Y = GAME_HEIGHT / 2 + 218;
 
   public constructor() {
     super('GameScene');
@@ -93,7 +98,7 @@ export class GameScene extends Phaser.Scene {
       .setDepth(this.UI_TEXT_DEPTH);
 
     applyPixelTextStyle(this.add
-      .text(GAME_WIDTH / 2, GAME_HEIGHT / 2 + (hasContinue ? 188 : 104), '第一幕 · 影中咎', {
+      .text(GAME_WIDTH / 2, this.SETTINGS_BUTTON_Y + 84, '第一幕 · 影中咎', {
         align: 'center',
         color: UI_THEME.colors.textMuted,
         fontFamily: UI_THEME.font.ui,
@@ -103,36 +108,73 @@ export class GameScene extends Phaser.Scene {
       .setOrigin(0.5)
       .setDepth(this.UI_BASE_DEPTH);
 
-    if (hasContinue) {
-      this.continueButton = this.add
-        .rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2 + 108, 360, 72, UI_THEME.colors.surfaceMuted)
-        .setOrigin(0.5)
-        .setDepth(this.UI_BASE_DEPTH)
-        .setInteractive({ useHandCursor: true });
-      applyPixelStrokeStyle(this.continueButton, UI_THEME.stroke.medium, UI_THEME.colors.gold, 0.88);
+    if (hasContinue) this.createContinueButton();
 
-      applyPixelTextStyle(this.add
-        .text(GAME_WIDTH / 2, GAME_HEIGHT / 2 + 108, '继续游戏', {
-          align: 'center',
-          color: UI_THEME.colors.text,
-          fontFamily: UI_THEME.font.ui,
-          fontSize: '32px',
-          fontStyle: 'bold',
-        })
-      )
-        .setOrigin(0.5)
-        .setDepth(this.UI_TEXT_DEPTH);
+    applyPixelTextStyle(this.add
+      .text(GAME_WIDTH / 2, this.SETTINGS_TITLE_Y, '设置', {
+        align: 'center',
+        color: UI_THEME.colors.textGold,
+        fontFamily: UI_THEME.font.ui,
+        fontSize: '20px',
+        fontStyle: 'bold',
+      })
+    )
+      .setOrigin(0.5)
+      .setDepth(this.UI_TEXT_DEPTH);
 
-      this.continueButton.on('pointerover', () => {
-        this.continueButton?.setFillStyle(UI_THEME.colors.accentHover);
-      });
-      this.continueButton.on('pointerout', () => {
-        this.continueButton?.setFillStyle(UI_THEME.colors.surfaceMuted);
-      });
-      this.continueButton.on('pointerdown', () => {
-        this.continueGame();
-      });
-    }
+    const exportButton = this.add
+      .rectangle(GAME_WIDTH / 2 - 92, this.SETTINGS_BUTTON_Y, 160, 42, UI_THEME.colors.surfaceMuted, UI_THEME.alpha.panel)
+      .setOrigin(0.5)
+      .setDepth(this.UI_BASE_DEPTH)
+      .setInteractive({ useHandCursor: true });
+    applyPixelStrokeStyle(exportButton, UI_THEME.stroke.thin, UI_THEME.colors.borderMuted, 0.95);
+    applyPixelTextStyle(this.add
+      .text(exportButton.x, exportButton.y, '导出本机码', {
+        align: 'center',
+        color: UI_THEME.colors.text,
+        fontFamily: UI_THEME.font.ui,
+        fontSize: '18px',
+        fontStyle: 'bold',
+      })
+    )
+      .setOrigin(0.5)
+      .setDepth(this.UI_TEXT_DEPTH);
+
+    const importButton = this.add
+      .rectangle(GAME_WIDTH / 2 + 92, exportButton.y, 160, 42, UI_THEME.colors.surfaceMuted, UI_THEME.alpha.panel)
+      .setOrigin(0.5)
+      .setDepth(this.UI_BASE_DEPTH)
+      .setInteractive({ useHandCursor: true });
+    applyPixelStrokeStyle(importButton, UI_THEME.stroke.thin, UI_THEME.colors.borderMuted, 0.95);
+    applyPixelTextStyle(this.add
+      .text(importButton.x, importButton.y, '导入本机码', {
+        align: 'center',
+        color: UI_THEME.colors.text,
+        fontFamily: UI_THEME.font.ui,
+        fontSize: '18px',
+        fontStyle: 'bold',
+      })
+    )
+      .setOrigin(0.5)
+      .setDepth(this.UI_TEXT_DEPTH);
+
+    this.saveCodeStatusText = applyPixelTextStyle(this.add
+      .text(GAME_WIDTH / 2, exportButton.y + 38, '', {
+        align: 'center',
+        color: UI_THEME.colors.textMuted,
+        fontFamily: UI_THEME.font.ui,
+        fontSize: '16px',
+      })
+    )
+      .setOrigin(0.5)
+      .setDepth(this.UI_TEXT_DEPTH);
+
+    exportButton.on('pointerover', () => exportButton.setFillStyle(UI_THEME.colors.accentHover, UI_THEME.alpha.panelStrong));
+    exportButton.on('pointerout', () => exportButton.setFillStyle(UI_THEME.colors.surfaceMuted, UI_THEME.alpha.panel));
+    exportButton.on('pointerdown', () => this.showExportSaveCode());
+    importButton.on('pointerover', () => importButton.setFillStyle(UI_THEME.colors.accentHover, UI_THEME.alpha.panelStrong));
+    importButton.on('pointerout', () => importButton.setFillStyle(UI_THEME.colors.surfaceMuted, UI_THEME.alpha.panel));
+    importButton.on('pointerdown', () => this.showImportSaveCode());
 
     // ── Button handlers ────────────────────────────────────────
     this.startButton.on('pointerover', () => {
@@ -189,6 +231,63 @@ export class GameScene extends Phaser.Scene {
     this.scene.start('PlayScene');
   }
 
+  private createContinueButton(): void {
+    if (this.continueButton) return;
+    this.continueButton = this.add
+      .rectangle(GAME_WIDTH / 2, this.CONTINUE_Y, 360, 72, UI_THEME.colors.surfaceMuted)
+      .setOrigin(0.5)
+      .setDepth(this.UI_BASE_DEPTH)
+      .setInteractive({ useHandCursor: true });
+    applyPixelStrokeStyle(this.continueButton, UI_THEME.stroke.medium, UI_THEME.colors.gold, 0.88);
+
+    applyPixelTextStyle(this.add
+      .text(GAME_WIDTH / 2, this.CONTINUE_Y, '继续游戏', {
+        align: 'center',
+        color: UI_THEME.colors.text,
+        fontFamily: UI_THEME.font.ui,
+        fontSize: '32px',
+        fontStyle: 'bold',
+      })
+    )
+      .setOrigin(0.5)
+      .setDepth(this.UI_TEXT_DEPTH);
+
+    this.continueButton.on('pointerover', () => {
+      this.continueButton?.setFillStyle(UI_THEME.colors.accentHover);
+    });
+    this.continueButton.on('pointerout', () => {
+      this.continueButton?.setFillStyle(UI_THEME.colors.surfaceMuted);
+    });
+    this.continueButton.on('pointerdown', () => {
+      this.continueGame();
+    });
+  }
+
+  private showExportSaveCode(): void {
+    const result = exportSaveCode();
+    if (result.status !== 'exported') {
+      this.saveCodeStatusText?.setText('暂无可导出的存档');
+      return;
+    }
+
+    window.prompt('复制本机四位存档码', result.code);
+    this.saveCodeStatusText?.setText(`存档码：${result.code}`);
+  }
+
+  private showImportSaveCode(): void {
+    const code = window.prompt('输入本机四位存档码', '')?.trim() ?? '';
+    const result = importSaveCode(code);
+    if (result.status === 'imported') {
+      refreshSaveDebugState();
+      this.continueAvailable = true;
+      this.createContinueButton();
+      this.saveCodeStatusText?.setText('导入成功');
+      return;
+    }
+
+    this.saveCodeStatusText?.setText(result.status === 'invalid-code' ? '请输入四位数字' : '未找到存档码');
+  }
+
   public shutdown(): void {
     this.input?.keyboard?.removeAllListeners();
     this.inputManager?.destroy();
@@ -198,5 +297,6 @@ export class GameScene extends Phaser.Scene {
     this.narrativeUI = null;
     this.mapRenderer = null;
     this.continueButton = null;
+    this.saveCodeStatusText = null;
   }
 }

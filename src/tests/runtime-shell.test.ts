@@ -53,6 +53,7 @@ import {
 } from '../game/scaffoldState';
 import { GameScene } from '../scenes/GameScene';
 import { PlayScene } from '../scenes/PlayScene';
+import { clearSaveState, createDefaultSaveState, exportSaveCode, loadSaveState, saveSaveState } from '../state/saveState';
 
 describe('runtime scene shell', () => {
   it('records BootScene, PreloadScene, and GameScene exactly once with preload readiness before game readiness', () => {
@@ -204,6 +205,107 @@ describe('runtime scene shell', () => {
     scene.onTimerExpired('survival-route-countdown');
 
     expect(scene.eventEngine.triggerEndingById).toHaveBeenCalledWith('saozi');
+  }, 15_000);
+
+  it('PlayScene allows elevator transitions during the 30s survival wait', () => {
+    const scene = Object.create(PlayScene.prototype) as {
+      mapRenderer: { startElevatorTransition: (floorId: string, complete: () => void) => void };
+      currentFloor: string;
+      currentRoom: string | null;
+      inRoom: boolean;
+      eventEngine: {
+        getCurrentState: () => string;
+        hasRunningTimer: (timerId: string) => boolean;
+        updateLocation: (floorId: string, roomId: string | null) => void;
+        updatePlayerPosition: (position: { x: number; y: number }) => void;
+        attemptBlockedDoor: (doorId: string) => boolean;
+        isInteractionTargetInCurrentLocation: () => boolean;
+      };
+      playerSprite: { setPosition: (x: number, y: number) => void };
+      playerPosition: { x: number; y: number };
+      currentDirection: string;
+      syncCharacterDebugState: () => void;
+      handleDoorInteraction: (door: {
+        id: string;
+        floorId: string;
+        side: string;
+        bounds: { x: number; y: number; width: number; height: number };
+        interaction: { type: 'elevator'; targetFloorId: '5F' };
+      }) => boolean;
+    };
+    scene.mapRenderer = { startElevatorTransition: vi.fn((_floorId: string, complete: () => void) => complete()) };
+    scene.currentFloor = '4F';
+    scene.currentRoom = null;
+    scene.inRoom = false;
+    scene.eventEngine = {
+      getCurrentState: vi.fn(() => 'waiting'),
+      hasRunningTimer: vi.fn((timerId: string) => timerId === 'survival-ending-countdown'),
+      updateLocation: vi.fn(),
+      updatePlayerPosition: vi.fn(),
+      attemptBlockedDoor: vi.fn(() => false),
+      isInteractionTargetInCurrentLocation: vi.fn(() => false),
+    };
+    scene.playerSprite = { setPosition: vi.fn() };
+    scene.playerPosition = { x: 520, y: 920 };
+    scene.currentDirection = 'down';
+    scene.syncCharacterDebugState = vi.fn();
+
+    expect(scene.handleDoorInteraction({
+      id: '4f-elevator',
+      floorId: '4F',
+      side: 'right',
+      bounds: { x: 500, y: 880, width: 40, height: 120 },
+      interaction: { type: 'elevator', targetFloorId: '5F' },
+    })).toBe(true);
+
+    expect(scene.mapRenderer.startElevatorTransition).toHaveBeenCalledWith('5F', expect.any(Function));
+    expect(scene.eventEngine.updateLocation).toHaveBeenCalledWith('5F', null);
+  }, 15_000);
+
+  it('GameScene settings can export and import four-digit save codes from the menu', () => {
+    resetSceneDebugState();
+    localStorage.clear();
+    const scene = Object.create(GameScene.prototype) as {
+      saveCodeStatusText: { setText: (text: string) => void } | null;
+      continueButton: unknown | null;
+      createContinueButton: () => void;
+      showExportSaveCode: () => void;
+      showImportSaveCode: () => void;
+    };
+    const statusText = { setText: vi.fn() };
+    scene.saveCodeStatusText = statusText;
+    scene.continueButton = null;
+    scene.createContinueButton = vi.fn(() => { scene.continueButton = {}; });
+    const savedPrompt = window.prompt;
+    const prompt = vi.fn((_message: string, value?: string) => value ?? null);
+    window.prompt = prompt;
+    const state = { ...createDefaultSaveState(), checkpointId: 'H' as const, floorId: '5F' as const, roomId: 'communication-control-5f' as const };
+    saveSaveState(state);
+
+    scene.showExportSaveCode();
+    const exported = exportSaveCode();
+    expect(exported.status).toBe('exported');
+    if (exported.status === 'exported') {
+      clearSaveState();
+      prompt.mockReturnValueOnce(exported.code);
+      scene.showImportSaveCode();
+    }
+
+    expect(prompt).toHaveBeenCalledWith('复制本机四位存档码', expect.stringMatching(/^\d{4}$/));
+    expect(prompt).toHaveBeenCalledWith('输入本机四位存档码', '');
+    expect(scene.createContinueButton).toHaveBeenCalledTimes(1);
+    expect(statusText.setText).toHaveBeenLastCalledWith('导入成功');
+    expect(loadSaveState()).toEqual({ status: 'valid', state });
+    window.prompt = savedPrompt;
+  }, 15_000);
+
+  it('GameScene menu reserves space for a continue button before settings controls', () => {
+    const scene = new GameScene() as unknown as {
+      CONTINUE_Y: number;
+      SETTINGS_TITLE_Y: number;
+    };
+
+    expect(scene.CONTINUE_Y + 36).toBeLessThan(scene.SETTINGS_TITLE_Y);
   }, 15_000);
 });
 

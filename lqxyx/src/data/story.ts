@@ -77,7 +77,7 @@ export type StoryCommand = (
   | { type: "setFlag"; id: string; value: boolean }
   | { type: "switchView"; characterId: CharacterId; location: string; visibility?: string; locationState?: { floorId: FloorId; roomId: RoomId | null }; position?: StoryPoint; facing?: "up" | "down" | "left" | "right" }
   | { type: "ending"; id: string; title: string; subtitle?: string; returnsToCheckpoint?: CheckpointId }
-  | { type: "curtain"; title: "下一幕"; subtitle: "敬请期待" }
+  | { type: "curtain"; title: string; subtitle: "敬请期待" }
   | { type: "blockDoor"; doorId: string; message: string; speaker?: string }
   | { type: "unblockDoor"; doorId: string }
 ) & { condition?: StoryCommandConditionRequirement };
@@ -140,7 +140,7 @@ export interface StoryAct {
   proximityTargets?: StoryProximityTarget[];
   visibilityTargets?: StoryVisibilityTarget[];
   scriptedMovementTargets?: StoryScriptedMovementTarget[];
-  curtain?: { title: "下一幕"; subtitle: "敬请期待" };
+  curtain?: { title: string; subtitle: "敬请期待" };
   notes?: string[];
 }
 
@@ -408,7 +408,7 @@ export const firstActCheckpoints: StoryCheckpoint[] = [
       { type: "wait", durationMs: 30_000, label: "活着倒计时结束" },
       { type: "fade", direction: "out", durationMs: 500 },
       { type: "ending", id: "survival-false-report", title: "幸存", subtitle: "报假警" },
-      { type: "curtain", title: "下一幕", subtitle: "敬请期待" },
+      { type: "curtain", title: "\"报假警\"", subtitle: "敬请期待" },
     ],
   },
 ];
@@ -478,6 +478,7 @@ export const firstActBranches: StoryBranch[] = [
     commands: [
       { type: "task", text: "前往五楼校长办公室" },
       { type: "interaction", input: "F", target: "五楼校长办公室门口", result: "不进入，黑屏对白", physicalTarget: { floorId: "5F", roomId: null, points: [{ x: 288, y: 2012, radiusPx: 48 }] } },
+      { type: "task", text: "无" },
       { type: "fade", direction: "out", durationMs: 500 },
       { type: "blackScreenDialogueWait", durationMs: 500, label: "校长办公室黑屏正常对白等待" },
       { type: "dialogue", speaker: "董继豪", text: "今天周末，我忘了。" },
@@ -603,7 +604,7 @@ export const storyManifest: StoryManifest = {
         { id: "dong-jihao-to-qin-haorui-body", target: { x: 760, y: 330 }, durationMs: 2_000, tolerancePx: 16 },
         { id: "yang-yun-to-qin-haorui-body", target: { x: 760, y: 330 }, durationMs: 2_000, tolerancePx: 16 },
       ],
-      curtain: { title: "下一幕", subtitle: "敬请期待" },
+      curtain: { title: "\"报假警\"", subtitle: "敬请期待" },
       notes: [
         "任务 `无` 保留为数据，后续 UI 在显示层隐藏。",
         "F-A 在剧本中只作为 F-B 的执行目标出现，未单独定义；manifest 将 F-B 视为触发小结局：躁子。",

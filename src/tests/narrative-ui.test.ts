@@ -44,10 +44,22 @@ function chainableUiObject(extra: Record<string, unknown> = {}): Record<string, 
     object.fillAlpha = alpha;
     return object;
   };
-  object.setInteractive = () => object;
-  object.on = () => object;
+  object.setInteractive = (config?: unknown) => {
+    object.interactiveConfig = config ?? true;
+    return object;
+  };
+  object.on = (eventName: string, handler: unknown) => {
+    const events = isEventRecord(object.events) ? object.events : {};
+    events[eventName] = handler;
+    object.events = events;
+    return object;
+  };
   object.getBounds = () => ({ x: 0, y: 0, width: 0, height: 0 });
   return object;
+}
+
+function isEventRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
 function createMockScene() {
@@ -454,6 +466,41 @@ describe('timer state via debug state', () => {
     const state = getSceneDebugState().ui;
     expect(state.timerVisible).toBe(false);
     expect(state.timerRemainingMs).toBe(30_000);
+  });
+});
+
+describe('curtain state via debug state', () => {
+  it('curtain renders 敬请期待 as a visible non-reactive button', () => {
+    resetSceneDebugState();
+    const scene = createMockScene();
+    const ui = new NarrativeUIManager(scene as never);
+
+    ui.setCurtain(true, '"报假警"', '敬请期待');
+
+    const curtainButtonBg = scene.add.rectangle.mock.results[5]?.value;
+    const curtainSubtitleText = scene.add.text.mock.results[7]?.value;
+    expect(curtainButtonBg.visible).toBe(true);
+    expect(curtainButtonBg.strokeColor).toBe(UI_THEME.colors.gold);
+    expect(curtainButtonBg.interactiveConfig).toBeUndefined();
+    expect(curtainButtonBg.events).toBeUndefined();
+    expect(curtainSubtitleText.visible).toBe(true);
+    expect(curtainSubtitleText.text).toBe('敬请期待');
+    expect(getSceneDebugState().ui.curtainSubtitle).toBe('敬请期待');
+  });
+
+  it('curtain hides subtitle button for black screens with empty subtitle', () => {
+    resetSceneDebugState();
+    const scene = createMockScene();
+    const ui = new NarrativeUIManager(scene as never);
+
+    ui.setCurtain(true, '', '');
+
+    const curtainButtonBg = scene.add.rectangle.mock.results[5]?.value;
+    const curtainSubtitleText = scene.add.text.mock.results[7]?.value;
+    expect(curtainButtonBg.visible).toBe(false);
+    expect(curtainSubtitleText.visible).toBe(false);
+    expect(curtainSubtitleText.text).toBeUndefined();
+    expect(getSceneDebugState().ui.curtainSubtitle).toBe('');
   });
 });
 

@@ -1,6 +1,6 @@
 import type Phaser from 'phaser';
 import type { CharacterDirection } from '../characters/characterState';
-import { getIdleAnimationKey } from '../characters/CharacterRegistry';
+import { WALK_ANIMATIONS, getIdleAnimationKey } from '../characters/CharacterRegistry';
 import type { FloorId, RoomId } from '../data/maps';
 import { isRectInCameraView } from './cameraView';
 
@@ -42,6 +42,8 @@ export class YangYunReplayManager {
   private currentFloor: FloorId = '4F';
   private currentRoom: RoomId | null = null;
   private currentDirection: CharacterDirection = 'down';
+  private moving = false;
+  private animationTime = 0;
 
   public constructor(scene: Phaser.Scene) {
     this.scene = scene;
@@ -118,12 +120,16 @@ export class YangYunReplayManager {
   }
 
   public update(time: number, deltaMs: number, dongJihao: DongJihaoSnapshot): void {
+    this.animationTime = time;
+    const previousX = this.currentX;
+    const previousY = this.currentY;
     if (this.phase === 'replaying') {
       this.advanceReplay(time);
     }
     if (this.phase === 'chasing') {
       this.advanceChase(deltaMs, dongJihao);
     }
+    this.moving = Math.hypot(this.currentX - previousX, this.currentY - previousY) > 0.5;
     this.refreshSpriteVisibility(dongJihao);
   }
 
@@ -221,9 +227,17 @@ export class YangYunReplayManager {
     const sameRoom = this.currentFloor === dongJihao.floorId && this.currentRoom === dongJihao.roomId;
     this.sprite.setVisible(sameRoom);
     this.sprite.setPosition(this.currentX, this.currentY);
-    const idleKey = getIdleAnimationKey('yangYunRed', this.currentDirection);
-    if (this.scene.textures.exists(idleKey)) {
-      this.sprite.setTexture(idleKey);
+    const textureKey = this.getCurrentTextureKey();
+    if (this.scene.textures.exists(textureKey)) {
+      this.sprite.setTexture(textureKey);
     }
+  }
+
+  private getCurrentTextureKey(): string {
+    if (!this.moving) {
+      return getIdleAnimationKey('yangYunRed', this.currentDirection);
+    }
+    const frames = WALK_ANIMATIONS.yangYunRed[this.currentDirection].frameKeys;
+    return frames[Math.floor(this.animationTime / 180) % frames.length] ?? getIdleAnimationKey('yangYunRed', this.currentDirection);
   }
 }

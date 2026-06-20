@@ -67,6 +67,7 @@ export class NarrativeUIManager {
   private curtainBg: Phaser.GameObjects.Rectangle;
   private curtainImage: Phaser.GameObjects.Image | null;
   private curtainTitleText: Phaser.GameObjects.Text;
+  private curtainSubtitleButtonBg: Phaser.GameObjects.Rectangle;
   private curtainSubtitleText: Phaser.GameObjects.Text;
 
   // Minor ending overlay (shown after returnsToCheckpoint endings, blocks until
@@ -231,12 +232,21 @@ export class NarrativeUIManager {
       .setDepth(CURTAIN_TEXT_DEPTH)
       .setVisible(false);
 
+    this.curtainSubtitleButtonBg = scene.add
+      .rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2 + 54, 260, 58, UI_THEME.colors.surfaceRaised, UI_THEME.alpha.panelStrong)
+      .setOrigin(0.5)
+      .setScrollFactor(0)
+      .setDepth(CURTAIN_TEXT_DEPTH)
+      .setVisible(false);
+    applyPixelStrokeStyle(this.curtainSubtitleButtonBg, UI_THEME.stroke.medium, UI_THEME.colors.gold, 1);
+
     this.curtainSubtitleText = applyPixelTextStyle(scene.add
-      .text(GAME_WIDTH / 2, GAME_HEIGHT / 2 + 40, '', {
+      .text(GAME_WIDTH / 2, GAME_HEIGHT / 2 + 54, '', {
         align: 'center',
-        color: UI_THEME.colors.textMuted,
+        color: UI_THEME.colors.textGold,
         fontFamily: UI_THEME.font.ui,
-        fontSize: '32px',
+        fontSize: '28px',
+        fontStyle: 'bold',
       })
     )
       .setOrigin(0.5)
@@ -417,13 +427,17 @@ export class NarrativeUIManager {
   }
 
   public setCurtain(visible: boolean, title?: string, subtitle?: string, textureKey?: string): void {
+    const curtainSubtitle = subtitle ?? '敬请期待';
+    const hasSubtitle = visible && curtainSubtitle !== '';
+
     this.curtainBg.setVisible(visible);
     this.curtainTitleText.setVisible(visible);
-    this.curtainSubtitleText.setVisible(visible);
+    this.curtainSubtitleButtonBg.setVisible(hasSubtitle);
+    this.curtainSubtitleText.setVisible(hasSubtitle);
 
     if (visible) {
       this.curtainTitleText.setText(title ?? '下一幕');
-      this.curtainSubtitleText.setText(subtitle ?? '敬请期待');
+      if (hasSubtitle) this.curtainSubtitleText.setText(curtainSubtitle);
       if (textureKey) {
         if (!this.curtainImage) {
           this.curtainImage = this.scene.add.image(GAME_WIDTH / 2, GAME_HEIGHT / 2, textureKey).setDepth(CURTAIN_DEPTH + 1).setScrollFactor(0).setVisible(false);
@@ -440,7 +454,7 @@ export class NarrativeUIManager {
     setNarrativeUiDebugState({
       curtainVisible: visible,
       curtainTitle: title ?? '下一幕',
-      curtainSubtitle: subtitle ?? '敬请期待',
+      curtainSubtitle,
     });
   }
 

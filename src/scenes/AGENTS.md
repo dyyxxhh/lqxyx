@@ -7,7 +7,7 @@
 src/scenes/
 ├── BootScene.ts           # 空 boot，直接切 PreloadScene
 ├── PreloadScene.ts        # 加载资产 + 进度条 + 失败重试 + URL 参数强制失败
-├── GameScene.ts           # 主菜单（开始新游戏 / 继续游戏 / 本机存档码设置）
+├── GameScene.ts           # 主菜单（开始新游戏 / 继续游戏 / 四位进度码设置）
 ├── PlayScene.ts           # 核心游戏场景（移动/交互/动画/剧情）
 ├── DeathFlashManager.ts   # 死亡闪屏（血黑/白底/黑底 + 贴图切换）
 ├── cameraView.ts          # 相机视野辅助
@@ -21,7 +21,7 @@ src/scenes/
 |------|------|-------|
 | 改玩家移动速度/碰撞 | `PlayScene.ts` | `PLAYER_SPEED = 200`，`clampToWalkable()` |
 | 改角色动画更新 | `PlayScene.ts` | `updateCharacterAnimation()` — `time.now / 180` 切帧 |
-| 改场景切换/菜单设置 | `GameScene.ts` / `PlayScene.ts` | `startNewGame()` → `clearSaveState()` → `scene.start('PlayScene')`；本机存档码导入成功后启用继续游戏 |
+| 改场景切换/菜单设置 | `GameScene.ts` / `PlayScene.ts` | `startNewGame()` → `clearSaveState()` → `scene.start('PlayScene')`；四位进度码导入成功后启用继续游戏 |
 | 改死亡闪屏序列 | `DeathFlashManager.ts` | 按 `DeathFlashFrame[]` 顺序切换背景和贴图 |
 | 改预加载 UI | `PreloadScene.ts` | 进度条 + 失败提示 + 重试按钮 |
 | 改相机跟随 | `PlayScene.ts` | `cameras.main.centerOn(playerPosition)` |

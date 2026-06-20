@@ -28,7 +28,7 @@ describe("story manifest", () => {
       120_000,
     ]);
     expect(firstAct?.tasks).toContain("无");
-    expect(firstAct?.endings.map((ending) => ending.title).sort()).toEqual(["一分为二", "幸存", "臊子"]);
+    expect(firstAct?.endings.map((ending) => ending.title).sort()).toEqual(["一分为二", "幸存", "躁子"]);
     expect(firstAct?.curtain).toEqual({ title: "下一幕", subtitle: "敬请期待" });
   });
 

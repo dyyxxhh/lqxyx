@@ -193,6 +193,18 @@ describe('runtime scene shell', () => {
     expect(scene.playerPosition.x).toBeLessThan(150);
     expect(scene.playerPosition.x).toBeGreaterThan(100);
   }, 15_000);
+
+  it('PlayScene routes survival countdown expiry through EventEngine ending lookup', () => {
+    const scene = Object.create(PlayScene.prototype) as {
+      eventEngine: { triggerEndingById: (endingId: string) => void };
+      onTimerExpired: (timerId: string) => void;
+    };
+    scene.eventEngine = { triggerEndingById: vi.fn() };
+
+    scene.onTimerExpired('survival-route-countdown');
+
+    expect(scene.eventEngine.triggerEndingById).toHaveBeenCalledWith('saozi');
+  }, 15_000);
 });
 
 function stubCanvasContext(): void {

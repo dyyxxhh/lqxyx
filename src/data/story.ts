@@ -487,8 +487,6 @@ export const firstActBranches: StoryBranch[] = [
       { type: "deathFlash", id: "ruler", sequence: rulerDeathFlash },
       { type: "blackScreen", durationMs: 1_000 },
       { type: "ending", id: "split-in-two", title: "一分为二", returnsToCheckpoint: "G" },
-      { type: "fade", direction: "in", durationMs: 500 },
-      { type: "checkpoint", id: "G" },
     ],
   },
   {
@@ -542,7 +540,7 @@ export const storyManifest: StoryManifest = {
           id: "survival-route-countdown",
           durationMs: 120_000,
           startsAt: "H",
-          result: "倒计时 ≤ 0 时关闭倒计时并执行 F-B / F-A，大结局：臊子",
+          result: "倒计时 ≤ 0 时关闭倒计时并执行 F-B / F-A，小结局：躁子",
         },
         {
           id: "survival-ending-countdown",
@@ -574,9 +572,10 @@ export const storyManifest: StoryManifest = {
         },
         {
           id: "saozi",
-          title: "臊子",
-          kind: "major",
+          title: "躁子",
+          kind: "minor",
           trigger: "F-B：杨云连续出现在屏幕内3s，或 H 的120s倒计时归零",
+          returnsToCheckpoint: "H",
         },
         {
           id: "survival-false-report",
@@ -607,7 +606,7 @@ export const storyManifest: StoryManifest = {
       curtain: { title: "下一幕", subtitle: "敬请期待" },
       notes: [
         "任务 `无` 保留为数据，后续 UI 在显示层隐藏。",
-        "F-A 在剧本中只作为 F-B 的执行目标出现，未单独定义；manifest 将 F-B 视为触发大结局：臊子。",
+        "F-A 在剧本中只作为 F-B 的执行目标出现，未单独定义；manifest 将 F-B 视为触发小结局：躁子。",
         "B-1 写明黑屏下对话、立绘正常显示；manifest 用 blackScreenDialogueWait 表示 500ms 黑屏对白等待。",
       ],
     },

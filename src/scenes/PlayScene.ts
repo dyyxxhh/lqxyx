@@ -872,10 +872,7 @@ export class PlayScene extends Phaser.Scene {
   }
 
   private triggerEnding(_endingId: string): void {
-    this.endingActive = true;
-    this.eventEngine.stopAllTimers();
-    this.inputManager.lock('ending');
-    this.narrativeUI.setCurtain(true, '臊子', '');
+    this.eventEngine.triggerEndingById(_endingId);
   }
 
   // ═══════════════════════════════════════════════════════════════

@@ -7,7 +7,9 @@ import {
   clearSaveState,
   createDefaultSaveState,
   deserializeSaveState,
+  exportSaveCode,
   hasValidSave,
+  importSaveCode,
   loadSaveState,
   saveSaveState,
   serializeSaveState,
@@ -153,5 +155,31 @@ describe('checkpoint save state manager', () => {
     clearSaveState();
 
     expect(hasValidSave()).toBe(false);
+  });
+
+  it('save-code: exports and imports a valid save through a four-digit numeric code', () => {
+    const checkpointState = createCheckpointState();
+    saveSaveState(checkpointState);
+
+    const exported = exportSaveCode();
+
+    expect(exported.status).toBe('exported');
+    if (exported.status === 'exported') {
+      expect(exported.code).toMatch(/^\d{4}$/);
+      clearSaveState();
+      expect(importSaveCode(exported.code)).toEqual({ status: 'imported', state: checkpointState });
+      expect(loadSaveState()).toEqual({ status: 'valid', state: checkpointState });
+    }
+  });
+
+  it('save-code: rejects malformed and unknown codes without changing current save', () => {
+    const checkpointState = createCheckpointState();
+    saveSaveState(checkpointState);
+
+    expect(importSaveCode('12')).toEqual({ status: 'invalid-code' });
+    expect(importSaveCode('abcd')).toEqual({ status: 'invalid-code' });
+    expect(importSaveCode('12345')).toEqual({ status: 'invalid-code' });
+    expect(importSaveCode('9999')).toEqual({ status: 'unknown-code' });
+    expect(loadSaveState()).toEqual({ status: 'valid', state: checkpointState });
   });
 });

@@ -3,6 +3,7 @@ import type { FloorId, RoomId, SpawnPoint } from '../data/maps';
 
 export const SAVE_STATE_STORAGE_KEY = 'ying-zhong-jiu.checkpoint-save.v1';
 export const SAVE_STATE_SCHEMA_VERSION = 1;
+const SAVE_CODEBOOK_STORAGE_KEY = 'ying-zhong-jiu.save-codebook.v1';
 
 export type SaveStateSchemaVersion = typeof SAVE_STATE_SCHEMA_VERSION;
 export type SaveTimerStatus = 'running' | 'paused' | 'stopped';
@@ -47,6 +48,15 @@ export type SaveLoadResult =
   | { readonly status: 'valid'; readonly state: SaveState }
   | { readonly status: 'empty'; readonly state: SaveState }
   | { readonly status: 'invalid'; readonly reason: InvalidSaveReason; readonly state: SaveState };
+
+export type SaveCodeExportResult =
+  | { readonly status: 'exported'; readonly code: string; readonly state: SaveState }
+  | { readonly status: 'no-save' };
+
+export type SaveCodeImportResult =
+  | { readonly status: 'imported'; readonly state: SaveState }
+  | { readonly status: 'invalid-code' }
+  | { readonly status: 'unknown-code' };
 
 export interface SaveDebugState {
   readonly storageKey: typeof SAVE_STATE_STORAGE_KEY;
@@ -161,6 +171,33 @@ export function clearSaveState(storage: Storage = localStorage): void {
   storage.removeItem('ying-zhong-jiu.replay-buffer.v1');
 }
 
+export function exportSaveCode(storage: Storage = localStorage): SaveCodeExportResult {
+  const current = loadSaveState(storage);
+  if (current.status !== 'valid') return { status: 'no-save' };
+
+  const serialized = serializeSaveState(current.state);
+  const codebook = readSaveCodebook(storage);
+  const existingCode = Object.entries(codebook).find(([, value]) => value === serialized)?.[0];
+  const code = existingCode ?? nextSaveCode(codebook);
+  codebook[code] = serialized;
+  storage.setItem(SAVE_CODEBOOK_STORAGE_KEY, JSON.stringify(codebook));
+
+  return { status: 'exported', code, state: current.state };
+}
+
+export function importSaveCode(code: string, storage: Storage = localStorage): SaveCodeImportResult {
+  if (!/^\d{4}$/.test(code)) return { status: 'invalid-code' };
+
+  const serialized = readSaveCodebook(storage)[code];
+  if (!serialized) return { status: 'unknown-code' };
+
+  const parsed = deserializeSaveState(serialized);
+  if (parsed.status !== 'valid') return { status: 'unknown-code' };
+
+  saveSaveState(parsed.state, storage);
+  return { status: 'imported', state: parsed.state };
+}
+
 export function createSaveDebugState(result: SaveLoadResult): SaveDebugState {
   return {
     storageKey: SAVE_STATE_STORAGE_KEY,
@@ -218,6 +255,36 @@ function toSaveState(value: unknown): SaveState | null {
     pickups,
     triggeredEvents,
   };
+}
+
+function readSaveCodebook(storage: Storage): Record<string, string> {
+  const raw = storage.getItem(SAVE_CODEBOOK_STORAGE_KEY);
+  if (!raw) return {};
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return {};
+  }
+
+  if (!isRecord(parsed)) return {};
+
+  const codebook: Record<string, string> = {};
+  for (const [code, value] of Object.entries(parsed)) {
+    if (/^\d{4}$/.test(code) && typeof value === 'string') {
+      codebook[code] = value;
+    }
+  }
+  return codebook;
+}
+
+function nextSaveCode(codebook: Record<string, string>): string {
+  for (let index = 0; index <= 9_999; index += 1) {
+    const code = String(index).padStart(4, '0');
+    if (!Object.hasOwn(codebook, code)) return code;
+  }
+  return '0000';
 }
 
 function toPosition(value: unknown): SavePosition | null {

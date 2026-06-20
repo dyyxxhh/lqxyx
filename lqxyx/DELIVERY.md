@@ -205,7 +205,7 @@ This is recorded in `.omo/evidence/task-16-delivery-consistency.log` and matches
 
 ## 9. Known Limitations
 
-1. **Acts 2 and 3 are reserved, not playable.** `src/data/story.ts` marks later acts as reserved. The delivered playable scope is Act 1 and ends at the `下一幕 / 敬请期待` curtain.
+1. **Acts 2 and 3 are reserved, not playable.** `src/data/story.ts` marks later acts as reserved. The delivered playable scope is Act 1 and ends at the `"报假警" / 敬请期待` curtain.
 
 2. **Production URL E2E requires an explicit deployed URL.** The default `npm run e2e` release suite covers local desktop/mobile gameplay on the Vite dev server. `production-chromium` runs only when `E2E_PRODUCTION_URL` is set, so it does not accidentally test a stale or unrelated service on port 8949.
 

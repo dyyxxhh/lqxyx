@@ -239,7 +239,7 @@ export class MapRenderer {
     for (const target of room.interactionTargets) {
       if (target.visible && target.render.assetKey === 'communication.steelInteractable') {
         this.renderCommunicationDevice(target);
-      } else if (target.visible && target.render.assetKey === 'prop.phone') {
+      } else if (target.visible && (target.render.assetKey === 'prop.phone' || target.render.assetKey === 'prop.phoneCabinetFront')) {
         this.renderOfficePhone(target);
       }
     }
@@ -411,7 +411,7 @@ export class MapRenderer {
     const bounds = target.bounds;
     const centerX = bounds.x + bounds.width / 2;
     const centerY = bounds.y + bounds.height / 2;
-    const phoneKey = 'prop.phone';
+    const phoneKey = target.render.assetKey;
 
     if (this.scene.textures.exists(phoneKey)) {
       const phone = this.scene.add.image(centerX, centerY, phoneKey);

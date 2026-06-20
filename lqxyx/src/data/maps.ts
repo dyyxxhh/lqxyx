@@ -91,6 +91,12 @@ export type RoomInteractionTargetRenderMetadata =
       material: "phone";
       shape: "deskPhone";
       color: "#1f1410";
+    }
+  | {
+      assetKey: "prop.phoneCabinetFront";
+      material: "phoneCabinet";
+      shape: "cabinetFront";
+      color: "#201815";
     };
 
 export interface RoomInteractionTarget {
@@ -203,10 +209,10 @@ const officePhoneRender: RoomInteractionTargetRenderMetadata = {
 };
 
 const phoneCabinetRender: RoomInteractionTargetRenderMetadata = {
-  assetKey: "prop.phone",
-  material: "phone",
-  shape: "deskPhone",
-  color: "#1f1410",
+  assetKey: "prop.phoneCabinetFront",
+  material: "phoneCabinet",
+  shape: "cabinetFront",
+  color: "#201815",
 };
 
 function rect(x: number, y: number, width: number, height: number): MapRectangle {

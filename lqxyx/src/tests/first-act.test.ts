@@ -4,7 +4,7 @@ import type { NarrativeUIManager } from '../ui/NarrativeUIManager';
 import { EventEngine } from '../story/EventEngine';
 import { resetSceneDebugState } from '../game/scaffoldState';
 import { storyManifest, type CheckpointId, type BranchId } from '../data/story';
-import { createDefaultSaveState, type SaveState } from '../state/saveState';
+import { createDefaultSaveState, loadSaveState, type SaveState } from '../state/saveState';
 
 // ── Test helpers ───────────────────────────────────────────────
 
@@ -267,7 +267,7 @@ describe('First Act — Checkpoint A-I Flow', () => {
     // Ending and curtain should have fired
     expect(onEndingReached).toHaveBeenCalledWith('survival-false-report');
     const curtain = uiLog.curtains.find((c) => c.visible);
-    expect(curtain?.title).toBe('下一幕');
+    expect(curtain?.title).toBe('"报假警"');
     expect(curtain?.subtitle).toBe('敬请期待');
   });
 });
@@ -300,7 +300,7 @@ describe('First Act — Branch Selection', () => {
     expect(onCheckpointReached).toHaveBeenCalledWith('D');
   });
 
-  it('branch A-2 (let me taste) auto-eats then chains to A-1', () => {
+  it('branch A-1 arms front-door proximity before checkpoint D', () => {
     const onCheckpointReached = vi.fn();
     const { engine } = createEngine({ onCheckpointReached });
 
@@ -480,7 +480,57 @@ describe('First Act — Endings and Curtain', () => {
     expect(engine.getPendingBranchIds()).toEqual(['B-1', 'B-2']);
   });
 
-  it('ending survival-false-report (I) triggers curtain with 下一幕 + 敬请期待', () => {
+  it('ending split-in-two restores checkpoint G office location and original save position', () => {
+    const saveState: SaveState = {
+      ...createDefaultSaveState(),
+      checkpointId: 'G',
+      controllableCharacterId: 'dongJihao',
+      floorId: '4F',
+      roomId: 'office-4f',
+      position: { x: 620, y: 180, facing: 'up' },
+    };
+    const { engine, uiLog } = createEngine({ saveState });
+
+    engine.startFromCheckpoint('G');
+    engine.selectBranch('B-1');
+    engine.updateLocation('5F', null);
+    engine.updatePlayerPosition({ x: 288, y: 2012 });
+    engine.completeInteraction('F');
+    engine.update(500);
+    engine.update(500);
+    engine.update(500);
+    engine.advance();
+    engine.update(3_000);
+    engine.advance();
+    engine.update(1_000);
+    engine.update(4_200);
+    engine.update(1_000);
+    engine.advance();
+
+    expect(engine.getCurrentState()).toBe('awaiting_branch');
+    expect(engine.getLocation()).toEqual({ floorId: '4F', roomId: 'office-4f' });
+    expect(loadSaveState().state.position).toEqual({ x: 620, y: 180, facing: 'up' });
+    expect(uiLog.curtains[uiLog.curtains.length - 1]).toMatchObject({ visible: false });
+  });
+
+  it('branch B-1 hides principal-office task before the black-screen curtain appears', () => {
+    const { engine, uiLog } = createEngine();
+
+    engine.startFromCheckpoint('G');
+    engine.selectBranch('B-1');
+    engine.updateLocation('5F', null);
+    engine.updatePlayerPosition({ x: 288, y: 2012 });
+    engine.completeInteraction('F');
+
+    expect(uiLog.taskTexts[uiLog.taskTexts.length - 1]).toBe('无');
+    expect(uiLog.curtains.some((call) => call.visible && call.title === '' && call.subtitle === '')).toBe(false);
+
+    engine.update(500);
+
+    expect(uiLog.curtains.some((call) => call.visible && call.title === '' && call.subtitle === '')).toBe(true);
+  });
+
+  it('ending survival-false-report (I) triggers curtain with quoted 报假警 + 敬请期待', () => {
     const { engine, uiLog, onEndingReached } = createEngine();
     engine.startFromCheckpoint('I');
     engine.advance(); // dialogue
@@ -491,7 +541,7 @@ describe('First Act — Endings and Curtain', () => {
 
     const curtainCalls = uiLog.curtains.filter((c) => c.visible);
     const lastCurtain = curtainCalls[curtainCalls.length - 1];
-    expect(lastCurtain?.title).toBe('下一幕');
+    expect(lastCurtain?.title).toBe('"报假警"');
     expect(lastCurtain?.subtitle).toBe('敬请期待');
   });
 
@@ -515,7 +565,7 @@ describe('First Act — Endings and Curtain', () => {
     expect(visibleCurtains.length).toBeGreaterThan(0);
     expect(visibleCurtains[visibleCurtains.length - 1]).toMatchObject({
       visible: true,
-      title: '下一幕',
+      title: '"报假警"',
       subtitle: '敬请期待',
     });
   });

@@ -97,6 +97,7 @@ export class EventEngine {
   private blockedDoors: Map<string, { message: string; speaker: string; shown: boolean }> = new Map();
   private ambientDialogueActive = false;
   private pendingReturnCheckpoint: CheckpointId | null = null;
+  private checkpointSnapshots: Map<CheckpointId, SaveState> = new Map();
 
   // ── Double-trigger guard ─────────────────────────────────────
   private advanceGuard = false;
@@ -142,6 +143,8 @@ export class EventEngine {
       triggeredEvents: [...saveState.triggeredEvents],
       position: { ...saveState.position },
     };
+
+    this.checkpointSnapshots.set(saveState.checkpointId, { ...saveState, position: { ...saveState.position } });
 
     this.syncDebugState();
   }
@@ -198,6 +201,7 @@ export class EventEngine {
       const returnCheckpoint = this.pendingReturnCheckpoint;
       if (returnCheckpoint) {
         this.pendingReturnCheckpoint = null;
+        this.restoreCheckpointSnapshot(returnCheckpoint);
         this.startFromCheckpoint(returnCheckpoint);
         this.restoreControlLock();
         this.advanceGuard = false;
@@ -567,6 +571,7 @@ export class EventEngine {
     this.currentControlState = 'player';
     this.restoreControlLock();
 
+    this.checkpointSnapshots.set(command.id, this.buildSaveState());
     this.persistSave();
     this.onCheckpointReached(command.id);
   }
@@ -684,6 +689,10 @@ export class EventEngine {
     this.stopActiveTimers();
   }
 
+  public hasRunningTimer(timerId: string): boolean {
+    return this.gameTimers.has(timerId) || this.mutable.timers[timerId]?.status === 'running';
+  }
+
   private handleTimer(command: Extract<StoryCommand, { type: 'timer' }>): void {
     const id = command.id;
 
@@ -768,6 +777,7 @@ export class EventEngine {
       this.pendingInteractionInput = command.input;
       this.pendingInteractionPhysicalTarget = command.physicalTarget ?? null;
       this.inputManager.setInteractContext(command.input);
+      this.currentControlState = 'player';
       this.inputManager.unlock();
       this.state = 'awaiting_interaction';
       this.syncDebugState();
@@ -781,6 +791,7 @@ export class EventEngine {
       this.pendingProximityTarget = target;
       this.pendingProximityArmedPosition = { x: this.mutable.position.x, y: this.mutable.position.y };
       this.inputManager.setInteractContext('F');
+      this.currentControlState = 'player';
       this.inputManager.unlock();
       this.state = 'awaiting_proximity';
       this.syncDebugState();
@@ -1018,7 +1029,11 @@ export class EventEngine {
   // ── Save persistence ─────────────────────────────────────────
 
   private persistSave(): void {
-    const state: SaveState = {
+    saveSaveState(this.buildSaveState());
+  }
+
+  private buildSaveState(): SaveState {
+    return {
       schemaVersion: 1,
       checkpointId: this.mutable.checkpointId,
       actId: this.mutable.actId,
@@ -1034,8 +1049,27 @@ export class EventEngine {
       pickups: {},
       triggeredEvents: [...this.mutable.triggeredEvents],
     };
+  }
 
-    saveSaveState(state);
+  private restoreCheckpointSnapshot(checkpointId: CheckpointId): void {
+    const snapshot = this.checkpointSnapshots.get(checkpointId);
+    if (!snapshot) return;
+
+    this.mutable = {
+      checkpointId: snapshot.checkpointId,
+      actId: 'act-1',
+      floorId: snapshot.floorId,
+      roomId: snapshot.roomId,
+      controllableCharacterId: snapshot.controllableCharacterId,
+      task: snapshot.task,
+      storyFlags: { ...snapshot.storyFlags },
+      branchChoices: { ...snapshot.branchChoices },
+      timers: structuredCloneSafeTimerRecord(snapshot.timers),
+      triggeredEvents: [...snapshot.triggeredEvents],
+      position: { ...snapshot.position },
+    };
+    this.narrativeUI.setCurtain(false);
+    this.onSwitchView?.(snapshot.floorId, snapshot.roomId, { x: snapshot.position.x, y: snapshot.position.y }, snapshot.position.facing);
   }
 
   // ── Debug state sync ─────────────────────────────────────────

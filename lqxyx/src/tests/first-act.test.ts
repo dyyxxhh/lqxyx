@@ -473,10 +473,11 @@ describe('First Act — Endings and Curtain', () => {
     const checkpointGCallsBeforeConfirm = onCheckpointReached.mock.calls.filter((args) => args[0] === 'G').length;
 
     engine.advance();
-    engine.update(500); // fade in
 
     const checkpointGCallsAfterConfirm = onCheckpointReached.mock.calls.filter((args) => args[0] === 'G').length;
     expect(checkpointGCallsAfterConfirm).toBe(checkpointGCallsBeforeConfirm + 1);
+    expect(engine.getCurrentState()).toBe('awaiting_branch');
+    expect(engine.getPendingBranchIds()).toEqual(['B-1', 'B-2']);
   });
 
   it('ending survival-false-report (I) triggers curtain with 下一幕 + 敬请期待', () => {

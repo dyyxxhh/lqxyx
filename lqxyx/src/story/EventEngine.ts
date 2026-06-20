@@ -96,6 +96,7 @@ export class EventEngine {
   // ── Blocked doors (story-driven, in-memory only) ────────────────
   private blockedDoors: Map<string, { message: string; speaker: string; shown: boolean }> = new Map();
   private ambientDialogueActive = false;
+  private pendingReturnCheckpoint: CheckpointId | null = null;
 
   // ── Double-trigger guard ─────────────────────────────────────
   private advanceGuard = false;
@@ -169,6 +170,7 @@ export class EventEngine {
     this.pendingProximityTarget = null;
     this.pendingProximityArmedPosition = null;
     this.pendingVisibilityTargetId = null;
+    this.pendingReturnCheckpoint = null;
     this.currentControlState = 'player';
     this.advanceGuard = false;
     this.branchGuard = false;
@@ -192,9 +194,15 @@ export class EventEngine {
 
     if (this.state === 'awaiting_advance') {
       this.narrativeUI.setVisible('dialogue', false);
-      // Tear down the minor-ending overlay if it is currently parked here.
-      // Safe no-op when the overlay is already hidden.
       this.narrativeUI.setMinorEnding(false);
+      const returnCheckpoint = this.pendingReturnCheckpoint;
+      if (returnCheckpoint) {
+        this.pendingReturnCheckpoint = null;
+        this.startFromCheckpoint(returnCheckpoint);
+        this.restoreControlLock();
+        this.advanceGuard = false;
+        return;
+      }
       this.state = 'executing';
       this.restoreControlLock();
       this.commandIndex++;
@@ -772,6 +780,7 @@ export class EventEngine {
 
       this.pendingProximityTarget = target;
       this.pendingProximityArmedPosition = { x: this.mutable.position.x, y: this.mutable.position.y };
+      this.inputManager.setInteractContext('F');
       this.inputManager.unlock();
       this.state = 'awaiting_proximity';
       this.syncDebugState();
@@ -847,16 +856,25 @@ export class EventEngine {
     this.onEndingReached(command.id);
 
     if (command.returnsToCheckpoint) {
-      // Minor ending: show "小结局" overlay with the ending's title as body
-      // and a "返回检查点" button that advances the engine when clicked.
-      // The state is parked at awaiting_advance so the engine pauses until
-      // advance() is called (either via the button or programmatically in
-      // headless tests).
+      this.pendingReturnCheckpoint = command.returnsToCheckpoint;
       this.narrativeUI.setMinorEnding(true, command.title, () => this.advance());
       this.state = 'awaiting_advance';
     }
 
     this.syncDebugState();
+  }
+
+  public triggerEndingById(endingId: string): void {
+    const act = this.manifest.acts.find((a) => a.status === 'playable');
+    const ending = act?.endings.find((candidate) => candidate.id === endingId);
+    if (!ending) return;
+    this.stopActiveTimers();
+    this.handleEnding({
+      type: 'ending',
+      id: ending.id,
+      title: ending.title,
+      ...(ending.returnsToCheckpoint ? { returnsToCheckpoint: ending.returnsToCheckpoint } : {}),
+    });
   }
 
   private handleCurtain(command: Extract<StoryCommand, { type: 'curtain' }>): void {
@@ -989,6 +1007,7 @@ export class EventEngine {
     this.pendingProximityTarget = null;
     this.pendingProximityArmedPosition = null;
     this.pendingVisibilityTargetId = null;
+    this.pendingReturnCheckpoint = null;
     this.currentControlState = 'player';
     this.advanceGuard = false;
     this.state = 'executing';

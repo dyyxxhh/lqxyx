@@ -18,6 +18,7 @@ interface MockNarrativeCallLog {
   taskTexts: string[];
   dialogues: { speaker: string; text: string; portraitKey: string | undefined; tone: string | undefined }[];
   curtains: { visible: boolean; title?: string; subtitle?: string }[];
+  minorEndings: { visible: boolean; body?: string; onConfirm?: () => void }[];
   rolePrompts: { characterId: string; displayName?: string }[];
   timerCalls: { remainingMs: number; visible: boolean }[];
 }
@@ -51,6 +52,7 @@ function createMockNarrativeUI(): { ui: NarrativeUIManager; log: MockNarrativeCa
     taskTexts: [],
     dialogues: [],
     curtains: [],
+    minorEndings: [],
     rolePrompts: [],
     timerCalls: [],
   };
@@ -61,7 +63,7 @@ function createMockNarrativeUI(): { ui: NarrativeUIManager; log: MockNarrativeCa
     setRolePrompt: vi.fn((characterId: string, displayName?: string) => { log.rolePrompts.push({ characterId, displayName }); }),
     setTimer: vi.fn((remainingMs: number, visible: boolean) => { log.timerCalls.push({ remainingMs, visible }); }),
     setVisible: vi.fn(),
-    setMinorEnding: vi.fn(),
+    setMinorEnding: vi.fn((visible: boolean, body?: string, onConfirm?: () => void) => { log.minorEndings.push({ visible, body, onConfirm }); }),
     getDisplayName: vi.fn((id: string) => id),
     getPortraitKey: vi.fn(() => undefined),
   } as unknown as NarrativeUIManager;
@@ -450,5 +452,56 @@ describe('Bug Fixes — A-1 door fall-through + switchView position', () => {
     engine.completeInteraction('F');
 
     expect(uiLog.dialogues.some((d) => d.speaker === '董继豪' && d.text === '搞定了。')).toBe(true);
+  });
+
+  it('Bug (saozi minor ending): triggering saozi shows minor-ending UI and advance returns to checkpoint H', () => {
+    const saveState: SaveState = {
+      ...createDefaultSaveState(),
+      checkpointId: 'H',
+      controllableCharacterId: 'dongJihao',
+    };
+    const { engine, uiLog, onEndingReached, onCheckpointReached } = createEngine({ saveState });
+
+    engine.startFromCheckpoint('H');
+    engine.triggerEndingById('saozi');
+
+    expect(onEndingReached).toHaveBeenCalledWith('saozi');
+    expect(uiLog.minorEndings[uiLog.minorEndings.length - 1]).toMatchObject({ visible: true, body: '躁子' });
+    expect(engine.getCurrentState()).toBe('awaiting_advance');
+
+    engine.advance();
+    engine.update(500);
+
+    expect(onCheckpointReached).toHaveBeenCalledWith('H');
+    expect(engine.getLocation()).toEqual({ floorId: '4F', roomId: 'office-4f' });
+  });
+
+  it('Bug (Yang Yun replay animation): replay uses walking frames while replay position advances', async () => {
+    const { YangYunReplayManager } = await import('../scenes/YangYunReplayManager');
+    const textureCalls: string[] = [];
+    const sprite = {
+      visible: false,
+      setOrigin: vi.fn(() => sprite),
+      setDepth: vi.fn(() => sprite),
+      setVisible: vi.fn((visible: boolean) => { sprite.visible = visible; return sprite; }),
+      setPosition: vi.fn(() => sprite),
+      setTexture: vi.fn((key: string) => { textureCalls.push(key); return sprite; }),
+      destroy: vi.fn(),
+    };
+    const stubScene = {
+      add: { sprite: vi.fn(() => sprite) },
+      textures: { exists: () => true },
+    } as unknown as Phaser.Scene;
+    const manager = new YangYunReplayManager(stubScene);
+
+    manager.startRecording(0);
+    manager.recordFrame(0, 100, 200, '4F', 'gt1-classroom', 'right');
+    manager.recordFrame(200, 160, 200, '4F', 'gt1-classroom', 'right');
+    manager.stopRecording();
+    manager.startReplay(0, { x: 100, y: 200, floorId: '4F', roomId: 'gt1-classroom' });
+
+    manager.update(360, 16, { x: 100, y: 200, floorId: '4F', roomId: 'gt1-classroom' });
+
+    expect(textureCalls).toContain('sprite.yangYunRed.right.step');
   });
 });

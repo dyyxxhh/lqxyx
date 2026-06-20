@@ -262,7 +262,7 @@ describe('runtime scene shell', () => {
     expect(scene.eventEngine.updateLocation).toHaveBeenCalledWith('5F', null);
   }, 15_000);
 
-  it('GameScene settings can export and import four-digit save codes from the menu', () => {
+  it('GameScene settings can export and import self-contained four-digit progress codes from the menu', () => {
     resetSceneDebugState();
     localStorage.clear();
     const scene = Object.create(GameScene.prototype) as {
@@ -291,11 +291,14 @@ describe('runtime scene shell', () => {
       scene.showImportSaveCode();
     }
 
-    expect(prompt).toHaveBeenCalledWith('复制本机四位存档码', expect.stringMatching(/^\d{4}$/));
-    expect(prompt).toHaveBeenCalledWith('输入本机四位存档码', '');
+    expect(prompt).toHaveBeenCalledWith('复制四位进度码', expect.stringMatching(/^\d{4}$/));
+    expect(prompt).toHaveBeenCalledWith('输入四位进度码', '');
     expect(scene.createContinueButton).toHaveBeenCalledTimes(1);
     expect(statusText.setText).toHaveBeenLastCalledWith('导入成功');
-    expect(loadSaveState()).toEqual({ status: 'valid', state });
+    const imported = loadSaveState();
+    expect(imported.status).toBe('valid');
+    expect(imported.status === 'valid' ? imported.state.checkpointId : null).toBe('H');
+    expect(imported.status === 'valid' ? imported.state.task : null).toBe('去班里偷同学手机报警');
     window.prompt = savedPrompt;
   }, 15_000);
 

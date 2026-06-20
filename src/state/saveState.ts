@@ -3,7 +3,6 @@ import type { FloorId, RoomId, SpawnPoint } from '../data/maps';
 
 export const SAVE_STATE_STORAGE_KEY = 'ying-zhong-jiu.checkpoint-save.v1';
 export const SAVE_STATE_SCHEMA_VERSION = 1;
-const SAVE_CODEBOOK_STORAGE_KEY = 'ying-zhong-jiu.save-codebook.v1';
 
 export type SaveStateSchemaVersion = typeof SAVE_STATE_SCHEMA_VERSION;
 export type SaveTimerStatus = 'running' | 'paused' | 'stopped';
@@ -85,6 +84,7 @@ const validFacings: readonly SpawnPoint['facing'][] = ['up', 'down', 'left', 'ri
 const validBranches: readonly BranchId[] = ['A-1', 'A-2', 'B-1', 'B-2'];
 const validBranchChoiceStatuses: readonly BranchChoiceStatus[] = ['selected', 'rejected', 'resolved'];
 const validTimerStatuses: readonly SaveTimerStatus[] = ['running', 'paused', 'stopped'];
+const SAVE_CODE_PREFIX = 1_000;
 
 export function createDefaultSaveState(): SaveState {
   return {
@@ -175,12 +175,7 @@ export function exportSaveCode(storage: Storage = localStorage): SaveCodeExportR
   const current = loadSaveState(storage);
   if (current.status !== 'valid') return { status: 'no-save' };
 
-  const serialized = serializeSaveState(current.state);
-  const codebook = readSaveCodebook(storage);
-  const existingCode = Object.entries(codebook).find(([, value]) => value === serialized)?.[0];
-  const code = existingCode ?? nextSaveCode(codebook);
-  codebook[code] = serialized;
-  storage.setItem(SAVE_CODEBOOK_STORAGE_KEY, JSON.stringify(codebook));
+  const code = encodeProgressCode(current.state.checkpointId);
 
   return { status: 'exported', code, state: current.state };
 }
@@ -188,14 +183,12 @@ export function exportSaveCode(storage: Storage = localStorage): SaveCodeExportR
 export function importSaveCode(code: string, storage: Storage = localStorage): SaveCodeImportResult {
   if (!/^\d{4}$/.test(code)) return { status: 'invalid-code' };
 
-  const serialized = readSaveCodebook(storage)[code];
-  if (!serialized) return { status: 'unknown-code' };
+  const checkpointId = decodeProgressCode(code);
+  if (!checkpointId) return { status: 'unknown-code' };
 
-  const parsed = deserializeSaveState(serialized);
-  if (parsed.status !== 'valid') return { status: 'unknown-code' };
-
-  saveSaveState(parsed.state, storage);
-  return { status: 'imported', state: parsed.state };
+  const state = createCanonicalProgressState(checkpointId);
+  saveSaveState(state, storage);
+  return { status: 'imported', state };
 }
 
 export function createSaveDebugState(result: SaveLoadResult): SaveDebugState {
@@ -257,34 +250,57 @@ function toSaveState(value: unknown): SaveState | null {
   };
 }
 
-function readSaveCodebook(storage: Storage): Record<string, string> {
-  const raw = storage.getItem(SAVE_CODEBOOK_STORAGE_KEY);
-  if (!raw) return {};
-
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(raw);
-  } catch {
-    return {};
-  }
-
-  if (!isRecord(parsed)) return {};
-
-  const codebook: Record<string, string> = {};
-  for (const [code, value] of Object.entries(parsed)) {
-    if (/^\d{4}$/.test(code) && typeof value === 'string') {
-      codebook[code] = value;
-    }
-  }
-  return codebook;
+function encodeProgressCode(checkpointId: CheckpointId): string {
+  return String(SAVE_CODE_PREFIX + validCheckpoints.indexOf(checkpointId)).padStart(4, '0');
 }
 
-function nextSaveCode(codebook: Record<string, string>): string {
-  for (let index = 0; index <= 9_999; index += 1) {
-    const code = String(index).padStart(4, '0');
-    if (!Object.hasOwn(codebook, code)) return code;
+function decodeProgressCode(code: string): CheckpointId | null {
+  const checkpointIndex = Number(code) - SAVE_CODE_PREFIX;
+  const checkpointId = validCheckpoints[checkpointIndex];
+  return checkpointId ?? null;
+}
+
+function createCanonicalProgressState(checkpointId: CheckpointId): SaveState {
+  switch (checkpointId) {
+    case 'A':
+      return createDefaultSaveState();
+    case 'B':
+      return withProgress({ checkpointId, roomId: 'gt1-classroom', position: { x: 760, y: 520, facing: 'right' }, controllableCharacterId: 'yangYunRed', triggeredEvents: ['checkpoint:B'] });
+    case 'C':
+      return withProgress({ checkpointId, roomId: 'gt1-classroom', position: { x: 760, y: 520, facing: 'down' }, controllableCharacterId: 'yangYunBlue', storyFlags: { danYuxuanBodyProneAndBloody: true }, triggeredEvents: ['checkpoint:C'] });
+    case 'D':
+      return withProgress({ checkpointId, roomId: 'gt2-classroom', position: { x: 760, y: 330, facing: 'down' }, controllableCharacterId: 'yangYunRed', task: '去办公室', storyFlags: { danYuxuanBodyProneAndBloody: true, qinHaoruiBodyBloodyOnGround: true }, triggeredEvents: ['checkpoint:D'] });
+    case 'E':
+      return withProgress({ checkpointId, position: { x: 796, y: 868, facing: 'left' }, controllableCharacterId: 'yangYunRed', task: '前往五楼关闭学校通信', storyFlags: { danYuxuanBodyProneAndBloody: true, qinHaoruiBodyBloodyOnGround: true }, triggeredEvents: ['checkpoint:E'] });
+    case 'F':
+      return withProgress({ checkpointId, roomId: 'gt2-classroom', position: { x: 760, y: 330, facing: 'down' }, controllableCharacterId: 'dongJihao', task: '前往办公室报警', storyFlags: { danYuxuanBodyProneAndBloody: true, qinHaoruiBodyBloodyOnGround: true, communicationDisabled: true }, triggeredEvents: ['checkpoint:F'] });
+    case 'G':
+      return withProgress({ checkpointId, roomId: 'office-4f', position: { x: 620, y: 180, facing: 'up' }, controllableCharacterId: 'dongJihao', storyFlags: { danYuxuanBodyProneAndBloody: true, qinHaoruiBodyBloodyOnGround: true, communicationDisabled: true }, triggeredEvents: ['checkpoint:G'] });
+    case 'H':
+      return withProgress({ checkpointId, roomId: 'office-4f', position: { x: 620, y: 180, facing: 'down' }, controllableCharacterId: 'dongJihao', task: '去班里偷同学手机报警', storyFlags: { danYuxuanBodyProneAndBloody: true, qinHaoruiBodyBloodyOnGround: true, communicationDisabled: true, yangYunReplaysB2Actions: true }, branchChoices: { 'B-2': 'selected' }, triggeredEvents: ['checkpoint:H'] });
+    case 'I':
+      return withProgress({ checkpointId, roomId: 'gt1-classroom', position: { x: 160, y: 260, facing: 'right' }, controllableCharacterId: 'dongJihao', task: '活着', storyFlags: { danYuxuanBodyProneAndBloody: true, qinHaoruiBodyBloodyOnGround: true, communicationDisabled: false, yangYunReplaysB2Actions: true, yangYunAutoTracksAfterReplay: true, phoneCabinetInteractionDisabled: true }, branchChoices: { 'B-2': 'selected' }, triggeredEvents: ['checkpoint:I'] });
+    default:
+      return assertNeverCheckpoint(checkpointId);
   }
-  return '0000';
+}
+
+function withProgress(progress: Partial<SaveState> & Pick<SaveState, 'checkpointId' | 'position' | 'controllableCharacterId'>): SaveState {
+  const base = createDefaultSaveState();
+  return {
+    ...base,
+    ...progress,
+    storyFlags: { ...base.storyFlags, ...progress.storyFlags },
+    branchChoices: progress.branchChoices ?? {},
+    timers: {},
+    inventory: [],
+    pickups: {},
+    triggeredEvents: progress.triggeredEvents ?? [`checkpoint:${progress.checkpointId}`],
+  };
+}
+
+function assertNeverCheckpoint(value: never): never {
+  throw new Error(`Unhandled checkpoint: ${value}`);
 }
 
 function toPosition(value: unknown): SavePosition | null {

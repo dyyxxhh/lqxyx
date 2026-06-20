@@ -129,7 +129,7 @@ export class GameScene extends Phaser.Scene {
       .setInteractive({ useHandCursor: true });
     applyPixelStrokeStyle(exportButton, UI_THEME.stroke.thin, UI_THEME.colors.borderMuted, 0.95);
     applyPixelTextStyle(this.add
-      .text(exportButton.x, exportButton.y, '导出本机码', {
+      .text(exportButton.x, exportButton.y, '导出进度码', {
         align: 'center',
         color: UI_THEME.colors.text,
         fontFamily: UI_THEME.font.ui,
@@ -147,7 +147,7 @@ export class GameScene extends Phaser.Scene {
       .setInteractive({ useHandCursor: true });
     applyPixelStrokeStyle(importButton, UI_THEME.stroke.thin, UI_THEME.colors.borderMuted, 0.95);
     applyPixelTextStyle(this.add
-      .text(importButton.x, importButton.y, '导入本机码', {
+      .text(importButton.x, importButton.y, '导入进度码', {
         align: 'center',
         color: UI_THEME.colors.text,
         fontFamily: UI_THEME.font.ui,
@@ -270,12 +270,12 @@ export class GameScene extends Phaser.Scene {
       return;
     }
 
-    window.prompt('复制本机四位存档码', result.code);
+    window.prompt('复制四位进度码', result.code);
     this.saveCodeStatusText?.setText(`存档码：${result.code}`);
   }
 
   private showImportSaveCode(): void {
-    const code = window.prompt('输入本机四位存档码', '')?.trim() ?? '';
+    const code = window.prompt('输入四位进度码', '')?.trim() ?? '';
     const result = importSaveCode(code);
     if (result.status === 'imported') {
       refreshSaveDebugState();

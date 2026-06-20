@@ -573,6 +573,19 @@ describe('map renderer', () => {
     expect(mock.scene.add.circle).not.toHaveBeenCalled();
   });
 
+  it('map-renderer: phone cabinet interaction targets render prop.phoneCabinetFront instead of prop.phone', () => {
+    const mock = createMockScene();
+    mock.scene.textures.exists = (key: string) => key === 'floor.tile' || key === 'furniture.classroomDeskChairs' || key === 'prop.phoneCabinetFront' || key === 'prop.phone';
+    const renderer = new MapRenderer(mock.scene as never, '4F');
+
+    renderer.renderRoom('gt2-classroom');
+
+    const cabinetImages = mock.images.filter((image) => image.key === 'prop.phoneCabinetFront');
+    const phoneImages = mock.images.filter((image) => image.key === 'prop.phone');
+    expect(cabinetImages).toHaveLength(1);
+    expect(phoneImages).toHaveLength(0);
+  });
+
   // ── In-room door S4 ─────────────────────────────────────────
 
   it('map-renderer: in-room doors render only plain right-side rectangles without labels or callouts', () => {

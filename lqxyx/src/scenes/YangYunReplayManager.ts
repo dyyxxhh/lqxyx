@@ -191,6 +191,10 @@ export class YangYunReplayManager {
 
   private advanceChase(deltaMs: number, dongJihao: DongJihaoSnapshot): void {
     if (this.currentFloor !== dongJihao.floorId || this.currentRoom !== dongJihao.roomId) {
+      this.currentFloor = dongJihao.floorId;
+      this.currentRoom = dongJihao.roomId;
+      this.currentX = dongJihao.x;
+      this.currentY = dongJihao.y;
       return;
     }
     const dx = dongJihao.x - this.currentX;

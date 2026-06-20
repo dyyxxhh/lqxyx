@@ -476,6 +476,35 @@ describe('Bug Fixes — A-1 door fall-through + switchView position', () => {
     expect(engine.getLocation()).toEqual({ floorId: '4F', roomId: 'office-4f' });
   });
 
+  it('Bug (A-2 into A-1 front-door route): 滚去前门 does not relock input as scriptedMovement', () => {
+    const { engine, inputLog, uiLog } = createEngine();
+
+    engine.startFromCheckpoint('C');
+    engine.loadBranchDirect('A-2');
+    engine.update(2_000);
+    engine.advance();
+    engine.update(500);
+    engine.update(1_000);
+    engine.update(500);
+    engine.advance();
+    engine.update(2_000);
+    engine.advance();
+    engine.advance();
+    engine.advance();
+
+    expect(engine.getCurrentState()).toBe('awaiting_proximity');
+
+    engine.attemptBlockedDoor('4f-gt2-back');
+    engine.dismissAmbientDialogue();
+
+    expect(inputLog.locked).toBe(false);
+    expect(inputLog.interactContexts[inputLog.interactContexts.length - 1]).toBe('F');
+    engine.updateLocation('4F', 'gt2-classroom');
+    engine.updatePlayerPosition({ x: 760, y: 220 });
+    expect(engine.getCurrentState()).toBe('awaiting_advance');
+    expect(uiLog.dialogues[uiLog.dialogues.length - 1]).toMatchObject({ speaker: '秦浩睿' });
+  });
+
   it('Bug (Yang Yun replay animation): replay uses walking frames while replay position advances', async () => {
     const { YangYunReplayManager } = await import('../scenes/YangYunReplayManager');
     const textureCalls: string[] = [];
@@ -503,5 +532,36 @@ describe('Bug Fixes — A-1 door fall-through + switchView position', () => {
     manager.update(360, 16, { x: 100, y: 200, floorId: '4F', roomId: 'gt1-classroom' });
 
     expect(textureCalls).toContain('sprite.yangYunRed.right.step');
+  });
+
+  it('Bug (survival chase): Yang Yun follows Dong Jihao across room and elevator boundaries', async () => {
+    const { YangYunReplayManager } = await import('../scenes/YangYunReplayManager');
+    const sprite = {
+      visible: false,
+      setOrigin: vi.fn(() => sprite),
+      setDepth: vi.fn(() => sprite),
+      setVisible: vi.fn((visible: boolean) => { sprite.visible = visible; return sprite; }),
+      setPosition: vi.fn(() => sprite),
+      setTexture: vi.fn(() => sprite),
+      destroy: vi.fn(),
+    };
+    const stubScene = {
+      add: { sprite: vi.fn(() => sprite) },
+      textures: { exists: () => true },
+    } as unknown as Phaser.Scene;
+    const manager = new YangYunReplayManager(stubScene);
+
+    manager.startRecording(0);
+    manager.recordFrame(0, 160, 260, '4F', 'gt2-classroom', 'down');
+    manager.stopRecording();
+    manager.startReplay(0, { x: 160, y: 260, floorId: '4F', roomId: 'gt2-classroom' });
+    manager.setChaseEnabled(true);
+    manager.update(1_000, 1_000, { x: 760, y: 920, floorId: '4F', roomId: null });
+
+    expect(manager.getDebugState()).toMatchObject({ phase: 'chasing', floorId: '4F', roomId: null, visible: true });
+
+    manager.update(2_000, 1_000, { x: 520, y: 920, floorId: '5F', roomId: null });
+
+    expect(manager.getDebugState()).toMatchObject({ phase: 'chasing', floorId: '5F', roomId: null, visible: true });
   });
 });

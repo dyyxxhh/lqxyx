@@ -27,7 +27,7 @@ src/ui/
 - **角色提示阻塞**: `isRolePromptBlocking()` 返回 `true`。`EventEngine` 在 `switchCharacter` 时锁输入 `rolePrompt`，等待 2000ms 后自动隐藏。
 - **任务隐藏**: `setTask(text)` 中 `text === '' || text === '无'` 时隐藏 UI。
 - **对话肖像**: `getDialoguePortraitKey(speaker, controllableCharacterId)` 根据说话人和当前可控角色解析立绘 key。
-- **幕帘**: `setCurtain()` 用于章节过渡（"下一幕" / "敬请期待"）和 blackScreen。深度 `CURTAIN_DEPTH=2000`。
+- **幕帘**: `setCurtain()` 用于章节过渡/结局幕帘和 blackScreen；默认文案为 "下一幕" / "敬请期待"，第一幕最终幕帘覆盖为 `"报假警"` / `敬请期待`。深度 `CURTAIN_DEPTH=2000`。
 - **UI 深度层级**: `UI_BG_DEPTH=1000`, `UI_TEXT_DEPTH=1001`, `UI_OVERLAY_DEPTH=1002`, `CURTAIN_DEPTH=2000`, `CURTAIN_TEXT_DEPTH=2001`。
 - **窗口暴露**: `NarrativeUIManager` 将自身挂到 `window.__YING_ZHONG_JIU_NARRATIVE_UI__`。
 

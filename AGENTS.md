@@ -36,7 +36,7 @@
 |------|----------|-------|
 | 改地图/门/地板 | `src/data/maps.ts` + `src/map/MapRenderer.ts` | 门竖向贴墙 `24×128`（DOOR_HEIGHT=128），地板单砖 `192×192` |
 | 改剧情/分支/检查点 | `src/data/story.ts`（数据）+ `src/story/EventEngine.ts`（执行） | checkpoint A~I，branch A-1/A-2/B-1/B-2 |
-| 改角色初始位置 | `src/state/saveState.ts` `createDefaultSaveState()` | 默认 4F 走廊中心 `560,920,down`，蓝边 |
+| 改角色初始位置/存档码 | `src/state/saveState.ts` | 默认 4F 走廊中心 `560,920,down`，蓝边；本机四位存档码 |
 | 改角色动画/方向 | `src/characters/CharacterRegistry.ts` + `src/scenes/PlayScene.ts` | 8 方向移动，斜向取上下方向贴图 |
 | 改 UI（对话/提示/计时器） | `src/ui/NarrativeUIManager.ts` | 角色提示全屏遮罩，阻塞 2 秒（ROLE_PROMPT_DURATION_MS=2000） |
 | 改输入锁/交互 | `src/input/InputManager.ts` | lockReason: dialogue/rolePrompt/blackScreen/elevatorFade/scriptedMovement/ending |
@@ -66,7 +66,7 @@
 - **门渲染**: 走廊门是竖向 `24×128` 贴墙木条（depth 6），标签 depth 7，交互 hitArea depth 8。`DOOR_HEIGHT = 128`。
 - **地板拼接**: `floor.tile` 源图 384×384 含 2×2 四块砖；渲染时取单砖 frame `single-floor-tile-192`（192×192）并平铺。`floorTile = { tileWidth: 192, tileHeight: 192 }`。
 - **角色提示阻塞**: `NarrativeUIManager.isRolePromptBlocking()` 返回 `true`；`EventEngine` 在 `switchCharacter` 时锁输入 `rolePrompt`，等待 `ROLE_PROMPT_DURATION_MS = 2000` 后自动隐藏。
-- **存档**: `localStorage` key `ying-zhong-jiu.checkpoint-save.v1`，schemaVersion = 1。
+- **存档**: 主存档 `localStorage` key `ying-zhong-jiu.checkpoint-save.v1`，schemaVersion = 1；本机四位存档码 codebook key `ying-zhong-jiu.save-codebook.v1`。
 - **深度层级**: floor=0, walls=1, door surface=2, furniture=3, in-room door=4, corridor door=6, label=7, hitArea=8, player=10, UI=1000~2001。
 - **资产 key 命名**: 点分隔层级，如 `sprite.yangYunBlue.right.step`、`prop.celery`、`portrait.danYuxuan`。
 - **任务隐藏**: `task` 值为 `"无"` 或空字符串时 UI 不显示。

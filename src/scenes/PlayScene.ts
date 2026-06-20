@@ -406,7 +406,8 @@ export class PlayScene extends Phaser.Scene {
     // principal-office door, briefly rendering the room interior before the
     // black screen takes effect.
     const engineState = this.eventEngine.getCurrentState();
-    if (engineState === 'waiting' || engineState === 'executing') {
+    const survivalWaitActive = engineState === 'waiting' && this.eventEngine.hasRunningTimer('survival-ending-countdown');
+    if ((engineState === 'waiting' && !survivalWaitActive) || engineState === 'executing') {
       return false;
     }
 

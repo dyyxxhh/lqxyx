@@ -168,7 +168,7 @@ test.describe('First Act — Main Route', () => {
 
     const state = await readState(page);
     expect(state?.ui.curtainVisible).toBe(true);
-    expect(state?.ui.curtainTitle).toBe('下一幕');
+    expect(state?.ui.curtainTitle).toBe('"报假警"');
     expect(state?.ui.curtainSubtitle).toBe('敬请期待');
   });
 });

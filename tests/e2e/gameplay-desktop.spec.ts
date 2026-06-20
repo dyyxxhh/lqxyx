@@ -288,7 +288,7 @@ test.describe('Desktop Gameplay Flow', () => {
 
     const state = await readState(page);
     expect(state?.ui.curtainVisible).toBe(true);
-    expect(state?.ui.curtainTitle).toBe('下一幕');
+    expect(state?.ui.curtainTitle).toBe('"报假警"');
     expect(state?.ui.curtainSubtitle).toBe('敬请期待');
 
     await page.screenshot({ path: `${evidenceDir}/task-17-ending-curtain.png` });
@@ -365,7 +365,7 @@ test.describe('Desktop Gameplay Flow', () => {
 
     const finalState = await readState(page);
     expect(finalState?.ui.curtainVisible).toBe(true);
-    expect(finalState?.ui.curtainTitle).toBe('下一幕');
+    expect(finalState?.ui.curtainTitle).toBe('"报假警"');
     expect(finalState?.ui.curtainSubtitle).toBe('敬请期待');
     expect(finalState?.input.lockActive).toBe(true);
     expect(finalState?.input.lockReason).toBe('ending');

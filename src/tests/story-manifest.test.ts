@@ -29,7 +29,7 @@ describe("story manifest", () => {
     ]);
     expect(firstAct?.tasks).toContain("无");
     expect(firstAct?.endings.map((ending) => ending.title).sort()).toEqual(["一分为二", "幸存", "躁子"]);
-    expect(firstAct?.curtain).toEqual({ title: "下一幕", subtitle: "敬请期待" });
+    expect(firstAct?.curtain).toEqual({ title: "\"报假警\"", subtitle: "敬请期待" });
   });
 
   it("story-manifest: represents all black-screen dialogue waits as 500ms commands", () => {

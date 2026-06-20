@@ -880,7 +880,7 @@ describe('EventEngine — curtain and ending', () => {
     expect(visibleCurtains.length).toBeGreaterThanOrEqual(1);
 
     const lastVisible = visibleCurtains[visibleCurtains.length - 1];
-    expect(lastVisible?.title).toBe('下一幕');
+    expect(lastVisible?.title).toBe('"报假警"');
     expect(lastVisible?.subtitle).toBe('敬请期待');
   });
 
@@ -910,7 +910,7 @@ describe('EventEngine — curtain and ending', () => {
 
     const lastCurtain = allCurtains[allCurtains.length - 1];
     expect(lastCurtain?.visible).toBe(true);
-    expect(lastCurtain?.title).toBe('下一幕');
+    expect(lastCurtain?.title).toBe('"报假警"');
     expect(lastCurtain?.subtitle).toBe('敬请期待');
   });
 });

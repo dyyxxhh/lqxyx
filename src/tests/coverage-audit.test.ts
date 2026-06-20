@@ -130,9 +130,9 @@ describe("Coverage Audit — Manifest Completeness", () => {
     expect(ending?.returnsToCheckpoint).toBeUndefined();
   });
 
-  it("first-act curtain has title 下一幕 and subtitle 敬请期待", () => {
+  it("first-act curtain has title 报假警 and subtitle 敬请期待", () => {
     expect(firstAct?.curtain).toEqual({
-      title: "下一幕",
+      title: "\"报假警\"",
       subtitle: "敬请期待",
     });
   });

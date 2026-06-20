@@ -106,7 +106,7 @@ describe("Coverage Audit — Manifest Completeness", () => {
 
   it("all three endings are declared", () => {
     const titles = firstAct?.endings.map((e) => e.title).sort();
-    expect(titles).toEqual(["一分为二", "幸存", "臊子"]);
+    expect(titles).toEqual(["一分为二", "幸存", "躁子"]);
   });
 
   it("ending split-in-two returns to checkpoint G", () => {
@@ -115,10 +115,11 @@ describe("Coverage Audit — Manifest Completeness", () => {
     expect(ending?.kind).toBe("minor");
   });
 
-  it("ending saozi is major with no return checkpoint", () => {
+  it("ending saozi is minor and returns to checkpoint H", () => {
     const ending = firstAct?.endings.find((e) => e.id === "saozi");
-    expect(ending?.kind).toBe("major");
-    expect(ending?.returnsToCheckpoint).toBeUndefined();
+    expect(ending?.title).toBe("躁子");
+    expect(ending?.kind).toBe("minor");
+    expect(ending?.returnsToCheckpoint).toBe("H");
   });
 
   it("ending survival-false-report is major with no return checkpoint", () => {

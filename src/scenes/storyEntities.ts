@@ -20,11 +20,14 @@ const STORY_ENTITY_DEPTH = 6;
 
 export function buildStoryEntityDebugEntries(flags: StoryFlags, context?: StoryEntityRenderContext): StoryEntityDebugEntry[] {
   const entries: StoryEntityDebugEntry[] = [];
+  const replayRestoresHeads = flags.yangYunReplayRestoresHeads === true;
+  const danYuxuanHeadPickedUp = flags.danYuxuanHeadPickedUp === true && !(replayRestoresHeads && flags.yangYunReplayDanHeadPickedUp !== true);
+  const qinHaoruiHeadPickedUp = flags.qinHaoruiHeadPickedUp === true && !(replayRestoresHeads && flags.yangYunReplayQinHeadPickedUp !== true);
 
   // 但宇轩 visual state — priority: head-picked-up > head-only (A-2 ate body) > lying-bloody (A-1 / killed) > lying-clean > standing.
   // After head pickup: render the headless body part — UNLESS A-2 was triggered, in which case the body was already eaten and
   // there is nothing left to show once the head sprite is removed.
-  if (flags.danYuxuanHeadPickedUp) {
+  if (danYuxuanHeadPickedUp) {
     if (!flags.danYuxuanBodyGoneHeadOnly) {
       entries.push(createEntry('danYuxuanBodyOnly', 'sprite.danYuxuan.bodyPart', 'gt1-classroom', 760, 520));
     }
@@ -39,7 +42,7 @@ export function buildStoryEntityDebugEntries(flags: StoryFlags, context?: StoryE
   }
 
   // 秦浩睿 visual state — always shown as a full body until the head is picked up; pickup leaves only the body part behind.
-  if (flags.qinHaoruiHeadPickedUp) {
+  if (qinHaoruiHeadPickedUp) {
     entries.push(createEntry('qinHaoruiBodyOnly', 'sprite.qinHaorui.bodyPart', 'gt2-classroom', 760, 330));
   } else if (flags.qinHaoruiStandingVisible) {
     entries.push(createEntry('qinHaoruiStanding', 'sprite.qinHaorui.standRight', 'gt2-classroom', 760, 330));

@@ -402,6 +402,7 @@ export const firstActCheckpoints: StoryCheckpoint[] = [
       { type: "checkpoint", id: "I" },
       { type: "dialogue", speaker: "董继豪", text: "好了。" },
       { type: "timer", id: "survival-route-countdown", action: "stop" },
+      { type: "timer", id: "yang-yun-visible-failure-window", action: "start", durationMs: 3_000, trigger: "杨云连续出现在用户屏幕内3s执行F-B", visibilityTargetId: "yang-yun-current-screen", visibilityRequiresContinuous: true },
       { type: "timer", id: "survival-ending-countdown", action: "reset", durationMs: 30_000, trigger: "等待至倒计时结束" },
       { type: "task", text: "活着" },
       { type: "setFlag", id: "yangYunAutoTracksAfterReplay", value: true },

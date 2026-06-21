@@ -523,6 +523,37 @@ describe('EventEngine — timer system', () => {
     const timerSetCalls = uiLog.timerCalls.filter((c) => c.visible);
     expect(timerSetCalls.length).toBeGreaterThan(0);
   });
+
+  it('checkpoint I keeps the visible Yang Yun failure timer active during the 30-second survival objective', () => {
+    const onTimerExpired = vi.fn();
+    const visibilityPredicate = vi.fn((targetId: string) => targetId === 'yang-yun-current-screen');
+    const { engine, uiLog } = createEngine({ onTimerExpired, visibilityPredicate });
+
+    engine.startFromCheckpoint('I');
+    engine.advance();
+
+    expect(getSceneDebugState().story.activeTimers.map((timer) => timer.id)).toEqual(expect.arrayContaining([
+      'survival-ending-countdown',
+      'yang-yun-visible-failure-window',
+    ]));
+    expect(uiLog.timerCalls[uiLog.timerCalls.length - 1]).toMatchObject({ remainingMs: 30_000, visible: true });
+
+    engine.update(3_000);
+
+    expect(onTimerExpired).toHaveBeenCalledWith('yang-yun-visible-failure-window');
+    expect(onTimerExpired).not.toHaveBeenCalledWith('survival-ending-countdown');
+  });
+
+  it('checkpoint I keeps displaying the 30-second survival countdown after update ticks', () => {
+    const visibilityPredicate = vi.fn(() => false);
+    const { engine, uiLog } = createEngine({ visibilityPredicate });
+
+    engine.startFromCheckpoint('I');
+    engine.advance();
+    engine.update(100);
+
+    expect(uiLog.timerCalls[uiLog.timerCalls.length - 1]).toMatchObject({ remainingMs: 29_900, visible: true });
+  });
 });
 
 describe('EventEngine — branch system', () => {
@@ -1058,7 +1089,7 @@ describe('EventEngine — wait command', () => {
 
     // After non-blocking commands, the 30s wait blocks
     expect(engine.getCurrentState()).toBe('waiting');
-    expect(engine.getCommandIndex()).toBe(7);
+    expect(engine.getCommandIndex()).toBe(8);
 
     // Partial wait — still waiting
     engine.update(15000);
@@ -1067,7 +1098,7 @@ describe('EventEngine — wait command', () => {
     // Complete the 30s wait — advances to fade (500ms), which blocks again
     engine.update(15000);
     expect(engine.getCurrentState()).toBe('waiting'); // now waiting on fade
-    expect(engine.getCommandIndex()).toBe(8); // advanced to fade command
+    expect(engine.getCommandIndex()).toBe(9); // advanced to fade command
   });
 
   it('0ms waits are asynchronous and do not synchronously recurse through command chains', () => {

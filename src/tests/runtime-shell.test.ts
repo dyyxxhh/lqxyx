@@ -53,7 +53,7 @@ import {
 } from '../game/scaffoldState';
 import { GameScene } from '../scenes/GameScene';
 import { PlayScene } from '../scenes/PlayScene';
-import { clearSaveState, createDefaultSaveState, exportSaveCode, loadSaveState, saveSaveState } from '../state/saveState';
+import { clearSaveState, createDefaultSaveState, exportSaveCode, loadSaveState, saveSaveState, SAVE_STATE_SCHEMA_VERSION } from '../state/saveState';
 
 describe('runtime scene shell', () => {
   it('records BootScene, PreloadScene, and GameScene exactly once with preload readiness before game readiness', () => {
@@ -310,7 +310,104 @@ describe('runtime scene shell', () => {
 
     expect(scene.CONTINUE_Y + 36).toBeLessThan(scene.SETTINGS_TITLE_Y);
   }, 15_000);
+
+  it('GameScene menu background overlay covers the full game viewport', () => {
+    stubCanvasContext();
+    resetSceneDebugState();
+    const rectangles: Array<{ x: number; y: number; width: number; height: number }> = [];
+    const makeRect = (x: number, y: number, width: number, height: number) => {
+      rectangles.push({ x, y, width, height });
+      return chainable({ x, y, width, height });
+    };
+    const scene = new GameScene() as unknown as GameScene & {
+      add: { rectangle: typeof makeRect; text: (...args: unknown[]) => Record<string, unknown>; image: (...args: unknown[]) => Record<string, unknown>; graphics: () => Record<string, unknown> };
+      cameras: { main: { setBounds: () => void } };
+      events: { off: () => void; once: () => void };
+      input: { keyboard: null };
+      scene: { start: () => void; isActive: () => boolean };
+      sys: { game: { device: { input: { touch: boolean } } }; scale: { gameSize: { width: number; height: number } } };
+      textures: { exists: () => boolean };
+    };
+    scene.add = { rectangle: makeRect, text: () => chainable(), image: () => chainable(), graphics: () => chainable() };
+    scene.cameras = { main: { setBounds: vi.fn() } };
+    scene.events = { off: vi.fn(), once: vi.fn() };
+    scene.input = { keyboard: null, on: vi.fn() } as never;
+    scene.scene = { start: vi.fn(), isActive: vi.fn(() => true) };
+    scene.sys = { game: { device: { input: { touch: false } } }, scale: { gameSize: { width: GAME_WIDTH, height: GAME_HEIGHT } } };
+    scene.textures = { exists: vi.fn(() => false) };
+
+    scene.create();
+
+    expect(rectangles).toContainEqual({ x: GAME_WIDTH / 2, y: GAME_HEIGHT / 2, width: GAME_WIDTH, height: GAME_HEIGHT });
+  }, 15_000);
+
+  it('GameScene completed save shows unclickable 敬请期待 instead of continue action', () => {
+    stubCanvasContext();
+    resetSceneDebugState();
+    localStorage.clear();
+    saveSaveState({
+      ...createDefaultSaveState(),
+      schemaVersion: SAVE_STATE_SCHEMA_VERSION,
+      checkpointId: 'I',
+      task: '活着',
+      triggeredEvents: ['ending-survival-false-report'],
+    });
+    const labels: string[] = [];
+    const startCalls = vi.fn();
+    const scene = new GameScene() as unknown as GameScene & {
+      add: { rectangle: (...args: unknown[]) => Record<string, unknown>; text: (_x: number, _y: number, text: string) => Record<string, unknown>; image: (...args: unknown[]) => Record<string, unknown>; graphics: () => Record<string, unknown> };
+      cameras: { main: { setBounds: () => void } };
+      events: { off: () => void; once: () => void };
+      input: { keyboard: null; on: () => void };
+      scene: { start: () => void; isActive: () => boolean };
+      sys: { game: { device: { input: { touch: boolean } } }; scale: { gameSize: { width: number; height: number } } };
+      textures: { exists: () => boolean };
+    };
+    scene.add = {
+      rectangle: () => chainable(),
+      text: (_x: number, _y: number, text: string) => { labels.push(text); return chainable(); },
+      image: () => chainable(),
+      graphics: () => chainable(),
+    };
+    scene.cameras = { main: { setBounds: vi.fn() } };
+    scene.events = { off: vi.fn(), once: vi.fn() };
+    scene.input = { keyboard: null, on: vi.fn() };
+    scene.scene = { start: startCalls, isActive: vi.fn(() => true) };
+    scene.sys = { game: { device: { input: { touch: false } } }, scale: { gameSize: { width: GAME_WIDTH, height: GAME_HEIGHT } } };
+    scene.textures = { exists: vi.fn(() => false) };
+
+    scene.create();
+
+    expect(labels).toContain('敬请期待');
+    expect(labels).not.toContain('继续游戏');
+    expect(startCalls).not.toHaveBeenCalledWith('PlayScene');
+  }, 15_000);
 });
+
+function chainable(extra: Record<string, unknown> = {}): Record<string, unknown> {
+  const object: Record<string, unknown> = { ...extra };
+  object.setOrigin = () => object;
+  object.setDepth = () => object;
+  object.setVisible = () => object;
+  object.setInteractive = () => object;
+  object.setScrollFactor = () => object;
+  object.setStrokeStyle = () => object;
+  object.setShadow = () => object;
+  object.setText = () => object;
+  object.setFillStyle = () => object;
+  object.setDisplaySize = () => object;
+  object.setScale = () => object;
+  object.setTexture = () => object;
+  object.fillStyle = () => object;
+  object.fillRect = () => object;
+  object.fillRoundedRect = () => object;
+  object.lineStyle = () => object;
+  object.strokeRect = () => object;
+  object.clear = () => object;
+  object.destroy = () => object;
+  object.on ??= () => object;
+  return object;
+}
 
 function stubCanvasContext(): void {
   Object.defineProperty(HTMLCanvasElement.prototype, 'getContext', {

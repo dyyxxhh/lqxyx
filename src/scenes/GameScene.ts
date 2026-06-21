@@ -11,7 +11,7 @@ import {
 } from '../game/scaffoldState';
 import { InputManager } from '../input/InputManager';
 import { MapRenderer } from '../map/MapRenderer';
-import { clearSaveState, exportSaveCode, importSaveCode } from '../state/saveState';
+import { clearSaveState, exportSaveCode, importSaveCode, loadSaveState, type SaveState } from '../state/saveState';
 import { NarrativeUIManager } from '../ui/NarrativeUIManager';
 import { UI_THEME, applyPixelStrokeStyle, applyPixelTextStyle } from '../ui/uiTheme';
 
@@ -41,6 +41,7 @@ export class GameScene extends Phaser.Scene {
     refreshCanvasDebugState();
     const sceneState = markGameSceneReady();
     const hasContinue = sceneState.menu.hasContinue;
+    const completedSave = this.hasCompletedSave();
 
     this.inputManager = new InputManager(this);
     if (typeof window !== 'undefined') {
@@ -61,7 +62,7 @@ export class GameScene extends Phaser.Scene {
 
     // ── Title ──────────────────────────────────────────────────
     this.add
-      .rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2 + 8, 560, 360, UI_THEME.colors.surface, 0.58)
+      .rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, GAME_WIDTH, GAME_HEIGHT, UI_THEME.colors.surface, 0.58)
       .setOrigin(0.5)
       .setDepth(this.UI_BASE_DEPTH - 1);
 
@@ -108,7 +109,13 @@ export class GameScene extends Phaser.Scene {
       .setOrigin(0.5)
       .setDepth(this.UI_BASE_DEPTH);
 
-    if (hasContinue) this.createContinueButton();
+    if (hasContinue) {
+      if (completedSave) {
+        this.createCompletedContinueButton();
+      } else {
+        this.createContinueButton();
+      }
+    }
 
     applyPixelTextStyle(this.add
       .text(GAME_WIDTH / 2, this.SETTINGS_TITLE_Y, '设置', {
@@ -192,7 +199,7 @@ export class GameScene extends Phaser.Scene {
       this.input.keyboard.on('keydown-F', this.handleKeyboardF);
       this.input.keyboard.on('keydown-ENTER', this.handleKeyboardEnter);
       this.input.keyboard.on('keydown-C', this.handleKeyboardC);
-      this.continueAvailable = hasContinue;
+      this.continueAvailable = hasContinue && !completedSave;
     }
   }
 
@@ -263,6 +270,25 @@ export class GameScene extends Phaser.Scene {
     });
   }
 
+  private createCompletedContinueButton(): void {
+    this.add
+      .rectangle(GAME_WIDTH / 2, this.CONTINUE_Y, 360, 72, UI_THEME.colors.surfaceMuted, UI_THEME.alpha.panel)
+      .setOrigin(0.5)
+      .setDepth(this.UI_BASE_DEPTH);
+
+    applyPixelTextStyle(this.add
+      .text(GAME_WIDTH / 2, this.CONTINUE_Y, '敬请期待', {
+        align: 'center',
+        color: UI_THEME.colors.textMuted,
+        fontFamily: UI_THEME.font.ui,
+        fontSize: '32px',
+        fontStyle: 'bold',
+      })
+    )
+      .setOrigin(0.5)
+      .setDepth(this.UI_TEXT_DEPTH);
+  }
+
   private showExportSaveCode(): void {
     const result = exportSaveCode();
     if (result.status !== 'exported') {
@@ -279,13 +305,27 @@ export class GameScene extends Phaser.Scene {
     const result = importSaveCode(code);
     if (result.status === 'imported') {
       refreshSaveDebugState();
-      this.continueAvailable = true;
-      this.createContinueButton();
+      if (this.isCompletedState(result.state)) {
+        this.continueAvailable = false;
+        this.createCompletedContinueButton();
+      } else {
+        this.continueAvailable = true;
+        this.createContinueButton();
+      }
       this.saveCodeStatusText?.setText('导入成功');
       return;
     }
 
     this.saveCodeStatusText?.setText(result.status === 'invalid-code' ? '请输入四位数字' : '未找到存档码');
+  }
+
+  private hasCompletedSave(): boolean {
+    const result = loadSaveState();
+    return result.status === 'valid' && this.isCompletedState(result.state);
+  }
+
+  private isCompletedState(state: SaveState): boolean {
+    return state.triggeredEvents.some((eventId) => eventId.startsWith('ending-'));
   }
 
   public shutdown(): void {

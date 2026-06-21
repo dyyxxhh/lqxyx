@@ -5,6 +5,7 @@ import {
   createInitialInputDebugState,
   setInputDebugState,
 } from './inputState';
+import { GAME_WIDTH } from '../game/scaffoldState';
 import { UI_THEME, applyPixelStrokeStyle, applyPixelTextStyle } from '../ui/uiTheme';
 
 const JOYSTICK_LEFT_BOUNDARY = 400;
@@ -12,9 +13,6 @@ const INTERACT_RIGHT_BOUNDARY = 880;
 const JOYSTICK_RADIUS = 80;
 const JOYSTICK_BASE_X = 200;
 const JOYSTICK_BASE_Y = 600;
-const INTERACT_CENTER_X = 1080;
-const INTERACT_CENTER_Y = 600;
-const INTERACT_RADIUS = 56;
 const DIALOGUE_TAP_LEFT = 280;
 const DIALOGUE_TAP_RIGHT = 1000;
 const DIALOGUE_TAP_TOP = 560;
@@ -23,11 +21,15 @@ const MOBILE_INTERACT_DEBOUNCE_MS = 120;
 
 const MOBILE_CONTROL_DEPTH = 950;
 const MOBILE_THUMB_DEPTH = 951;
-const FULLSCREEN_DEPTH = 960;
-const FULLSCREEN_BTN_DEPTH = 961;
-const FULLSCREEN_LABEL_DEPTH = 962;
+const FULLSCREEN_DEPTH = 990;
+const FULLSCREEN_BTN_DEPTH = 991;
+const FULLSCREEN_LABEL_DEPTH = 992;
+const TUTORIAL_DEPTH = 993;
+const TUTORIAL_TEXT_DEPTH = 994;
 const ORIENTATION_DEPTH = 1010;
 const ORIENTATION_TEXT_DEPTH = 1011;
+const INPUT_TUTORIAL_STORAGE_PREFIX = 'ying-zhong-jiu.input-tutorial-shown.v1';
+const INPUT_TUTORIAL_DURATION_MS = 3_000;
 
 const DIRECTION_ANGLES = [0, 45, 90, 135, 180, 225, 270, 315] as const;
 
@@ -115,6 +117,9 @@ export class InputManager {
   private fullscreenReentryLabel: Phaser.GameObjects.Text | null = null;
   private orientationOverlay: Phaser.GameObjects.Rectangle | null = null;
   private orientationText: Phaser.GameObjects.Text | null = null;
+  private tutorialOverlay: Phaser.GameObjects.Rectangle | null = null;
+  private tutorialText: Phaser.GameObjects.Text | null = null;
+  private tutorialHideTimeout: ReturnType<typeof setTimeout> | null = null;
 
   // Cleanup bindings
   private boundVisibilityChange: (() => void) | null = null;
@@ -141,6 +146,8 @@ export class InputManager {
     } else {
       this.setupDesktopPointerInput();
     }
+
+    this.setupInputTutorial();
 
     this.updateDebugState();
   }
@@ -343,17 +350,50 @@ export class InputManager {
     ).setDepth(MOBILE_THUMB_DEPTH).setScrollFactor(0).setVisible(false);
     applyPixelStrokeStyle(this.joystickThumb, UI_THEME.stroke.thin, UI_THEME.colors.surface, 0.9);
 
-    // Interact button visual
-    this.interactButton = this.scene.add.circle(
-      INTERACT_CENTER_X, INTERACT_CENTER_Y, INTERACT_RADIUS,
-      UI_THEME.colors.accent, UI_THEME.alpha.controlActive,
-    ).setDepth(MOBILE_CONTROL_DEPTH).setScrollFactor(0);
-    applyPixelStrokeStyle(this.interactButton, UI_THEME.stroke.medium, UI_THEME.colors.gold, 0.9);
+    this.interactButton = null;
+    this.interactLabel = null;
+  }
 
-    this.interactLabel = applyPixelTextStyle(this.scene.add.text(
-      INTERACT_CENTER_X, INTERACT_CENTER_Y, '交互',
-      { align: 'center', color: UI_THEME.colors.text, fontFamily: UI_THEME.font.ui, fontSize: '19px', fontStyle: 'bold' },
-    )).setOrigin(0.5).setDepth(MOBILE_THUMB_DEPTH).setScrollFactor(0);
+  private setupInputTutorial(): void {
+    if (this.hasSeenInputTutorial()) return;
+
+    const text = this.isMobile
+      ? '左侧滑动移动，右侧任意位置轻点互动'
+      : 'WASD/方向键移动，F互动，Q特殊互动';
+    this.tutorialOverlay = this.scene.add.rectangle(
+      GAME_WIDTH / 2, 112, 760, 76, UI_THEME.colors.surfaceRaised, UI_THEME.alpha.panelStrong,
+    ).setOrigin(0.5).setScrollFactor(0).setDepth(TUTORIAL_DEPTH);
+    applyPixelStrokeStyle(this.tutorialOverlay, UI_THEME.stroke.medium, UI_THEME.colors.gold, 0.95);
+
+    this.tutorialText = applyPixelTextStyle(this.scene.add.text(
+      GAME_WIDTH / 2, 112, text,
+      { align: 'center', color: UI_THEME.colors.textGold, fontFamily: UI_THEME.font.ui, fontSize: '22px', fontStyle: 'bold' },
+    )).setOrigin(0.5).setScrollFactor(0).setDepth(TUTORIAL_TEXT_DEPTH);
+
+    this.markInputTutorialSeen();
+    this.tutorialHideTimeout = setTimeout(() => {
+      this.tutorialHideTimeout = null;
+      this.hideInputTutorial();
+    }, INPUT_TUTORIAL_DURATION_MS);
+  }
+
+  private hasSeenInputTutorial(): boolean {
+    if (typeof localStorage === 'undefined') return true;
+    return localStorage.getItem(this.inputTutorialStorageKey()) === 'true';
+  }
+
+  private markInputTutorialSeen(): void {
+    if (typeof localStorage === 'undefined') return;
+    localStorage.setItem(this.inputTutorialStorageKey(), 'true');
+  }
+
+  private inputTutorialStorageKey(): string {
+    return `${INPUT_TUTORIAL_STORAGE_PREFIX}.${this.isMobile ? 'mobile' : 'desktop'}`;
+  }
+
+  private hideInputTutorial(): void {
+    this.tutorialOverlay?.setVisible(false);
+    this.tutorialText?.setVisible(false);
   }
 
   private onPointerDown(pointer: Phaser.Input.Pointer): void {
@@ -770,12 +810,13 @@ export class InputManager {
       fullscreenPrompt: this.fullscreenOverlay ? this.boundsOf(this.fullscreenOverlay) : null,
       fullscreenButtonFill: this.fullscreenButton?.fillColor ?? null,
       interactFill: this.interactButton?.fillColor ?? null,
+      tutorial: this.tutorialOverlay ? { ...this.boundsOf(this.tutorialOverlay), text: this.tutorialText?.text ?? '' } : null,
     };
   }
 
-  private boundsOf(object: Phaser.GameObjects.Components.GetBounds & Phaser.GameObjects.Components.Visible): { x: number; y: number; width: number; height: number; visible: boolean } {
+  private boundsOf(object: Phaser.GameObjects.Components.GetBounds & Phaser.GameObjects.Components.Visible & { depth?: number }): { x: number; y: number; width: number; height: number; visible: boolean; depth: number } {
     const bounds = object.getBounds();
-    return { x: bounds.x, y: bounds.y, width: bounds.width, height: bounds.height, visible: object.visible };
+    return { x: bounds.x, y: bounds.y, width: bounds.width, height: bounds.height, visible: object.visible, depth: object.depth ?? 0 };
   }
 
   // ── Cleanup ─────────────────────────────────────────────────
@@ -818,6 +859,10 @@ export class InputManager {
     }
 
     this.clearFullscreenFallbackTimeout();
+    if (this.tutorialHideTimeout !== null) {
+      clearTimeout(this.tutorialHideTimeout);
+      this.tutorialHideTimeout = null;
+    }
 
     if (this.boundTouchStart) {
       const canvas = this.scene.sys.game.canvas;

@@ -371,6 +371,60 @@ describe('fullscreen status machine', () => {
     });
   });
 
+  it('keeps fullscreen prompt above the GameScene menu overlay but below portrait warning', () => {
+    stubCanvasContext();
+    withFullscreenElement(null, () => {
+      const manager = new InputManager(createMobileInputSceneStub());
+      const visual = manager.getVisualDebugState();
+
+      expect(visual.fullscreenPrompt).toMatchObject({ visible: true, depth: 990 });
+      expect((visual.fullscreenPrompt as { depth: number }).depth).toBeGreaterThan(979);
+      expect((visual.fullscreenPrompt as { depth: number }).depth).toBeLessThan(1010);
+
+      manager.destroy();
+    });
+  });
+
+  it('does not render a visible mobile interaction button while right-side tap still interacts', () => {
+    stubCanvasContext();
+    withFullscreenElement(document.body, () => {
+      const manager = new InputManager(createMobileInputSceneStub());
+
+      expect(manager.getVisualDebugState()).toMatchObject({ interact: null, interactLabel: null });
+
+      (manager as unknown as { onPointerDown: (pointer: { x: number; y: number; id: number }) => void }).onPointerDown({ x: 1080, y: 600, id: 1 });
+
+      expect(manager.consumeInteract()).toEqual({ action: 'F', pressed: true });
+
+      manager.destroy();
+    });
+  });
+
+  it('shows a first-run tutorial for the current device mode and hides it after three seconds', () => {
+    stubCanvasContext();
+    vi.useFakeTimers();
+    try {
+      localStorage.clear();
+      withFullscreenElement(document.body, () => {
+        const manager = new InputManager(createMobileInputSceneStub());
+
+        expect(manager.getVisualDebugState()).toMatchObject({
+          tutorial: expect.objectContaining({ visible: true, text: expect.stringContaining('左侧') }),
+        });
+
+        vi.advanceTimersByTime(3_000);
+
+        expect(manager.getVisualDebugState()).toMatchObject({
+          tutorial: expect.objectContaining({ visible: false }),
+        });
+
+        manager.destroy();
+      });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('keeps portrait-to-landscape from re-showing after denial while document is fullscreen, but re-shows when it is not fullscreen', () => {
     stubCanvasContext();
     withFullscreenElement(null, (setFullscreenElement) => {
@@ -592,7 +646,9 @@ type FullscreenElementSetter = (element: Element | null) => void;
 type StubGameObject = {
   visible: boolean;
   fillColor: number | null;
-  setDepth: () => StubGameObject;
+  depth: number;
+  text: string;
+  setDepth: (depth: number) => StubGameObject;
   setScrollFactor: () => StubGameObject;
   setOrigin: () => StubGameObject;
   setInteractive: () => StubGameObject;
@@ -636,12 +692,17 @@ function withFullscreenElement(initialElement: Element | null, run: (setFullscre
   }
 }
 
-function createStubGameObject(x = 0, y = 0, width = 0, height = 0): StubGameObject {
+function createStubGameObject(x = 0, y = 0, width = 0, height = 0, text = ''): StubGameObject {
   const callbacks = new Map<string, () => void>();
   const object: StubGameObject = {
     visible: true,
     fillColor: null,
-    setDepth: () => object,
+    depth: 0,
+    text,
+    setDepth: (depth: number) => {
+      object.depth = depth;
+      return object;
+    },
     setScrollFactor: () => object,
     setOrigin: () => object,
     setInteractive: () => object,
@@ -689,7 +750,7 @@ function createMobileInputSceneStub(): MobileInputSceneStub {
         if (x === 760 && y === 104) dismissButton = object;
         return object;
       },
-      text: (x: number, y: number, text: string) => createStubGameObject(x, y, text.length * 12, 24),
+      text: (x: number, y: number, text: string) => createStubGameObject(x, y, text.length * 12, 24, text),
       circle: (x: number, y: number, radius: number) => createStubGameObject(x - radius, y - radius, radius * 2, radius * 2),
     },
     input: {

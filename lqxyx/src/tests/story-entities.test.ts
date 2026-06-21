@@ -65,6 +65,33 @@ describe('story entity visibility from flags', () => {
     ]);
   });
 
+  it('replay pickup flags keep full bodies visible until Yang Yun reaches each replay pickup beat', () => {
+    const beforeReplayPickup = buildStoryEntityDebugEntries({
+      danYuxuanBodyProneAndBloody: true,
+      qinHaoruiBodyBloodyOnGround: true,
+      danYuxuanHeadPickedUp: true,
+      qinHaoruiHeadPickedUp: true,
+      yangYunReplayRestoresHeads: true,
+    });
+    expect(beforeReplayPickup).toEqual([
+      expect.objectContaining({ id: 'danYuxuanProneBloody', textureKey: 'sprite.danYuxuan.lyingBloody' }),
+      expect.objectContaining({ id: 'qinHaoruiProneBloody', textureKey: 'sprite.qinHaorui.lyingBloody' }),
+    ]);
+
+    const afterDanReplayPickup = buildStoryEntityDebugEntries({
+      danYuxuanBodyProneAndBloody: true,
+      qinHaoruiBodyBloodyOnGround: true,
+      danYuxuanHeadPickedUp: true,
+      qinHaoruiHeadPickedUp: true,
+      yangYunReplayRestoresHeads: true,
+      yangYunReplayDanHeadPickedUp: true,
+    });
+    expect(afterDanReplayPickup).toEqual([
+      expect.objectContaining({ id: 'danYuxuanBodyOnly', textureKey: 'sprite.danYuxuan.bodyPart' }),
+      expect.objectContaining({ id: 'qinHaoruiProneBloody', textureKey: 'sprite.qinHaorui.lyingBloody' }),
+    ]);
+  });
+
   it('hides room-owned story entities while rendering the corridor', () => {
     const entries = buildStoryEntityDebugEntries(
       {

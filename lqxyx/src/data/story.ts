@@ -73,7 +73,7 @@ export type StoryCommand = (
   | { type: "branch"; id: BranchId; trigger: string }
   | { type: "timer"; id: string; action: "start" | "stop" | "reset"; durationMs?: number; trigger?: string; visibilityTargetId?: string; visibilityRequiresContinuous?: boolean }
   | { type: "awaitView"; visibilityTargetId: string; reason: string }
-  | { type: "interaction"; input: "F" | "Q" | "choice" | "proximity" | "timer"; target: string; result: string; proximityTargetId?: string; physicalTarget?: StoryPhysicalTargetRequirement }
+  | { type: "interaction"; input: "F" | "Q" | "choice" | "proximity" | "timer"; target: string; result: string; proximityTargetId?: string; physicalTarget?: StoryPhysicalTargetRequirement; physicalTargetFlagMap?: readonly { targetIndex: number; flags: readonly string[] }[]; completeWhenFlags?: readonly string[] }
   | { type: "setFlag"; id: string; value: boolean }
   | { type: "switchView"; characterId: CharacterId; location: string; visibility?: string; locationState?: { floorId: FloorId; roomId: RoomId | null }; position?: StoryPoint; facing?: "up" | "down" | "left" | "right" }
   | { type: "ending"; id: string; title: string; subtitle?: string; returnsToCheckpoint?: CheckpointId }
@@ -513,12 +513,13 @@ export const firstActBranches: StoryBranch[] = [
       { type: "setFlag", id: "yangYunReplayQinHeadPickedUp", value: false },
       { type: "dialogue", speaker: "杨云", text: "我好像忘了点啥" },
       { type: "task", text: "拾取但宇轩和秦浩睿的头颅" },
-      { type: "interaction", input: "Q", target: "但宇轩头颅", result: "拾取但宇轩头颅", physicalTarget: { floorId: "4F", roomId: "gt1-classroom", points: [{ x: 760, y: 520, radiusPx: 96 }] } },
-      { type: "setFlag", id: "danYuxuanHeadPickedUp", value: true },
-      { type: "setFlag", id: "yangYunReplayDanHeadPickedUp", value: true },
-      { type: "interaction", input: "Q", target: "秦浩睿头颅", result: "拾取秦浩睿头颅", physicalTarget: { floorId: "4F", roomId: "gt2-classroom", points: [{ x: 760, y: 330, radiusPx: 96 }] } },
-      { type: "setFlag", id: "qinHaoruiHeadPickedUp", value: true },
-      { type: "setFlag", id: "yangYunReplayQinHeadPickedUp", value: true },
+      { type: "interaction", input: "Q", target: "拾取头颅", result: "拾取头颅", physicalTarget: [
+        { floorId: "4F", roomId: "gt1-classroom", points: [{ x: 760, y: 520, radiusPx: 96 }] },
+        { floorId: "4F", roomId: "gt2-classroom", points: [{ x: 760, y: 330, radiusPx: 96 }] },
+      ], physicalTargetFlagMap: [
+        { targetIndex: 0, flags: ["danYuxuanHeadPickedUp", "yangYunReplayDanHeadPickedUp"] },
+        { targetIndex: 1, flags: ["qinHaoruiHeadPickedUp", "yangYunReplayQinHeadPickedUp"] },
+      ], completeWhenFlags: ["danYuxuanHeadPickedUp", "qinHaoruiHeadPickedUp"] },
       { type: "dialogue", speaker: "杨云", text: "材料够了。" },
       { type: "setFlag", id: "yangYunRecordingActive", value: false },
       { type: "fade", direction: "out", durationMs: 500 },

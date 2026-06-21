@@ -776,19 +776,18 @@ describe('EventEngine — switchView location state', () => {
     const interactions = branch.commands.filter(
       (cmd): cmd is Extract<StoryCommand, { type: 'interaction' }> => cmd.type === 'interaction' && cmd.input === 'Q',
     );
-    expect(interactions).toHaveLength(2);
+    expect(interactions).toHaveLength(1);
 
-    const danPickup = interactions.find((cmd) => cmd.target.includes('但宇轩'));
-    const qinPickup = interactions.find((cmd) => cmd.target.includes('秦浩睿'));
-    expect(danPickup).toBeDefined();
-    expect(qinPickup).toBeDefined();
+    const pickup = interactions[0]!;
+    expect(pickup.target).toBe('拾取头颅');
 
-    const danTarget = danPickup!.physicalTarget;
-    const qinTarget = qinPickup!.physicalTarget;
-    expect(Array.isArray(danTarget)).toBe(false);
-    expect(Array.isArray(qinTarget)).toBe(false);
-    expect(danTarget).toMatchObject({ floorId: '4F', roomId: 'gt1-classroom', points: [{ x: 760, y: 520 }] });
-    expect(qinTarget).toMatchObject({ floorId: '4F', roomId: 'gt2-classroom', points: [{ x: 760, y: 330 }] });
+    const targets = pickup.physicalTarget;
+    expect(Array.isArray(targets)).toBe(true);
+    expect(targets).toHaveLength(2);
+    expect(targets).toEqual(expect.arrayContaining([
+      expect.objectContaining({ floorId: '4F', roomId: 'gt1-classroom', points: [expect.objectContaining({ x: 760, y: 520 })] }),
+      expect.objectContaining({ floorId: '4F', roomId: 'gt2-classroom', points: [expect.objectContaining({ x: 760, y: 330 })] }),
+    ]));
 
     // Ends with gotoCheckpoint H (not a bare checkpoint annotation that would leave the engine idle).
     const last = branch.commands[branch.commands.length - 1];
@@ -801,14 +800,49 @@ describe('EventEngine — switchView location state', () => {
       (cmd): cmd is Extract<StoryCommand, { type: 'setFlag' }> => cmd.type === 'setFlag',
     );
     const flagValues = flagCommands.map((cmd) => [cmd.id, cmd.value]);
+    const pickupCommand = branch.commands.find(
+      (cmd): cmd is Extract<StoryCommand, { type: 'interaction' }> => cmd.type === 'interaction' && cmd.target === '拾取头颅',
+    );
 
     expect(flagValues).toEqual(expect.arrayContaining([
       ['yangYunReplayRestoresHeads', true],
       ['yangYunReplayDanHeadPickedUp', false],
       ['yangYunReplayQinHeadPickedUp', false],
-      ['yangYunReplayDanHeadPickedUp', true],
-      ['yangYunReplayQinHeadPickedUp', true],
     ]));
+    expect(pickupCommand?.physicalTargetFlagMap).toEqual(expect.arrayContaining([
+      { targetIndex: 0, flags: ['danYuxuanHeadPickedUp', 'yangYunReplayDanHeadPickedUp'] },
+      { targetIndex: 1, flags: ['qinHaoruiHeadPickedUp', 'yangYunReplayQinHeadPickedUp'] },
+    ]));
+    expect(pickupCommand?.completeWhenFlags).toEqual(['danYuxuanHeadPickedUp', 'qinHaoruiHeadPickedUp']);
+  });
+
+  it('B-2 head pickup works in any order and waits for both heads before continuing', () => {
+    const { engine } = createEngine();
+    engine.startFromCheckpoint('G');
+    engine.selectBranch('B-2');
+
+    for (let i = 0; i < 200 && engine.getCurrentState() !== 'awaiting_interaction'; i++) {
+      if (engine.getCurrentState() === 'waiting') engine.update(4_000);
+      if (engine.getCurrentState() === 'awaiting_advance') engine.advance();
+    }
+    expect(engine.getCurrentState()).toBe('awaiting_interaction');
+
+    engine.updateLocation('4F', 'gt2-classroom');
+    engine.updatePlayerPosition({ x: 760, y: 330 });
+    const completed = engine.completeInteraction('Q');
+    expect(completed).toBe(true);
+
+    expect(engine.getStoryFlags().qinHaoruiHeadPickedUp).toBe(true);
+    expect(engine.getStoryFlags().danYuxuanHeadPickedUp).toBeFalsy();
+    expect(engine.getCurrentState()).toBe('awaiting_interaction');
+
+    engine.updateLocation('4F', 'gt1-classroom');
+    engine.updatePlayerPosition({ x: 760, y: 520 });
+    expect(engine.completeInteraction('Q')).toBe(true);
+
+    expect(engine.getStoryFlags().qinHaoruiHeadPickedUp).toBe(true);
+    expect(engine.getStoryFlags().danYuxuanHeadPickedUp).toBe(true);
+    expect(engine.getCurrentState()).toBe('awaiting_advance');
   });
 
   it('B-2 hides 董继豪 with control="hidden" before switching to 杨云 so the role prompt does NOT briefly say "你现在是董继豪"', () => {

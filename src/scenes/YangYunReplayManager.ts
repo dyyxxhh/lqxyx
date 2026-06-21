@@ -1,7 +1,7 @@
 import type Phaser from 'phaser';
 import type { CharacterDirection } from '../characters/characterState';
 import { WALK_ANIMATIONS, getIdleAnimationKey } from '../characters/CharacterRegistry';
-import type { FloorId, RoomId } from '../data/maps';
+import { schoolMaps, type CorridorDoor, type FloorId, type RoomId, type SpawnPoint } from '../data/maps';
 import { isRectInCameraView } from './cameraView';
 
 export interface ReplayFrame {
@@ -25,6 +25,7 @@ const SPRITE_HALF_WIDTH = 24;
 const SPRITE_HALF_HEIGHT = 32;
 const REPLAY_SPRITE_DEPTH = 9;
 const REPLAY_BUFFER_STORAGE_KEY = 'ying-zhong-jiu.replay-buffer.v1';
+const DOOR_REACH_TOLERANCE_PX = 8;
 
 type Phase = 'idle' | 'recording' | 'replaying' | 'chasing' | 'done';
 
@@ -190,14 +191,19 @@ export class YangYunReplayManager {
   }
 
   private advanceChase(deltaMs: number, dongJihao: DongJihaoSnapshot): void {
-    if (this.currentFloor !== dongJihao.floorId || this.currentRoom !== dongJihao.roomId) {
-      this.moving = false;
+    const target = this.resolveChaseTarget(dongJihao);
+    const dx = target.x - this.currentX;
+    const dy = target.y - this.currentY;
+    const dist = Math.hypot(dx, dy);
+    if (dist < DOOR_REACH_TOLERANCE_PX) {
+      if (target.nextRoom !== undefined) {
+        this.currentFloor = target.nextFloor;
+        this.currentRoom = target.nextRoom;
+        this.currentX = target.nextX;
+        this.currentY = target.nextY;
+      }
       return;
     }
-    const dx = dongJihao.x - this.currentX;
-    const dy = dongJihao.y - this.currentY;
-    const dist = Math.hypot(dx, dy);
-    if (dist < 4) return;
     const step = (CHASE_SPEED_PX_PER_SEC * deltaMs) / 1000;
     const ratio = Math.min(1, step / dist);
     this.currentX += dx * ratio;
@@ -207,6 +213,105 @@ export class YangYunReplayManager {
     } else {
       this.currentDirection = dy < 0 ? 'up' : 'down';
     }
+  }
+
+  private resolveChaseTarget(dongJihao: DongJihaoSnapshot): { x: number; y: number; nextFloor: FloorId; nextRoom?: RoomId | null; nextX: number; nextY: number } {
+    if (this.currentFloor === dongJihao.floorId && this.currentRoom === dongJihao.roomId) {
+      return { x: dongJihao.x, y: dongJihao.y, nextFloor: this.currentFloor, nextX: dongJihao.x, nextY: dongJihao.y };
+    }
+
+    if (this.currentRoom) {
+      const exit = this.chooseRoomExit(this.currentFloor, this.currentRoom, dongJihao);
+      if (exit) {
+        return {
+          x: exit.spawn.x,
+          y: exit.spawn.y,
+          nextFloor: this.currentFloor,
+          nextRoom: null,
+          nextX: exit.corridorX,
+          nextY: exit.corridorY,
+        };
+      }
+    }
+
+    if (this.currentFloor !== dongJihao.floorId) {
+      const elevator = this.chooseElevatorDoor(this.currentFloor);
+      const arrivalElevator = this.chooseElevatorDoor(dongJihao.floorId);
+      if (elevator && arrivalElevator) {
+        return {
+          x: elevator.bounds.x + elevator.bounds.width / 2,
+          y: elevator.bounds.y + elevator.bounds.height / 2,
+          nextFloor: dongJihao.floorId,
+          nextRoom: null,
+          nextX: arrivalElevator.bounds.x + arrivalElevator.bounds.width / 2,
+          nextY: arrivalElevator.bounds.y + arrivalElevator.bounds.height / 2,
+        };
+      }
+    }
+
+    const entryDoor = this.chooseCorridorDoor(this.currentFloor, dongJihao.roomId, dongJihao.y);
+    if (entryDoor) {
+      const interaction = entryDoor.interaction;
+      const targetRoom = interaction.type === 'roomTransition' ? schoolMaps.floors[this.currentFloor].rooms[interaction.targetRoomId] : null;
+      const targetSpawn = targetRoom?.spawnPoints.find((spawn) => spawn.id === (interaction.type === 'roomTransition' ? interaction.spawnPointId : ''));
+      const targetY = entryDoor.bounds.y + entryDoor.bounds.height / 2;
+      if (interaction.type !== 'roomTransition') {
+        return { x: entryDoor.bounds.x + entryDoor.bounds.width / 2, y: targetY, nextFloor: this.currentFloor, nextX: entryDoor.bounds.x + entryDoor.bounds.width / 2, nextY: targetY };
+      }
+      return {
+        x: entryDoor.bounds.x + entryDoor.bounds.width / 2,
+        y: targetY,
+        nextFloor: this.currentFloor,
+        nextRoom: interaction.targetRoomId,
+        nextX: targetSpawn?.x ?? entryDoor.bounds.x + entryDoor.bounds.width / 2,
+        nextY: targetSpawn?.y ?? targetY,
+      };
+    }
+
+    return { x: dongJihao.x, y: dongJihao.y, nextFloor: this.currentFloor, nextX: dongJihao.x, nextY: dongJihao.y };
+  }
+
+  private chooseRoomExit(floorId: FloorId, roomId: RoomId, dongJihao: DongJihaoSnapshot): { spawn: SpawnPoint; corridorX: number; corridorY: number } | null {
+    const floor = schoolMaps.floors[floorId];
+    const room = floor.rooms[roomId];
+    if (!room) return null;
+    const destinationDoor = this.currentFloor === dongJihao.floorId
+      ? this.chooseCorridorDoor(floorId, dongJihao.roomId, dongJihao.y)
+      : this.chooseElevatorDoor(floorId);
+    const targetCorridorY = destinationDoor ? destinationDoor.bounds.y + destinationDoor.bounds.height / 2 : dongJihao.y;
+    let best: { spawn: SpawnPoint; corridorDoor: CorridorDoor; score: number } | null = null;
+    for (const doorId of room.entryDoorIds) {
+      const corridorDoor = floor.corridor.doors.find((door) => door.id === doorId);
+      if (!corridorDoor) continue;
+      const interaction = corridorDoor.interaction;
+      if (interaction.type !== 'roomTransition') continue;
+      const spawn = room.spawnPoints.find((candidate) => candidate.id === interaction.spawnPointId);
+      if (!spawn) continue;
+      const corridorY = corridorDoor.bounds.y + corridorDoor.bounds.height / 2;
+      const score = Math.abs(corridorY - targetCorridorY);
+      if (!best || score < best.score) best = { spawn, corridorDoor, score };
+    }
+    if (!best) return null;
+    return {
+      spawn: best.spawn,
+      corridorX: best.corridorDoor.bounds.x + best.corridorDoor.bounds.width / 2,
+      corridorY: best.corridorDoor.bounds.y + best.corridorDoor.bounds.height / 2,
+    };
+  }
+
+  private chooseCorridorDoor(floorId: FloorId, roomId: RoomId | null, targetY: number): CorridorDoor | null {
+    if (!roomId) return null;
+    const doors = schoolMaps.floors[floorId].corridor.doors.filter((door) => door.roomId === roomId);
+    let best: { door: CorridorDoor; score: number } | null = null;
+    for (const door of doors) {
+      const score = Math.abs(door.bounds.y + door.bounds.height / 2 - targetY);
+      if (!best || score < best.score) best = { door, score };
+    }
+    return best?.door ?? null;
+  }
+
+  private chooseElevatorDoor(floorId: FloorId): CorridorDoor | null {
+    return schoolMaps.floors[floorId].corridor.doors.find((door) => door.kind === 'elevator') ?? null;
   }
 
   private ensureSprite(): void {

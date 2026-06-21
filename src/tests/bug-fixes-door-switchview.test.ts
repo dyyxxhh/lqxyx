@@ -618,4 +618,73 @@ describe('Bug Fixes — A-1 door fall-through + switchView position', () => {
     expect(manager.getDebugState().x).not.toBe(760);
     expect(manager.getDebugState().y).not.toBe(920);
   });
+
+  it('Bug (survival chase pathing): Yang Yun walks from GT2 through the corridor toward GT1 instead of freezing', async () => {
+    const { YangYunReplayManager } = await import('../scenes/YangYunReplayManager');
+    const sprite = {
+      visible: false,
+      setOrigin: vi.fn(() => sprite),
+      setDepth: vi.fn(() => sprite),
+      setVisible: vi.fn((visible: boolean) => { sprite.visible = visible; return sprite; }),
+      setPosition: vi.fn(() => sprite),
+      setTexture: vi.fn(() => sprite),
+      destroy: vi.fn(),
+    };
+    const stubScene = {
+      add: { sprite: vi.fn(() => sprite) },
+      textures: { exists: () => true },
+    } as unknown as Phaser.Scene;
+    const manager = new YangYunReplayManager(stubScene);
+
+    manager.startRecording(0);
+    manager.recordFrame(0, 760, 330, '4F', 'gt2-classroom', 'down');
+    manager.stopRecording();
+    manager.startReplay(0, { x: 760, y: 520, floorId: '4F', roomId: 'gt1-classroom' });
+    manager.setChaseEnabled(true);
+    manager.update(1_000, 1_000, { x: 760, y: 520, floorId: '4F', roomId: 'gt1-classroom' });
+
+    expect(manager.getDebugState()).toMatchObject({ phase: 'chasing', floorId: '4F', roomId: 'gt2-classroom' });
+    expect(manager.getDebugState().y).toBeGreaterThan(330);
+
+    for (let step = 0; step < 20 && manager.getDebugState().roomId === 'gt2-classroom'; step += 1) {
+      manager.update(2_000 + step * 1_000, 1_000, { x: 760, y: 520, floorId: '4F', roomId: 'gt1-classroom' });
+    }
+
+    for (let step = 0; step < 20 && manager.getDebugState().roomId === null; step += 1) {
+      manager.update(30_000 + step * 1_000, 1_000, { x: 760, y: 520, floorId: '4F', roomId: 'gt1-classroom' });
+    }
+
+    expect(manager.getDebugState()).toMatchObject({ floorId: '4F', roomId: 'gt1-classroom' });
+    expect(manager.getDebugState().visible).toBe(true);
+  });
+
+  it('Bug (survival chase pathing): Yang Yun uses the elevator when the target changes floors', async () => {
+    const { YangYunReplayManager } = await import('../scenes/YangYunReplayManager');
+    const sprite = {
+      visible: false,
+      setOrigin: vi.fn(() => sprite),
+      setDepth: vi.fn(() => sprite),
+      setVisible: vi.fn((visible: boolean) => { sprite.visible = visible; return sprite; }),
+      setPosition: vi.fn(() => sprite),
+      setTexture: vi.fn(() => sprite),
+      destroy: vi.fn(),
+    };
+    const stubScene = {
+      add: { sprite: vi.fn(() => sprite) },
+      textures: { exists: () => true },
+    } as unknown as Phaser.Scene;
+    const manager = new YangYunReplayManager(stubScene);
+
+    manager.startRecording(0);
+    manager.recordFrame(0, 796, 452, '4F', null, 'up');
+    manager.stopRecording();
+    manager.startReplay(0, { x: 796, y: 424, floorId: '5F', roomId: null });
+    manager.setChaseEnabled(true);
+
+    for (let step = 0; step < 5 && manager.getDebugState().floorId === '4F'; step += 1) {
+      manager.update(1_000 + step * 1_000, 1_000, { x: 796, y: 424, floorId: '5F', roomId: null });
+    }
+
+    expect(manager.getDebugState()).toMatchObject({ floorId: '5F', roomId: null });
+  });
 });

@@ -281,7 +281,7 @@ export class EventEngine {
       }
     }
 
-    const preferredTimer = this.gameTimers.get('survival-route-countdown');
+    const preferredTimer = this.gameTimers.get('survival-route-countdown') ?? this.gameTimers.get('survival-ending-countdown');
     const activeGameTimer = preferredTimer ?? (this.gameTimers.size > 0 ? this.gameTimers.values().next().value : undefined);
     if (activeGameTimer) {
       this.narrativeUI.setTimer(activeGameTimer.remainingMs, true);

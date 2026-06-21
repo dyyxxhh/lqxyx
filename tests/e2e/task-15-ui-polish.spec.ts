@@ -207,9 +207,9 @@ test.describe('Task 15 UI polish', () => {
     expect(beforeTap.state?.input.deviceMode).toBe('mobile');
     expect(beforeTap.ui?.task.visible).toBe(true);
     expect(beforeTap.input?.joystick?.visible).toBe(true);
-    expect(beforeTap.input?.interact?.visible).toBe(true);
+    expect(beforeTap.input?.interact).toBeNull();
     expect(beforeTap.ui && beforeTap.input?.joystick && overlaps(beforeTap.ui.dialogue, beforeTap.input.joystick)).toBe(false);
-    expect(beforeTap.ui && beforeTap.input?.interact && overlaps(beforeTap.ui.dialogue, beforeTap.input.interact)).toBe(false);
+    expect(beforeTap.input?.interactFill).toBeNull();
 
     await dispatchGameTouch(page, 'touchstart', [{ id: 7, x: 1080, y: 600 }], [7]);
     await page.waitForTimeout(100);
@@ -219,7 +219,7 @@ test.describe('Task 15 UI polish', () => {
       input: (window as SceneWindow).__YING_ZHONG_JIU_INPUT_MANAGER__?.getVisualDebugState(),
       state: (window as SceneWindow).__YING_ZHONG_JIU_SCENE_STATE__,
     }));
-    expect(afterTap.input?.interactFill).not.toBe(beforeTap.input?.interactFill);
+    expect(afterTap.state?.input.interactPressed).toBe(true);
 
     await dispatchGameTouch(page, 'touchend', [], [7]);
 

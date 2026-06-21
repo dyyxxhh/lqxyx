@@ -399,7 +399,9 @@ export class EventEngine {
 
     if (this.state !== 'awaiting_interaction' || this.pendingInteractionInput !== input) return false;
     const matchedTargetIndex = this.findMatchedTargetIndex(this.pendingInteractionPhysicalTarget);
-    if (this.pendingInteractionPhysicalTarget && matchedTargetIndex === null) return false;
+    if (this.pendingInteractionPhysicalTarget && matchedTargetIndex === null) {
+      return this.completePendingOverrideInteraction(input);
+    }
 
     if (matchedTargetIndex !== null && this.pendingInteractionFlagMap) {
       for (const entry of this.pendingInteractionFlagMap) {
@@ -423,6 +425,28 @@ export class EventEngine {
     this.syncDebugState();
     this.executeNext();
     return true;
+  }
+
+  private completePendingOverrideInteraction(input: 'F' | 'Q'): boolean {
+    for (let i = this.commandIndex + 1; i < this.currentCommands.length; i++) {
+      const command = this.currentCommands[i];
+      if (!command || command.type !== 'interaction' || command.input !== input || command.allowDuringPending !== true) continue;
+      if (!this.shouldExecuteCommand(command)) continue;
+      if (this.findMatchedTargetIndex(command.physicalTarget ?? null) === null) continue;
+
+      this.pendingInteractionInput = null;
+      this.pendingInteractionPhysicalTarget = null;
+      this.pendingInteractionFlagMap = null;
+      this.pendingInteractionCompleteFlags = null;
+      this.inputManager.setInteractContext(null);
+      this.state = 'executing';
+      this.commandIndex = i + 1;
+      this.syncDebugState();
+      this.executeNext();
+      return true;
+    }
+
+    return false;
   }
 
   /**

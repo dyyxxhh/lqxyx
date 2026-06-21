@@ -1069,6 +1069,7 @@ export class EventEngine {
       position: { ...snapshot.position },
     };
     this.narrativeUI.setCurtain(false);
+    this.onFade?.('in', 0);
     this.onSwitchView?.(snapshot.floorId, snapshot.roomId, { x: snapshot.position.x, y: snapshot.position.y }, snapshot.position.facing);
   }
 

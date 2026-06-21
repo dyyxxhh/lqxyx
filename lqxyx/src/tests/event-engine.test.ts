@@ -108,6 +108,8 @@ function createEngine(
     onTimerExpired?: (id: string) => void;
     onScriptedMovement?: (movement: ScriptedMovementRequest, complete: (position: { x: number; y: number }) => void) => void;
     onDeathFlash?: (id: 'celery' | 'ruler', sequence: readonly DeathFlashFrame[]) => void;
+    onFade?: (direction: 'in' | 'out', durationMs: number) => void;
+    onSwitchView?: (floorId: string, roomId: string | null, position?: { x: number; y: number }, facing?: 'up' | 'down' | 'left' | 'right') => void;
     saveState?: SaveState;
     manifest?: StoryManifest;
     visibilityPredicate?: (visibilityTargetId: string) => boolean;
@@ -121,6 +123,8 @@ function createEngine(
   const onTimerExpired = overrides?.onTimerExpired ?? vi.fn();
   const onScriptedMovement = overrides?.onScriptedMovement;
   const onDeathFlash = overrides?.onDeathFlash;
+  const onFade = overrides?.onFade;
+  const onSwitchView = overrides?.onSwitchView;
   const visibilityPredicate = overrides?.visibilityPredicate ?? (() => true);
 
   const engine = new EventEngine(
@@ -133,12 +137,12 @@ function createEngine(
     onTimerExpired,
     onScriptedMovement,
     onDeathFlash,
-    undefined,
-    undefined,
+    onFade,
+    onSwitchView,
     visibilityPredicate,
   );
 
-  return { engine, manager, ui, inputLog, uiLog, onCheckpointReached, onEndingReached, onTimerExpired };
+  return { engine, manager, ui, inputLog, uiLog, onCheckpointReached, onEndingReached, onTimerExpired, onFade, onSwitchView };
 }
 
 /** Call advance() count times to skip through dialogues. */
@@ -749,6 +753,22 @@ describe('EventEngine — switchView location state', () => {
     );
     expect(endingIndex).toBeGreaterThan(-1);
     expect(branch.commands.slice(endingIndex + 1)).toEqual([]);
+  });
+
+  it('B-1 split-in-two checkpoint return resets fade overlay via onFade(in, 0)', () => {
+    const onFade = vi.fn();
+    const { engine } = createEngine({ onFade });
+
+    engine.startFromCheckpoint('G');
+
+    engine.triggerEndingById('split-in-two');
+
+    expect(engine.getCurrentState()).toBe('awaiting_advance');
+    onFade.mockClear();
+
+    engine.advance();
+
+    expect(onFade).toHaveBeenCalledWith('in', 0);
   });
 
   it('B-2 requires picking up BOTH heads at body positions and chains to checkpoint H via gotoCheckpoint', () => {

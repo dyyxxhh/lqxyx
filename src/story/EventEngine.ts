@@ -82,6 +82,8 @@ export class EventEngine {
   private pendingBranchIds: BranchId[] = [];
   private pendingInteractionInput: 'F' | 'Q' | null = null;
   private pendingInteractionPhysicalTarget: StoryPhysicalTargetRequirement | null = null;
+  private pendingInteractionFlagMap: Extract<StoryCommand, { type: 'interaction' }>['physicalTargetFlagMap'] | null = null;
+  private pendingInteractionCompleteFlags: readonly string[] | null = null;
   private pendingProximityTarget: StoryProximityTarget | null = null;
   private pendingProximityArmedPosition: StoryPoint | null = null;
   private pendingVisibilityTargetId: string | null = null;
@@ -396,10 +398,25 @@ export class EventEngine {
     }
 
     if (this.state !== 'awaiting_interaction' || this.pendingInteractionInput !== input) return false;
-    if (this.pendingInteractionPhysicalTarget && !this.satisfiesPhysicalTarget(this.pendingInteractionPhysicalTarget)) return false;
+    const matchedTargetIndex = this.findMatchedTargetIndex(this.pendingInteractionPhysicalTarget);
+    if (this.pendingInteractionPhysicalTarget && matchedTargetIndex === null) return false;
+
+    if (matchedTargetIndex !== null && this.pendingInteractionFlagMap) {
+      for (const entry of this.pendingInteractionFlagMap) {
+        if (entry.targetIndex !== matchedTargetIndex) continue;
+        for (const flag of entry.flags) this.mutable.storyFlags[flag] = true;
+      }
+    }
+
+    if (this.pendingInteractionCompleteFlags && !this.pendingInteractionCompleteFlags.every((flag) => this.mutable.storyFlags[flag] === true)) {
+      this.syncDebugState();
+      return true;
+    }
 
     this.pendingInteractionInput = null;
     this.pendingInteractionPhysicalTarget = null;
+    this.pendingInteractionFlagMap = null;
+    this.pendingInteractionCompleteFlags = null;
     this.inputManager.setInteractContext(null);
     this.state = 'executing';
     this.commandIndex++;
@@ -761,21 +778,26 @@ export class EventEngine {
     this.executeNext();
   }
 
-  private satisfiesPhysicalTarget(target: StoryPhysicalTargetRequirement): boolean {
+  private findMatchedTargetIndex(target: StoryPhysicalTargetRequirement | null): number | null {
+    if (!target) return null;
     const targets: readonly StoryPhysicalTarget[] = Array.isArray(target) ? target : [target];
-    return targets.some((candidate) => {
-      if (this.mutable.floorId !== candidate.floorId || this.mutable.roomId !== candidate.roomId) return false;
-      return candidate.points.some((point) => Math.hypot(
+    for (let i = 0; i < targets.length; i++) {
+      const candidate = targets[i]!;
+      if (this.mutable.floorId !== candidate.floorId || this.mutable.roomId !== candidate.roomId) continue;
+      if (candidate.points.some((point) => Math.hypot(
         this.mutable.position.x - point.x,
         this.mutable.position.y - point.y,
-      ) <= point.radiusPx);
-    });
+      ) <= point.radiusPx)) return i;
+    }
+    return null;
   }
 
   private handleInteraction(command: Extract<StoryCommand, { type: 'interaction' }>): void {
     if (command.input === 'F' || command.input === 'Q') {
       this.pendingInteractionInput = command.input;
       this.pendingInteractionPhysicalTarget = command.physicalTarget ?? null;
+      this.pendingInteractionFlagMap = command.physicalTargetFlagMap ?? null;
+      this.pendingInteractionCompleteFlags = command.completeWhenFlags ?? null;
       this.inputManager.setInteractContext(command.input);
       this.currentControlState = 'player';
       this.inputManager.unlock();

@@ -26,6 +26,7 @@ const SPRITE_HALF_HEIGHT = 32;
 const REPLAY_SPRITE_DEPTH = 9;
 const REPLAY_BUFFER_STORAGE_KEY = 'ying-zhong-jiu.replay-buffer.v1';
 const DOOR_REACH_TOLERANCE_PX = 8;
+const CHASE_DIRECTION_UPDATE_THRESHOLD_PX = 6;
 
 type Phase = 'idle' | 'recording' | 'replaying' | 'chasing' | 'done';
 
@@ -208,6 +209,7 @@ export class YangYunReplayManager {
     const ratio = Math.min(1, step / dist);
     this.currentX += dx * ratio;
     this.currentY += dy * ratio;
+    if (Math.max(Math.abs(dx), Math.abs(dy)) < CHASE_DIRECTION_UPDATE_THRESHOLD_PX) return;
     if (Math.abs(dx) >= Math.abs(dy)) {
       this.currentDirection = dx < 0 ? 'left' : 'right';
     } else {

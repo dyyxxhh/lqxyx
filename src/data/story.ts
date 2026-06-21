@@ -73,7 +73,7 @@ export type StoryCommand = (
   | { type: "branch"; id: BranchId; trigger: string }
   | { type: "timer"; id: string; action: "start" | "stop" | "reset"; durationMs?: number; trigger?: string; visibilityTargetId?: string; visibilityRequiresContinuous?: boolean }
   | { type: "awaitView"; visibilityTargetId: string; reason: string }
-  | { type: "interaction"; input: "F" | "Q" | "choice" | "proximity" | "timer"; target: string; result: string; proximityTargetId?: string; physicalTarget?: StoryPhysicalTargetRequirement; physicalTargetFlagMap?: readonly { targetIndex: number; flags: readonly string[] }[]; completeWhenFlags?: readonly string[] }
+  | { type: "interaction"; input: "F" | "Q" | "choice" | "proximity" | "timer"; target: string; result: string; proximityTargetId?: string; physicalTarget?: StoryPhysicalTargetRequirement; physicalTargetFlagMap?: readonly { targetIndex: number; flags: readonly string[] }[]; completeWhenFlags?: readonly string[]; allowDuringPending?: boolean }
   | { type: "setFlag"; id: string; value: boolean }
   | { type: "switchView"; characterId: CharacterId; location: string; visibility?: string; locationState?: { floorId: FloorId; roomId: RoomId | null }; position?: StoryPoint; facing?: "up" | "down" | "left" | "right" }
   | { type: "ending"; id: string; title: string; subtitle?: string; returnsToCheckpoint?: CheckpointId }
@@ -364,6 +364,7 @@ export const firstActCheckpoints: StoryCheckpoint[] = [
         result: "开启学校通信",
         physicalTarget: { floorId: "5F", roomId: "communication-control-5f", points: [{ x: 620, y: 240, radiusPx: 48 }] },
         condition: { flag: "communicationDisabled", equals: true },
+        allowDuringPending: true,
       },
       { type: "setFlag", id: "communicationDisabled", value: false },
       { type: "dialogue", speaker: "董继豪", text: "搞定了。", condition: { flag: "communicationDisabled", equals: false } },

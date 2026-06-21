@@ -479,6 +479,29 @@ describe('Bug Fixes — A-1 door fall-through + switchView position', () => {
     expect(uiLog.taskTexts[uiLog.taskTexts.length - 1]).toBe('去五楼开启学校通信');
   });
 
+  it('Bug (H comms controller): 5F communication controller works during the 120s window without first touching the phone cabinet', () => {
+    const saveState: SaveState = {
+      ...createDefaultSaveState(),
+      checkpointId: 'H',
+      controllableCharacterId: 'dongJihao',
+      storyFlags: { communicationDisabled: true, phoneCabinetInteractionDisabled: false },
+    };
+    const { engine, uiLog } = createEngine({ saveState });
+
+    engine.startFromCheckpoint('H');
+    engine.update(500);
+    expect(engine.hasRunningTimer('survival-route-countdown')).toBe(true);
+
+    engine.updateLocation('5F', 'communication-control-5f');
+    engine.updatePlayerPosition({ x: 620, y: 240 });
+    expect(engine.completeInteraction('F')).toBe(true);
+
+    expect(engine.getStoryFlags().communicationDisabled).toBe(false);
+    expect(uiLog.dialogues.some((d) => d.speaker === '董继豪' && d.text === '搞定了。')).toBe(true);
+    engine.advance();
+    expect(uiLog.taskTexts[uiLog.taskTexts.length - 1]).toBe('去班里偷同学手机报警');
+  });
+
   it('Bug (saozi minor ending): triggering saozi shows minor-ending UI and advance returns to checkpoint H', () => {
     const saveState: SaveState = {
       ...createDefaultSaveState(),
@@ -617,6 +640,37 @@ describe('Bug Fixes — A-1 door fall-through + switchView position', () => {
     expect(manager.getDebugState()).toMatchObject({ phase: 'chasing', floorId: '4F', roomId: 'gt2-classroom' });
     expect(manager.getDebugState().x).not.toBe(760);
     expect(manager.getDebugState().y).not.toBe(920);
+  });
+
+  it('Bug (survival chase jitter): Yang Yun keeps chase direction stable for tiny target jitter', async () => {
+    const { YangYunReplayManager } = await import('../scenes/YangYunReplayManager');
+    const textureCalls: string[] = [];
+    const sprite = {
+      visible: false,
+      setOrigin: vi.fn(() => sprite),
+      setDepth: vi.fn(() => sprite),
+      setVisible: vi.fn((visible: boolean) => { sprite.visible = visible; return sprite; }),
+      setPosition: vi.fn(() => sprite),
+      setTexture: vi.fn((key: string) => { textureCalls.push(key); return sprite; }),
+      destroy: vi.fn(),
+    };
+    const stubScene = {
+      add: { sprite: vi.fn(() => sprite) },
+      textures: { exists: () => true },
+    } as unknown as Phaser.Scene;
+    const manager = new YangYunReplayManager(stubScene);
+
+    manager.startRecording(0);
+    manager.recordFrame(0, 100, 100, '4F', null, 'right');
+    manager.stopRecording();
+    manager.startReplay(0, { x: 200, y: 100, floorId: '4F', roomId: null });
+    manager.setChaseEnabled(true);
+    manager.update(1_000, 1_000, { x: 200, y: 100, floorId: '4F', roomId: null });
+    textureCalls.length = 0;
+
+    manager.update(1_180, 16, { x: manager.getDebugState().x + 1, y: manager.getDebugState().y - 4, floorId: '4F', roomId: null });
+
+    expect(textureCalls.at(-1)?.startsWith('sprite.yangYunRed.right.')).toBe(true);
   });
 
   it('Bug (survival chase pathing): Yang Yun walks from GT2 through the corridor toward GT1 instead of freezing', async () => {

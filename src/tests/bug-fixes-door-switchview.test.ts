@@ -445,6 +445,11 @@ describe('Bug Fixes — A-1 door fall-through + switchView position', () => {
     engine.startFromCheckpoint('H');
     engine.update(500);
 
+    engine.updateLocation('4F', 'gt1-classroom');
+    engine.updatePlayerPosition({ x: 160, y: 260 });
+    engine.completeInteraction('F');
+    engine.advance();
+
     expect(engine.getCurrentState()).toBe('awaiting_interaction');
 
     engine.updateLocation('5F', 'communication-control-5f');
@@ -452,6 +457,26 @@ describe('Bug Fixes — A-1 door fall-through + switchView position', () => {
     engine.completeInteraction('F');
 
     expect(uiLog.dialogues.some((d) => d.speaker === '董继豪' && d.text === '搞定了。')).toBe(true);
+  });
+
+  it('Bug (H comms disabled phone cabinet dialogue): clicking cabinet explains signal jammer before task update', () => {
+    const saveState: SaveState = {
+      ...createDefaultSaveState(),
+      checkpointId: 'H',
+      controllableCharacterId: 'dongJihao',
+      storyFlags: { communicationDisabled: true, phoneCabinetInteractionDisabled: false },
+    };
+    const { engine, uiLog } = createEngine({ saveState });
+
+    engine.startFromCheckpoint('H');
+    engine.update(500);
+    engine.updateLocation('4F', 'gt1-classroom');
+    engine.updatePlayerPosition({ x: 160, y: 260 });
+    engine.completeInteraction('F');
+
+    expect(uiLog.dialogues[uiLog.dialogues.length - 1]).toMatchObject({ speaker: '董继豪', text: '信号屏蔽器？这对吗？' });
+    engine.advance();
+    expect(uiLog.taskTexts[uiLog.taskTexts.length - 1]).toBe('去五楼开启学校通信');
   });
 
   it('Bug (saozi minor ending): triggering saozi shows minor-ending UI and advance returns to checkpoint H', () => {
@@ -558,10 +583,39 @@ describe('Bug Fixes — A-1 door fall-through + switchView position', () => {
     manager.setChaseEnabled(true);
     manager.update(1_000, 1_000, { x: 760, y: 920, floorId: '4F', roomId: null });
 
-    expect(manager.getDebugState()).toMatchObject({ phase: 'chasing', floorId: '4F', roomId: null, visible: true });
+    expect(manager.getDebugState()).toMatchObject({ phase: 'chasing', floorId: '4F', roomId: 'gt2-classroom', visible: false });
 
     manager.update(2_000, 1_000, { x: 520, y: 920, floorId: '5F', roomId: null });
 
-    expect(manager.getDebugState()).toMatchObject({ phase: 'chasing', floorId: '5F', roomId: null, visible: true });
+    expect(manager.getDebugState()).toMatchObject({ phase: 'chasing', floorId: '4F', roomId: 'gt2-classroom', visible: false });
+  });
+
+  it('Bug (survival chase walking): Yang Yun does not teleport to Dong Jihao when chase crosses locations', async () => {
+    const { YangYunReplayManager } = await import('../scenes/YangYunReplayManager');
+    const sprite = {
+      visible: false,
+      setOrigin: vi.fn(() => sprite),
+      setDepth: vi.fn(() => sprite),
+      setVisible: vi.fn((visible: boolean) => { sprite.visible = visible; return sprite; }),
+      setPosition: vi.fn(() => sprite),
+      setTexture: vi.fn(() => sprite),
+      destroy: vi.fn(),
+    };
+    const stubScene = {
+      add: { sprite: vi.fn(() => sprite) },
+      textures: { exists: () => true },
+    } as unknown as Phaser.Scene;
+    const manager = new YangYunReplayManager(stubScene);
+
+    manager.startRecording(0);
+    manager.recordFrame(0, 160, 260, '4F', 'gt2-classroom', 'down');
+    manager.stopRecording();
+    manager.startReplay(0, { x: 160, y: 260, floorId: '4F', roomId: 'gt2-classroom' });
+    manager.setChaseEnabled(true);
+    manager.update(1_000, 1_000, { x: 760, y: 920, floorId: '4F', roomId: null });
+
+    expect(manager.getDebugState()).toMatchObject({ phase: 'chasing', floorId: '4F', roomId: 'gt2-classroom' });
+    expect(manager.getDebugState().x).not.toBe(760);
+    expect(manager.getDebugState().y).not.toBe(920);
   });
 });

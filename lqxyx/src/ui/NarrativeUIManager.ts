@@ -211,7 +211,7 @@ export class NarrativeUIManager {
 
     // --- Curtain ---
     this.curtainBg = scene.add
-      .rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, GAME_WIDTH, GAME_HEIGHT, 0x000000, 1)
+      .rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, GAME_WIDTH, GAME_HEIGHT, UI_THEME.colors.surface, 0.98)
       .setOrigin(0.5)
       .setScrollFactor(0)
       .setDepth(CURTAIN_DEPTH)
@@ -219,11 +219,11 @@ export class NarrativeUIManager {
     this.curtainImage = null;
 
     this.curtainTitleText = applyPixelTextStyle(scene.add
-      .text(GAME_WIDTH / 2, GAME_HEIGHT / 2 - 40, '', {
+      .text(GAME_WIDTH / 2, GAME_HEIGHT / 2 - 64, '', {
         align: 'center',
-        color: UI_THEME.colors.text,
+        color: UI_THEME.colors.textGold,
         fontFamily: UI_THEME.font.ui,
-        fontSize: '56px',
+        fontSize: '64px',
         fontStyle: 'bold',
       })
     )
@@ -233,7 +233,7 @@ export class NarrativeUIManager {
       .setVisible(false);
 
     this.curtainSubtitleButtonBg = scene.add
-      .rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2 + 54, 260, 58, UI_THEME.colors.surfaceRaised, UI_THEME.alpha.panelStrong)
+      .rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2 + 64, 320, 64, UI_THEME.colors.surfaceRaised, UI_THEME.alpha.panelStrong)
       .setOrigin(0.5)
       .setScrollFactor(0)
       .setDepth(CURTAIN_TEXT_DEPTH)
@@ -241,11 +241,11 @@ export class NarrativeUIManager {
     applyPixelStrokeStyle(this.curtainSubtitleButtonBg, UI_THEME.stroke.medium, UI_THEME.colors.gold, 1);
 
     this.curtainSubtitleText = applyPixelTextStyle(scene.add
-      .text(GAME_WIDTH / 2, GAME_HEIGHT / 2 + 54, '', {
+      .text(GAME_WIDTH / 2, GAME_HEIGHT / 2 + 64, '', {
         align: 'center',
-        color: UI_THEME.colors.textGold,
+        color: UI_THEME.colors.text,
         fontFamily: UI_THEME.font.ui,
-        fontSize: '28px',
+        fontSize: '26px',
         fontStyle: 'bold',
       })
     )
@@ -429,7 +429,9 @@ export class NarrativeUIManager {
   public setCurtain(visible: boolean, title?: string, subtitle?: string, textureKey?: string): void {
     const curtainSubtitle = subtitle ?? '敬请期待';
     const hasSubtitle = visible && curtainSubtitle !== '';
+    const isEndingCurtain = visible && ((title ?? '') !== '' || curtainSubtitle !== '');
 
+    this.curtainBg.setFillStyle(isEndingCurtain ? UI_THEME.colors.surface : 0x000000, isEndingCurtain ? 0.98 : 1);
     this.curtainBg.setVisible(visible);
     this.curtainTitleText.setVisible(visible);
     this.curtainSubtitleButtonBg.setVisible(hasSubtitle);

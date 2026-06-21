@@ -65,9 +65,24 @@ function isEventRecord(value: unknown): value is Record<string, unknown> {
 function createMockScene() {
   return {
     add: {
-      rectangle: vi.fn(() => chainableUiObject()),
-      text: vi.fn(() => chainableUiObject()),
-      image: vi.fn(() => chainableUiObject({ originX: 0.5, originY: 0.5, displayWidth: 0, displayHeight: 0 })),
+      rectangle: vi.fn((x: number, y: number, width: number, height: number, fillColor?: number, fillAlpha?: number) => chainableUiObject({
+        x,
+        y,
+        width,
+        height,
+        fillColor,
+        fillAlpha,
+      })),
+      text: vi.fn((x: number, y: number, text?: string, style?: Record<string, unknown>) => chainableUiObject({ x, y, text, style })),
+      image: vi.fn((x: number, y: number, textureKey?: string) => chainableUiObject({
+        x,
+        y,
+        textureKey,
+        originX: 0.5,
+        originY: 0.5,
+        displayWidth: 0,
+        displayHeight: 0,
+      })),
     },
   };
 }
@@ -488,6 +503,34 @@ describe('curtain state via debug state', () => {
     expect(getSceneDebugState().ui.curtainSubtitle).toBe('敬请期待');
   });
 
+  it('curtain uses the documented pixel-horror ending layout', () => {
+    resetSceneDebugState();
+    const scene = createMockScene();
+    const ui = new NarrativeUIManager(scene as never);
+
+    ui.setCurtain(true, '"报假警"', '敬请期待');
+
+    const curtainBg = scene.add.rectangle.mock.results[4]?.value;
+    const curtainButtonBg = scene.add.rectangle.mock.results[5]?.value;
+    const curtainTitleText = scene.add.text.mock.results[6]?.value;
+    const curtainSubtitleText = scene.add.text.mock.results[7]?.value;
+
+    expect(curtainBg.fillColor).toBe(UI_THEME.colors.surface);
+    expect(curtainBg.fillAlpha).toBe(0.98);
+    expect(curtainTitleText.y).toBe(296);
+    expect(curtainTitleText.style).toMatchObject({
+      color: UI_THEME.colors.textGold,
+      fontSize: '64px',
+    });
+    expect(curtainButtonBg.width).toBe(320);
+    expect(curtainButtonBg.height).toBe(64);
+    expect(curtainButtonBg.y).toBe(424);
+    expect(curtainSubtitleText.style).toMatchObject({
+      color: UI_THEME.colors.text,
+      fontSize: '26px',
+    });
+  });
+
   it('curtain hides subtitle button for black screens with empty subtitle', () => {
     resetSceneDebugState();
     const scene = createMockScene();
@@ -497,9 +540,12 @@ describe('curtain state via debug state', () => {
 
     const curtainButtonBg = scene.add.rectangle.mock.results[5]?.value;
     const curtainSubtitleText = scene.add.text.mock.results[7]?.value;
+    const curtainBg = scene.add.rectangle.mock.results[4]?.value;
+    expect(curtainBg.fillColor).toBe(0x000000);
+    expect(curtainBg.fillAlpha).toBe(1);
     expect(curtainButtonBg.visible).toBe(false);
     expect(curtainSubtitleText.visible).toBe(false);
-    expect(curtainSubtitleText.text).toBeUndefined();
+    expect(curtainSubtitleText.text).toBe('');
     expect(getSceneDebugState().ui.curtainSubtitle).toBe('');
   });
 });

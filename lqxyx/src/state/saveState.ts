@@ -48,14 +48,14 @@ export type SaveLoadResult =
   | { readonly status: 'empty'; readonly state: SaveState }
   | { readonly status: 'invalid'; readonly reason: InvalidSaveReason; readonly state: SaveState };
 
-export type SaveCodeExportResult =
-  | { readonly status: 'exported'; readonly code: string; readonly state: SaveState }
+export type SaveJsonExportResult =
+  | { readonly status: 'exported'; readonly json: string; readonly state: SaveState }
   | { readonly status: 'no-save' };
 
-export type SaveCodeImportResult =
+export type SaveJsonImportResult =
   | { readonly status: 'imported'; readonly state: SaveState }
-  | { readonly status: 'invalid-code' }
-  | { readonly status: 'unknown-code' };
+  | { readonly status: 'invalid-json' }
+  | { readonly status: 'invalid-save' };
 
 export interface SaveDebugState {
   readonly storageKey: typeof SAVE_STATE_STORAGE_KEY;
@@ -84,7 +84,14 @@ const validFacings: readonly SpawnPoint['facing'][] = ['up', 'down', 'left', 'ri
 const validBranches: readonly BranchId[] = ['A-1', 'A-2', 'B-1', 'B-2'];
 const validBranchChoiceStatuses: readonly BranchChoiceStatus[] = ['selected', 'rejected', 'resolved'];
 const validTimerStatuses: readonly SaveTimerStatus[] = ['running', 'paused', 'stopped'];
-const SAVE_CODE_PREFIX = 1_000;
+const REPLAY_BUFFER_STORAGE_KEY = 'ying-zhong-jiu.replay-buffer.v1';
+const SAVE_JSON_KIND = 'ying-zhong-jiu.save-json.v1';
+
+interface SaveJsonBundle {
+  readonly kind: typeof SAVE_JSON_KIND;
+  readonly saveState: SaveState;
+  readonly replayBuffer: readonly unknown[];
+}
 
 export function createDefaultSaveState(): SaveState {
   return {
@@ -168,27 +175,36 @@ export function hasValidSave(storage: Storage = localStorage): boolean {
 
 export function clearSaveState(storage: Storage = localStorage): void {
   storage.removeItem(SAVE_STATE_STORAGE_KEY);
-  storage.removeItem('ying-zhong-jiu.replay-buffer.v1');
+  storage.removeItem(REPLAY_BUFFER_STORAGE_KEY);
 }
 
-export function exportSaveCode(storage: Storage = localStorage): SaveCodeExportResult {
+export function exportSaveJson(storage: Storage = localStorage): SaveJsonExportResult {
   const current = loadSaveState(storage);
   if (current.status !== 'valid') return { status: 'no-save' };
 
-  const code = encodeProgressCode(current.state.checkpointId);
+  const bundle: SaveJsonBundle = {
+    kind: SAVE_JSON_KIND,
+    saveState: current.state,
+    replayBuffer: loadReplayBuffer(storage),
+  };
 
-  return { status: 'exported', code, state: current.state };
+  return { status: 'exported', json: JSON.stringify(bundle), state: current.state };
 }
 
-export function importSaveCode(code: string, storage: Storage = localStorage): SaveCodeImportResult {
-  if (!/^\d{4}$/.test(code)) return { status: 'invalid-code' };
+export function importSaveJson(json: string, storage: Storage = localStorage): SaveJsonImportResult {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(json);
+  } catch {
+    return { status: 'invalid-json' };
+  }
 
-  const checkpointId = decodeProgressCode(code);
-  if (!checkpointId) return { status: 'unknown-code' };
+  const bundle = toSaveJsonBundle(parsed);
+  if (!bundle) return { status: 'invalid-save' };
 
-  const state = createCanonicalProgressState(checkpointId);
-  saveSaveState(state, storage);
-  return { status: 'imported', state };
+  saveSaveState(bundle.saveState, storage);
+  storage.setItem(REPLAY_BUFFER_STORAGE_KEY, JSON.stringify(bundle.replayBuffer));
+  return { status: 'imported', state: bundle.saveState };
 }
 
 export function createSaveDebugState(result: SaveLoadResult): SaveDebugState {
@@ -250,57 +266,22 @@ function toSaveState(value: unknown): SaveState | null {
   };
 }
 
-function encodeProgressCode(checkpointId: CheckpointId): string {
-  return String(SAVE_CODE_PREFIX + validCheckpoints.indexOf(checkpointId)).padStart(4, '0');
+function toSaveJsonBundle(value: unknown): SaveJsonBundle | null {
+  if (!isRecord(value) || value.kind !== SAVE_JSON_KIND || !Array.isArray(value.replayBuffer)) return null;
+  const state = toSaveState(value.saveState);
+  if (!state) return null;
+  return { kind: SAVE_JSON_KIND, saveState: state, replayBuffer: [...value.replayBuffer] };
 }
 
-function decodeProgressCode(code: string): CheckpointId | null {
-  const checkpointIndex = Number(code) - SAVE_CODE_PREFIX;
-  const checkpointId = validCheckpoints[checkpointIndex];
-  return checkpointId ?? null;
-}
-
-function createCanonicalProgressState(checkpointId: CheckpointId): SaveState {
-  switch (checkpointId) {
-    case 'A':
-      return createDefaultSaveState();
-    case 'B':
-      return withProgress({ checkpointId, roomId: 'gt1-classroom', position: { x: 760, y: 520, facing: 'right' }, controllableCharacterId: 'yangYunRed', triggeredEvents: ['checkpoint:B'] });
-    case 'C':
-      return withProgress({ checkpointId, roomId: 'gt1-classroom', position: { x: 760, y: 520, facing: 'down' }, controllableCharacterId: 'yangYunBlue', storyFlags: { danYuxuanBodyProneAndBloody: true }, triggeredEvents: ['checkpoint:C'] });
-    case 'D':
-      return withProgress({ checkpointId, roomId: 'gt2-classroom', position: { x: 760, y: 330, facing: 'down' }, controllableCharacterId: 'yangYunRed', task: '去办公室', storyFlags: { danYuxuanBodyProneAndBloody: true, qinHaoruiBodyBloodyOnGround: true }, triggeredEvents: ['checkpoint:D'] });
-    case 'E':
-      return withProgress({ checkpointId, position: { x: 796, y: 868, facing: 'left' }, controllableCharacterId: 'yangYunRed', task: '前往五楼关闭学校通信', storyFlags: { danYuxuanBodyProneAndBloody: true, qinHaoruiBodyBloodyOnGround: true }, triggeredEvents: ['checkpoint:E'] });
-    case 'F':
-      return withProgress({ checkpointId, roomId: 'gt2-classroom', position: { x: 760, y: 330, facing: 'down' }, controllableCharacterId: 'dongJihao', task: '前往办公室报警', storyFlags: { danYuxuanBodyProneAndBloody: true, qinHaoruiBodyBloodyOnGround: true, communicationDisabled: true }, triggeredEvents: ['checkpoint:F'] });
-    case 'G':
-      return withProgress({ checkpointId, roomId: 'office-4f', position: { x: 620, y: 180, facing: 'up' }, controllableCharacterId: 'dongJihao', storyFlags: { danYuxuanBodyProneAndBloody: true, qinHaoruiBodyBloodyOnGround: true, communicationDisabled: true }, triggeredEvents: ['checkpoint:G'] });
-    case 'H':
-      return withProgress({ checkpointId, roomId: 'office-4f', position: { x: 620, y: 180, facing: 'down' }, controllableCharacterId: 'dongJihao', task: '去班里偷同学手机报警', storyFlags: { danYuxuanBodyProneAndBloody: true, qinHaoruiBodyBloodyOnGround: true, communicationDisabled: true, yangYunReplaysB2Actions: true }, branchChoices: { 'B-2': 'selected' }, triggeredEvents: ['checkpoint:H'] });
-    case 'I':
-      return withProgress({ checkpointId, roomId: 'gt1-classroom', position: { x: 160, y: 260, facing: 'right' }, controllableCharacterId: 'dongJihao', task: '活着', storyFlags: { danYuxuanBodyProneAndBloody: true, qinHaoruiBodyBloodyOnGround: true, communicationDisabled: false, yangYunReplaysB2Actions: true, yangYunAutoTracksAfterReplay: true, phoneCabinetInteractionDisabled: true }, branchChoices: { 'B-2': 'selected' }, triggeredEvents: ['checkpoint:I'] });
-    default:
-      return assertNeverCheckpoint(checkpointId);
+function loadReplayBuffer(storage: Storage): readonly unknown[] {
+  const raw = storage.getItem(REPLAY_BUFFER_STORAGE_KEY);
+  if (!raw) return [];
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    return Array.isArray(parsed) ? [...parsed] : [];
+  } catch {
+    return [];
   }
-}
-
-function withProgress(progress: Partial<SaveState> & Pick<SaveState, 'checkpointId' | 'position' | 'controllableCharacterId'>): SaveState {
-  const base = createDefaultSaveState();
-  return {
-    ...base,
-    ...progress,
-    storyFlags: { ...base.storyFlags, ...progress.storyFlags },
-    branchChoices: progress.branchChoices ?? {},
-    timers: {},
-    inventory: [],
-    pickups: {},
-    triggeredEvents: progress.triggeredEvents ?? [`checkpoint:${progress.checkpointId}`],
-  };
-}
-
-function assertNeverCheckpoint(value: never): never {
-  throw new Error(`Unhandled checkpoint: ${value}`);
 }
 
 function toPosition(value: unknown): SavePosition | null {

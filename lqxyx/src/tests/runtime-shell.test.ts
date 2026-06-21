@@ -53,7 +53,7 @@ import {
 } from '../game/scaffoldState';
 import { GameScene } from '../scenes/GameScene';
 import { PlayScene } from '../scenes/PlayScene';
-import { clearSaveState, createDefaultSaveState, exportSaveCode, loadSaveState, saveSaveState, SAVE_STATE_SCHEMA_VERSION } from '../state/saveState';
+import { clearSaveState, createDefaultSaveState, exportSaveJson, importSaveJson, loadSaveState, saveSaveState, SAVE_STATE_SCHEMA_VERSION } from '../state/saveState';
 
 describe('runtime scene shell', () => {
   it('records BootScene, PreloadScene, and GameScene exactly once with preload readiness before game readiness', () => {
@@ -262,7 +262,7 @@ describe('runtime scene shell', () => {
     expect(scene.eventEngine.updateLocation).toHaveBeenCalledWith('5F', null);
   }, 15_000);
 
-  it('GameScene settings can export and import self-contained four-digit progress codes from the menu', () => {
+  it('GameScene settings can export and import full JSON save files from the menu', () => {
     resetSceneDebugState();
     localStorage.clear();
     const scene = Object.create(GameScene.prototype) as {
@@ -279,28 +279,60 @@ describe('runtime scene shell', () => {
     const savedPrompt = window.prompt;
     const prompt = vi.fn((_message: string, value?: string) => value ?? null);
     window.prompt = prompt;
-    const state = { ...createDefaultSaveState(), checkpointId: 'H' as const, floorId: '5F' as const, roomId: 'communication-control-5f' as const };
+    const state = {
+      ...createDefaultSaveState(),
+      checkpointId: 'H' as const,
+      floorId: '5F' as const,
+      roomId: 'communication-control-5f' as const,
+      position: { x: 620, y: 240, facing: 'up' as const },
+      controllableCharacterId: 'dongJihao' as const,
+      task: '自定义完整存档',
+      storyFlags: { communicationDisabled: true, yangYunReplaysB2Actions: true, yangYunAutoTracksAfterReplay: true },
+      branchChoices: { 'B-2': 'selected' as const },
+      timers: { 'survival-route-countdown': { status: 'running' as const, durationMs: 120_000, remainingMs: 72_000 } },
+      inventory: ['borrowed-phone'],
+      pickups: { danYuxuanHead: true, qinHaoruiHead: false },
+      triggeredEvents: ['checkpoint-H', 'yang-yun-replay-started'],
+    };
     saveSaveState(state);
 
     scene.showExportSaveCode();
-    const exported = exportSaveCode();
+    const exported = exportSaveJson();
     expect(exported.status).toBe('exported');
     if (exported.status === 'exported') {
       clearSaveState();
-      prompt.mockReturnValueOnce(exported.code);
+      prompt.mockReturnValueOnce(exported.json);
       scene.showImportSaveCode();
     }
 
-    expect(prompt).toHaveBeenCalledWith('复制四位进度码', expect.stringMatching(/^\d{4}$/));
-    expect(prompt).toHaveBeenCalledWith('输入四位进度码', '');
+    expect(prompt).toHaveBeenCalledWith('复制 JSON 存档', expect.stringContaining('"timers"'));
+    expect(prompt).toHaveBeenCalledWith('粘贴 JSON 存档', '');
     expect(scene.createContinueButton).toHaveBeenCalledTimes(1);
     expect(statusText.setText).toHaveBeenLastCalledWith('导入成功');
     const imported = loadSaveState();
     expect(imported.status).toBe('valid');
     expect(imported.status === 'valid' ? imported.state.checkpointId : null).toBe('H');
-    expect(imported.status === 'valid' ? imported.state.task : null).toBe('去班里偷同学手机报警');
+    expect(imported.status === 'valid' ? imported.state.task : null).toBe('自定义完整存档');
+    expect(imported.status === 'valid' ? imported.state.timers['survival-route-countdown']?.remainingMs : null).toBe(72_000);
+    expect(imported.status === 'valid' ? imported.state.triggeredEvents : null).toContain('yang-yun-replay-started');
     window.prompt = savedPrompt;
   }, 15_000);
+
+  it('JSON save import rejects malformed JSON without overwriting the current save', () => {
+    localStorage.clear();
+    const currentState = {
+      ...createDefaultSaveState(),
+      checkpointId: 'G' as const,
+      task: '保留原存档',
+    };
+    saveSaveState(currentState);
+
+    expect(importSaveJson('{not-json')).toEqual({ status: 'invalid-json' });
+
+    const loaded = loadSaveState();
+    expect(loaded.status).toBe('valid');
+    expect(loaded.status === 'valid' ? loaded.state.task : null).toBe('保留原存档');
+  });
 
   it('GameScene menu reserves space for a continue button before settings controls', () => {
     const scene = new GameScene() as unknown as {

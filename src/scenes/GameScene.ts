@@ -11,7 +11,7 @@ import {
 } from '../game/scaffoldState';
 import { InputManager } from '../input/InputManager';
 import { MapRenderer } from '../map/MapRenderer';
-import { clearSaveState, exportSaveCode, importSaveCode, loadSaveState, type SaveState } from '../state/saveState';
+import { clearSaveState, exportSaveJson, importSaveJson, loadSaveState, type SaveState } from '../state/saveState';
 import { NarrativeUIManager } from '../ui/NarrativeUIManager';
 import { UI_THEME, applyPixelStrokeStyle, applyPixelTextStyle } from '../ui/uiTheme';
 
@@ -136,7 +136,7 @@ export class GameScene extends Phaser.Scene {
       .setInteractive({ useHandCursor: true });
     applyPixelStrokeStyle(exportButton, UI_THEME.stroke.thin, UI_THEME.colors.borderMuted, 0.95);
     applyPixelTextStyle(this.add
-      .text(exportButton.x, exportButton.y, '导出进度码', {
+      .text(exportButton.x, exportButton.y, '导出存档', {
         align: 'center',
         color: UI_THEME.colors.text,
         fontFamily: UI_THEME.font.ui,
@@ -154,7 +154,7 @@ export class GameScene extends Phaser.Scene {
       .setInteractive({ useHandCursor: true });
     applyPixelStrokeStyle(importButton, UI_THEME.stroke.thin, UI_THEME.colors.borderMuted, 0.95);
     applyPixelTextStyle(this.add
-      .text(importButton.x, importButton.y, '导入进度码', {
+      .text(importButton.x, importButton.y, '导入存档', {
         align: 'center',
         color: UI_THEME.colors.text,
         fontFamily: UI_THEME.font.ui,
@@ -290,19 +290,19 @@ export class GameScene extends Phaser.Scene {
   }
 
   private showExportSaveCode(): void {
-    const result = exportSaveCode();
+    const result = exportSaveJson();
     if (result.status !== 'exported') {
       this.saveCodeStatusText?.setText('暂无可导出的存档');
       return;
     }
 
-    window.prompt('复制四位进度码', result.code);
-    this.saveCodeStatusText?.setText(`存档码：${result.code}`);
+    window.prompt('复制 JSON 存档', result.json);
+    this.saveCodeStatusText?.setText('JSON 存档已生成');
   }
 
   private showImportSaveCode(): void {
-    const code = window.prompt('输入四位进度码', '')?.trim() ?? '';
-    const result = importSaveCode(code);
+    const json = window.prompt('粘贴 JSON 存档', '')?.trim() ?? '';
+    const result = importSaveJson(json);
     if (result.status === 'imported') {
       refreshSaveDebugState();
       if (this.isCompletedState(result.state)) {
@@ -316,7 +316,7 @@ export class GameScene extends Phaser.Scene {
       return;
     }
 
-    this.saveCodeStatusText?.setText(result.status === 'invalid-code' ? '请输入四位数字' : '未找到存档码');
+    this.saveCodeStatusText?.setText(result.status === 'invalid-json' ? 'JSON 格式错误' : '存档内容无效');
   }
 
   private hasCompletedSave(): boolean {

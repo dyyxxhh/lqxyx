@@ -7,9 +7,9 @@ import {
   clearSaveState,
   createDefaultSaveState,
   deserializeSaveState,
-  exportSaveCode,
+  exportSaveJson,
   hasValidSave,
-  importSaveCode,
+  importSaveJson,
   loadSaveState,
   saveSaveState,
   serializeSaveState,
@@ -157,77 +157,57 @@ describe('checkpoint save state manager', () => {
     expect(hasValidSave()).toBe(false);
   });
 
-  it('save-code: exports and imports a self-contained four-digit progress code after storage is cleared', () => {
+  it('save-json: exports and imports full save state plus Yang Yun replay buffer after storage is cleared', () => {
     const checkpointState = createCheckpointState();
+    const replayBuffer = [
+      { t: 0, x: 620, y: 240, floorId: '5F', roomId: 'communication-control-5f', direction: 'up' },
+      { t: 600, x: 760, y: 520, floorId: '4F', roomId: 'gt1-classroom', direction: 'down' },
+    ];
     saveSaveState(checkpointState);
+    localStorage.setItem('ying-zhong-jiu.replay-buffer.v1', JSON.stringify(replayBuffer));
 
-    const exported = exportSaveCode();
+    const exported = exportSaveJson();
 
     expect(exported.status).toBe('exported');
     if (exported.status === 'exported') {
-      expect(exported.code).toMatch(/^\d{4}$/);
-      expect(exported.code).toBe('1007');
       clearSaveState();
       localStorage.clear();
 
-      const imported = importSaveCode(exported.code);
+      const imported = importSaveJson(exported.json);
 
       expect(imported.status).toBe('imported');
-      expect(imported.status === 'imported' ? imported.state.checkpointId : null).toBe('H');
-      expect(imported.status === 'imported' ? imported.state.task : null).toBe('去班里偷同学手机报警');
-      expect(imported.status === 'imported' ? imported.state.storyFlags.communicationDisabled : null).toBe(true);
+      expect(imported.status === 'imported' ? imported.state : null).toEqual(checkpointState);
+      expect(localStorage.getItem('ying-zhong-jiu.replay-buffer.v1')).toBe(JSON.stringify(replayBuffer));
       expect(loadSaveState()).toEqual({ status: 'valid', state: imported.status === 'imported' ? imported.state : createDefaultSaveState() });
     }
   });
 
-  it('save-code: imports a known numeric progress code without any local codebook state', () => {
-    localStorage.clear();
-
-    const imported = importSaveCode('1003');
-
-    expect(imported.status).toBe('imported');
-    if (imported.status === 'imported') {
-      expect(imported.state.checkpointId).toBe('D');
-      expect(imported.state.task).toBe('去办公室');
-      expect(imported.state.floorId).toBe('4F');
-      expect(imported.state.roomId).toBe('gt2-classroom');
-      expect(loadSaveState()).toEqual({ status: 'valid', state: imported.state });
-    }
+  it('save-json: exports no-save when no valid save exists', () => {
+    expect(exportSaveJson()).toEqual({ status: 'no-save' });
   });
 
-  it('save-code: exports no-save and imports default progress code without localStorage aliases', () => {
-    expect(exportSaveCode()).toEqual({ status: 'no-save' });
-
-    const imported = importSaveCode('1000');
-
-    expect(imported).toEqual({ status: 'imported', state: createDefaultSaveState() });
-    expect(loadSaveState()).toEqual({ status: 'valid', state: createDefaultSaveState() });
-  });
-
-  it('save-code: rejects malformed and unknown codes without changing current save', () => {
+  it('save-json: rejects malformed JSON and invalid save bundles without changing current save', () => {
     const checkpointState = createCheckpointState();
     saveSaveState(checkpointState);
 
-    expect(importSaveCode('12')).toEqual({ status: 'invalid-code' });
-    expect(importSaveCode('abcd')).toEqual({ status: 'invalid-code' });
-    expect(importSaveCode('12345')).toEqual({ status: 'invalid-code' });
-    expect(importSaveCode('9999')).toEqual({ status: 'unknown-code' });
+    expect(importSaveJson('{not-json')).toEqual({ status: 'invalid-json' });
+    expect(importSaveJson(JSON.stringify({ kind: 'wrong' }))).toEqual({ status: 'invalid-save' });
     expect(loadSaveState()).toEqual({ status: 'valid', state: checkpointState });
   });
 
-  it('save-code: does not preserve arbitrary local-only fields outside the finite progress state', () => {
+  it('save-json: preserves arbitrary local fields that four-digit checkpoint codes could not represent', () => {
     const checkpointState = createCheckpointState();
     saveSaveState(checkpointState);
 
-    const exported = exportSaveCode();
+    const exported = exportSaveJson();
 
     expect(exported.status).toBe('exported');
     if (exported.status === 'exported') {
-      const imported = importSaveCode(exported.code);
+      const imported = importSaveJson(exported.json);
 
-      expect(imported.status === 'imported' ? imported.state.position : null).not.toEqual(checkpointState.position);
-      expect(imported.status === 'imported' ? imported.state.timers : null).toEqual({});
-      expect(imported.status === 'imported' ? imported.state.triggeredEvents : null).toEqual(['checkpoint:H']);
+      expect(imported.status === 'imported' ? imported.state.position : null).toEqual(checkpointState.position);
+      expect(imported.status === 'imported' ? imported.state.timers : null).toEqual(checkpointState.timers);
+      expect(imported.status === 'imported' ? imported.state.triggeredEvents : null).toEqual(checkpointState.triggeredEvents);
     }
   });
 });

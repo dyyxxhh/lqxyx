@@ -513,6 +513,40 @@ describe('First Act — Endings and Curtain', () => {
     expect(uiLog.curtains[uiLog.curtains.length - 1]).toMatchObject({ visible: false });
   });
 
+  it('ending split-in-two return clears black-screen lock before showing checkpoint G branch choice', () => {
+    const saveState: SaveState = {
+      ...createDefaultSaveState(),
+      checkpointId: 'G',
+      controllableCharacterId: 'dongJihao',
+      floorId: '4F',
+      roomId: 'office-4f',
+      position: { x: 620, y: 180, facing: 'up' },
+    };
+    const { engine, inputLog } = createEngine({ saveState });
+
+    engine.startFromCheckpoint('G');
+    engine.selectBranch('B-1');
+    engine.updateLocation('5F', null);
+    engine.updatePlayerPosition({ x: 288, y: 2012 });
+    engine.completeInteraction('F');
+    engine.update(500);
+    engine.update(500);
+    engine.update(500);
+    engine.advance();
+    engine.update(3_000);
+    engine.advance();
+    engine.update(1_000);
+    engine.update(4_200);
+    engine.update(1_000);
+
+    expect(inputLog.lockCalls[inputLog.lockCalls.length - 1]).toEqual({ reason: 'ending' });
+
+    engine.advance();
+
+    expect(engine.getCurrentState()).toBe('awaiting_branch');
+    expect(inputLog.locked).toBe(false);
+  });
+
   it('branch B-1 hides principal-office task before the black-screen curtain appears', () => {
     const { engine, uiLog } = createEngine();
 

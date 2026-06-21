@@ -744,6 +744,22 @@ describe('EventEngine — switchView location state', () => {
     expect(last).toMatchObject({ type: 'gotoCheckpoint', id: 'H' });
   });
 
+  it('B-2 wires replay-specific head pickup flags into the real story command flow', () => {
+    const branch = firstActBranches.find((b) => b.id === 'B-2')!;
+    const flagCommands = branch.commands.filter(
+      (cmd): cmd is Extract<StoryCommand, { type: 'setFlag' }> => cmd.type === 'setFlag',
+    );
+    const flagValues = flagCommands.map((cmd) => [cmd.id, cmd.value]);
+
+    expect(flagValues).toEqual(expect.arrayContaining([
+      ['yangYunReplayRestoresHeads', true],
+      ['yangYunReplayDanHeadPickedUp', false],
+      ['yangYunReplayQinHeadPickedUp', false],
+      ['yangYunReplayDanHeadPickedUp', true],
+      ['yangYunReplayQinHeadPickedUp', true],
+    ]));
+  });
+
   it('B-2 hides 董继豪 with control="hidden" before switching to 杨云 so the role prompt does NOT briefly say "你现在是董继豪"', () => {
     const branch = firstActBranches.find((b) => b.id === 'B-2')!;
     const dongJihaoHide = branch.commands.findIndex(
@@ -1458,6 +1474,11 @@ describe('EventEngine — checkpoint H communication branching', () => {
 
     expect(inputLog.interactContexts).toEqual(['F']);
     expect(engine.getCurrentState()).toBe('awaiting_interaction');
+
+    engine.updateLocation('4F', 'gt1-classroom');
+    engine.updatePlayerPosition({ x: 160, y: 260 });
+    engine.completeInteraction('F');
+    engine.advance();
 
     engine.updateLocation('5F', 'communication-control-5f');
     engine.updatePlayerPosition({ x: 620, y: 240 });

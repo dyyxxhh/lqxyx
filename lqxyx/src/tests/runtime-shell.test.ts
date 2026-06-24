@@ -207,6 +207,69 @@ describe('runtime scene shell', () => {
     expect(scene.eventEngine.triggerEndingById).toHaveBeenCalledWith('saozi');
   }, 15_000);
 
+  it('PlayScene branch panel exposes a prompt plus numbered touch-safe choices', () => {
+    const objects: RuntimeMenuObject[] = [];
+    const scene = Object.create(PlayScene.prototype) as {
+      add: RuntimeMenuAdd;
+      branchBg: RuntimeMenuObject | null;
+      branchButtons: RuntimeMenuObject[];
+      branchTexts: RuntimeMenuObject[];
+      branchIds: string[];
+      eventEngine: { selectBranch: (branchId: string) => void };
+      buildBranchChoices: (branchIds: readonly string[]) => void;
+      getBranchVisualDebugState: () => {
+        prompt?: { text: string; bounds: { visible: boolean } };
+        buttons: Array<{ bounds: { width: number; height: number } }>;
+        labels: Array<{ text: string; bounds: { y: number; height: number } }>;
+      };
+    };
+    scene.add = createRuntimeMenuAdd(objects);
+    scene.branchBg = runtimeMenuObject({ x: GAME_WIDTH / 2, y: GAME_HEIGHT / 2, width: 600, height: 200 });
+    scene.branchButtons = [];
+    scene.branchTexts = [];
+    scene.branchIds = [];
+    scene.eventEngine = { selectBranch: vi.fn() };
+
+    scene.buildBranchChoices(['A-1', 'A-2']);
+
+    const visual = scene.getBranchVisualDebugState();
+    expect(visual.prompt?.bounds.visible).toBe(true);
+    expect(visual.prompt?.text.trim().length).toBeGreaterThan(0);
+    expect(visual.labels.map((label) => label.text)).toEqual([
+      expect.stringMatching(/^1[.、]/),
+      expect.stringMatching(/^2[.、]/),
+    ]);
+    expect(visual.buttons.every((button) => button.bounds.width >= 44 && button.bounds.height >= 44)).toBe(true);
+    expect(visual.labels[0]!.bounds.y + visual.labels[0]!.bounds.height).toBeLessThanOrEqual(visual.labels[1]!.bounds.y);
+  }, 15_000);
+
+  it('PlayScene refreshes story entities after replay state advances in the same frame', () => {
+    const calls: string[] = [];
+    const scene = Object.create(PlayScene.prototype) as {
+      inputManager: { update: () => void };
+      eventEngine: { updatePlayerPosition: (position: { x: number; y: number }) => void; update: (delta: number) => void };
+      cameras: { main: { centerOn: (x: number, y: number) => void } };
+      playerPosition: { x: number; y: number };
+      endingActive: boolean;
+      blackOverlay: null;
+      updateYangYunReplay: (time: number, delta: number) => void;
+      refreshStoryEntities: () => void;
+      update: (time: number, delta: number) => void;
+    };
+    scene.inputManager = { update: vi.fn() };
+    scene.eventEngine = { updatePlayerPosition: vi.fn(), update: vi.fn() };
+    scene.cameras = { main: { centerOn: vi.fn() } };
+    scene.playerPosition = { x: 100, y: 200 };
+    scene.endingActive = true;
+    scene.blackOverlay = null;
+    scene.updateYangYunReplay = vi.fn(() => calls.push('replay'));
+    scene.refreshStoryEntities = vi.fn(() => calls.push('entities'));
+
+    scene.update(1_000, 16);
+
+    expect(calls).toEqual(['replay', 'entities']);
+  }, 15_000);
+
   it('PlayScene allows elevator transitions during the 30s survival wait', () => {
     const scene = Object.create(PlayScene.prototype) as {
       mapRenderer: { startElevatorTransition: (floorId: string, complete: () => void) => void };
@@ -225,6 +288,7 @@ describe('runtime scene shell', () => {
       playerPosition: { x: number; y: number };
       currentDirection: string;
       syncCharacterDebugState: () => void;
+      refreshStoryEntities: () => void;
       handleDoorInteraction: (door: {
         id: string;
         floorId: string;
@@ -249,6 +313,7 @@ describe('runtime scene shell', () => {
     scene.playerPosition = { x: 520, y: 920 };
     scene.currentDirection = 'down';
     scene.syncCharacterDebugState = vi.fn();
+    scene.refreshStoryEntities = vi.fn();
 
     expect(scene.handleDoorInteraction({
       id: '4f-elevator',
@@ -260,6 +325,54 @@ describe('runtime scene shell', () => {
 
     expect(scene.mapRenderer.startElevatorTransition).toHaveBeenCalledWith('5F', expect.any(Function));
     expect(scene.eventEngine.updateLocation).toHaveBeenCalledWith('5F', null);
+    expect(scene.refreshStoryEntities).toHaveBeenCalledTimes(1);
+  }, 15_000);
+
+  it('PlayScene refreshes story entities immediately after switchView changes rooms', () => {
+    const calls: string[] = [];
+    const scene = Object.create(PlayScene.prototype) as {
+      mapRenderer: { renderRoom: (roomId: string) => void; renderCorridor: (floorId: string) => void };
+      currentFloor: string;
+      currentRoom: string | null;
+      inRoom: boolean;
+      eventEngine: { updateLocation: (floorId: string, roomId: string | null) => void; updatePlayerPosition: (position: { x: number; y: number }) => void };
+      playerPosition: { x: number; y: number };
+      playerSprite: { setPosition: (x: number, y: number) => void; setTexture: (key: string) => void };
+      currentDirection: string;
+      currentCharacter: 'yangYunRed';
+      textures: { exists: (key: string) => boolean };
+      activeTextureKey: string | null;
+      syncCharacterDebugState: () => void;
+      refreshStoryEntities: () => void;
+      handleSwitchView: (floorId: '4F', roomId: 'gt2-classroom', position?: { x: number; y: number }, facing?: 'left') => void;
+    };
+    scene.mapRenderer = {
+      renderRoom: vi.fn((roomId: string) => calls.push(`render:${roomId}`)),
+      renderCorridor: vi.fn((floorId: string) => calls.push(`render:${floorId}`)),
+    };
+    scene.currentFloor = '4F';
+    scene.currentRoom = 'gt1-classroom';
+    scene.inRoom = true;
+    scene.eventEngine = {
+      updateLocation: vi.fn((floorId: string, roomId: string | null) => calls.push(`location:${floorId}:${roomId ?? 'corridor'}`)),
+      updatePlayerPosition: vi.fn(),
+    };
+    scene.playerPosition = { x: 760, y: 520 };
+    scene.playerSprite = { setPosition: vi.fn(), setTexture: vi.fn() };
+    scene.currentDirection = 'down';
+    scene.currentCharacter = 'yangYunRed';
+    scene.textures = { exists: vi.fn(() => true) };
+    scene.activeTextureKey = null;
+    scene.syncCharacterDebugState = vi.fn();
+    scene.refreshStoryEntities = vi.fn(() => calls.push(`entities:${scene.currentRoom ?? 'corridor'}`));
+
+    scene.handleSwitchView('4F', 'gt2-classroom', { x: 772, y: 144 }, 'left');
+
+    expect(calls).toEqual([
+      'render:gt2-classroom',
+      'location:4F:gt2-classroom',
+      'entities:gt2-classroom',
+    ]);
   }, 15_000);
 
   it('GameScene settings can export and import full JSON save files from the menu', () => {
@@ -315,6 +428,109 @@ describe('runtime scene shell', () => {
     expect(imported.status === 'valid' ? imported.state.task : null).toBe('自定义完整存档');
     expect(imported.status === 'valid' ? imported.state.timers['survival-route-countdown']?.remainingMs : null).toBe(72_000);
     expect(imported.status === 'valid' ? imported.state.triggeredEvents : null).toContain('yang-yun-replay-started');
+    window.prompt = savedPrompt;
+  }, 15_000);
+
+  it('GameScene completed save import replaces the existing enabled continue affordance', () => {
+    resetSceneDebugState();
+    localStorage.clear();
+    const objects: RuntimeMenuObject[] = [];
+    const scene = Object.create(GameScene.prototype) as {
+      add: RuntimeMenuAdd;
+      saveCodeStatusText: { setText: (text: string) => void } | null;
+      continueButton: unknown | null;
+      continueAvailable: boolean;
+      createContinueButton: () => void;
+      showImportSaveCode: () => void;
+    };
+    scene.add = createRuntimeMenuAdd(objects);
+    const statusText = { setText: vi.fn() };
+    scene.saveCodeStatusText = statusText;
+    scene.continueButton = null;
+    scene.continueAvailable = false;
+    const savedPrompt = window.prompt;
+    const completedJson = exportJsonForState({
+      ...createDefaultSaveState(),
+      checkpointId: 'I',
+      triggeredEvents: ['ending-survival-false-report'],
+    });
+    window.prompt = vi.fn(() => completedJson);
+
+    scene.createContinueButton();
+    scene.continueAvailable = true;
+    scene.showImportSaveCode();
+
+    expect(liveCompletedAffordanceTexts(objects)).toEqual(['第一幕已完成', '敬请期待']);
+    expect(liveContinueAffordanceTexts(objects)).toEqual(['敬请期待']);
+    expect(liveContinueAffordanceRectangles(objects)).toHaveLength(1);
+    expect(liveContinueAffordanceRectangles(objects).some((object) => object.interactive)).toBe(false);
+    expect(scene.continueAvailable).toBe(false);
+    expect(statusText.setText).toHaveBeenLastCalledWith('导入成功');
+    window.prompt = savedPrompt;
+  }, 15_000);
+
+  it('GameScene non-completed save import leaves one enabled continue affordance', () => {
+    resetSceneDebugState();
+    localStorage.clear();
+    const objects: RuntimeMenuObject[] = [];
+    const scene = Object.create(GameScene.prototype) as {
+      add: RuntimeMenuAdd;
+      saveCodeStatusText: { setText: (text: string) => void } | null;
+      continueButton: unknown | null;
+      continueAvailable: boolean;
+      showImportSaveCode: () => void;
+    };
+    scene.add = createRuntimeMenuAdd(objects);
+    const statusText = { setText: vi.fn() };
+    scene.saveCodeStatusText = statusText;
+    scene.continueButton = null;
+    scene.continueAvailable = false;
+    const savedPrompt = window.prompt;
+    const normalJson = exportJsonForState({
+      ...createDefaultSaveState(),
+      checkpointId: 'H',
+      task: '继续调查',
+      triggeredEvents: ['checkpoint-H'],
+    });
+    window.prompt = vi.fn(() => normalJson);
+
+    scene.showImportSaveCode();
+
+    expect(liveContinueAffordanceTexts(objects)).toEqual(['继续游戏']);
+    expect(liveContinueAffordanceRectangles(objects)).toHaveLength(1);
+    expect(liveContinueAffordanceRectangles(objects).filter((object) => object.interactive)).toHaveLength(1);
+    expect(scene.continueAvailable).toBe(true);
+    expect(statusText.setText).toHaveBeenLastCalledWith('导入成功');
+    window.prompt = savedPrompt;
+  }, 15_000);
+
+  it('GameScene invalid save import keeps the existing continue affordance without duplication', () => {
+    resetSceneDebugState();
+    localStorage.clear();
+    const objects: RuntimeMenuObject[] = [];
+    const scene = Object.create(GameScene.prototype) as {
+      add: RuntimeMenuAdd;
+      saveCodeStatusText: { setText: (text: string) => void } | null;
+      continueButton: unknown | null;
+      continueAvailable: boolean;
+      createContinueButton: () => void;
+      showImportSaveCode: () => void;
+    };
+    scene.add = createRuntimeMenuAdd(objects);
+    const statusText = { setText: vi.fn() };
+    scene.saveCodeStatusText = statusText;
+    scene.continueButton = null;
+    scene.continueAvailable = true;
+    const savedPrompt = window.prompt;
+    window.prompt = vi.fn(() => '{not-json');
+
+    scene.createContinueButton();
+    scene.showImportSaveCode();
+
+    expect(liveContinueAffordanceTexts(objects)).toEqual(['继续游戏']);
+    expect(liveContinueAffordanceRectangles(objects)).toHaveLength(1);
+    expect(liveContinueAffordanceRectangles(objects).filter((object) => object.interactive)).toHaveLength(1);
+    expect(statusText.setText).toHaveBeenLastCalledWith('JSON 格式错误');
     window.prompt = savedPrompt;
   }, 15_000);
 
@@ -410,9 +626,51 @@ describe('runtime scene shell', () => {
 
     scene.create();
 
+    expect(labels).toContain('第一幕已完成');
     expect(labels).toContain('敬请期待');
     expect(labels).not.toContain('继续游戏');
     expect(startCalls).not.toHaveBeenCalledWith('PlayScene');
+  }, 15_000);
+
+  it('GameScene minor ending save still shows an enabled continue action', () => {
+    stubCanvasContext();
+    resetSceneDebugState();
+    localStorage.clear();
+    saveSaveState({
+      ...createDefaultSaveState(),
+      checkpointId: 'H',
+      task: '去班里偷同学手机报警',
+      triggeredEvents: ['checkpoint-H', 'ending-saozi'],
+    });
+    const labels: string[] = [];
+    const scene = new GameScene() as unknown as GameScene & {
+      add: { rectangle: (...args: unknown[]) => Record<string, unknown>; text: (_x: number, _y: number, text: string) => Record<string, unknown>; image: (...args: unknown[]) => Record<string, unknown>; graphics: () => Record<string, unknown> };
+      cameras: { main: { setBounds: () => void } };
+      events: { off: () => void; once: () => void };
+      input: { keyboard: null; on: () => void };
+      scene: { start: () => void; isActive: () => boolean };
+      sys: { game: { device: { input: { touch: boolean } } }; scale: { gameSize: { width: number; height: number } } };
+      textures: { exists: () => boolean };
+      continueAvailable: boolean;
+    };
+    scene.add = {
+      rectangle: () => chainable(),
+      text: (_x: number, _y: number, text: string) => { labels.push(text); return chainable(); },
+      image: () => chainable(),
+      graphics: () => chainable(),
+    };
+    scene.cameras = { main: { setBounds: vi.fn() } };
+    scene.events = { off: vi.fn(), once: vi.fn() };
+    scene.input = { keyboard: null, on: vi.fn() };
+    scene.scene = { start: vi.fn(), isActive: vi.fn(() => true) };
+    scene.sys = { game: { device: { input: { touch: false } } }, scale: { gameSize: { width: GAME_WIDTH, height: GAME_HEIGHT } } };
+    scene.textures = { exists: vi.fn(() => false) };
+
+    scene.create();
+
+    expect(labels).toContain('继续游戏');
+    expect(labels).not.toContain('第一幕已完成');
+    expect(scene.continueAvailable).toBe(true);
   }, 15_000);
 });
 
@@ -439,6 +697,86 @@ function chainable(extra: Record<string, unknown> = {}): Record<string, unknown>
   object.destroy = () => object;
   object.on ??= () => object;
   return object;
+}
+
+type RuntimeMenuObject = Record<string, unknown> & {
+  destroyed: boolean;
+  interactive: boolean;
+  text?: string;
+  x?: number;
+  y?: number;
+  width?: number;
+  height?: number;
+};
+
+interface RuntimeMenuAdd {
+  rectangle: (x: number, y: number, width: number, height: number) => RuntimeMenuObject;
+  text: (x: number, y: number, text: string) => RuntimeMenuObject;
+}
+
+function createRuntimeMenuAdd(objects: RuntimeMenuObject[]): RuntimeMenuAdd {
+  return {
+    rectangle: (x: number, y: number, width: number, height: number) => {
+      const object = runtimeMenuObject({ x, y, width, height });
+      objects.push(object);
+      return object;
+    },
+    text: (x: number, y: number, text: string) => {
+      const object = runtimeMenuObject({ x, y, text });
+      objects.push(object);
+      return object;
+    },
+  };
+}
+
+function runtimeMenuObject(extra: Partial<RuntimeMenuObject>): RuntimeMenuObject {
+  const object: RuntimeMenuObject = { ...extra, destroyed: false, interactive: false, visible: true };
+  object.setOrigin = () => object;
+  object.setDepth = () => object;
+  object.setVisible = (visible: boolean) => { object.visible = visible; return object; };
+  object.setInteractive = () => { object.interactive = true; return object; };
+  object.setStrokeStyle = () => object;
+  object.setShadow = () => object;
+  object.setFillStyle = () => object;
+  object.setScrollFactor = () => object;
+  object.setSize = (width: number, height: number) => { object.width = width; object.height = height; return object; };
+  object.setPosition = (x: number, y: number) => { object.x = x; object.y = y; return object; };
+  object.on = () => object;
+  object.destroy = () => { object.destroyed = true; return object; };
+  object.getBounds = () => {
+    const width = typeof object.width === 'number' ? object.width : typeof object.text === 'string' ? object.text.length * 20 : 0;
+    const height = typeof object.height === 'number' ? object.height : typeof object.text === 'string' ? 28 : 0;
+    const x = typeof object.x === 'number' ? object.x : 0;
+    const y = typeof object.y === 'number' ? object.y : 0;
+    return { x: x - width / 2, y: y - height / 2, width, height };
+  };
+  return object;
+}
+
+function liveContinueAffordanceTexts(objects: readonly RuntimeMenuObject[]): string[] {
+  return objects
+    .filter((object) => !object.destroyed && (object.text === '继续游戏' || object.text === '敬请期待'))
+    .map((object) => object.text ?? '');
+}
+
+function liveCompletedAffordanceTexts(objects: readonly RuntimeMenuObject[]): string[] {
+  return objects
+    .filter((object) => !object.destroyed && (object.text === '第一幕已完成' || object.text === '敬请期待'))
+    .map((object) => object.text ?? '');
+}
+
+function liveContinueAffordanceRectangles(objects: readonly RuntimeMenuObject[]): RuntimeMenuObject[] {
+  return objects.filter((object) => !object.destroyed && object.width === 360 && object.height === 72);
+}
+
+function exportJsonForState(state: ReturnType<typeof createDefaultSaveState>): string {
+  saveSaveState(state);
+  const exported = exportSaveJson();
+  if (exported.status !== 'exported') {
+    throw new Error('Expected exportable save state');
+  }
+  clearSaveState();
+  return exported.json;
 }
 
 function stubCanvasContext(): void {

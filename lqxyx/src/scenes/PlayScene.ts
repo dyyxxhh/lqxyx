@@ -32,7 +32,7 @@ import { YangYunReplayManager } from './YangYunReplayManager';
 
 const PLAYER_SPEED = 200; // px/s
 const MAX_MOVEMENT_DELTA_MS = 50;
-const PLAYER_SPAWN_X = 560;
+const PLAYER_SPAWN_X = 640;
 const PLAYER_SPAWN_Y = 920;
 const DOOR_PROXIMITY = 80;
 
@@ -64,6 +64,7 @@ export class PlayScene extends Phaser.Scene {
 
   // Branch choice UI
   private branchBg: Phaser.GameObjects.Rectangle | null = null;
+  private branchPromptText: Phaser.GameObjects.Text | null = null;
   private branchButtons: Phaser.GameObjects.Rectangle[] = [];
   private branchTexts: Phaser.GameObjects.Text[] = [];
   private branchIds: BranchId[] = [];
@@ -226,8 +227,8 @@ export class PlayScene extends Phaser.Scene {
     this.cameras.main.centerOn(this.playerPosition.x, this.playerPosition.y);
     // Update event engine (drives timers, waits, state transitions)
     this.eventEngine.update(delta);
-    this.refreshStoryEntities();
     this.updateYangYunReplay(_time, delta);
+    this.refreshStoryEntities();
 
     // Handle black screen overlay visibility based on lock reason
     this.updateBlackOverlay();
@@ -418,6 +419,7 @@ export class PlayScene extends Phaser.Scene {
         this.inRoom = false;
         this.currentRoom = null;
         this.eventEngine.updateLocation(this.currentFloor, this.currentRoom);
+        this.refreshStoryEntities();
         this.movePlayerToElevatorArrival(targetFloor);
       });
       return true;
@@ -429,6 +431,7 @@ export class PlayScene extends Phaser.Scene {
       this.inRoom = true;
       this.currentRoom = interaction.targetRoomId;
       this.eventEngine.updateLocation(this.currentFloor, this.currentRoom);
+      this.refreshStoryEntities();
       const spawnPoint = this.getRoomSpawnPoint(interaction.targetRoomId, interaction.spawnPointId);
       this.currentDirection = spawnPoint.facing;
       this.playerPosition = { x: spawnPoint.x, y: spawnPoint.y };
@@ -462,6 +465,7 @@ export class PlayScene extends Phaser.Scene {
     this.inRoom = false;
     this.currentRoom = null;
     this.eventEngine.updateLocation(this.currentFloor, this.currentRoom);
+    this.refreshStoryEntities();
     this.currentDirection = returnPosition.facing;
     this.playerPosition = { x: returnPosition.x, y: returnPosition.y };
     this.playerSprite.setPosition(this.playerPosition.x, this.playerPosition.y);
@@ -597,10 +601,23 @@ export class PlayScene extends Phaser.Scene {
 
     if (this.branchBg) {
       this.branchBg.setVisible(true);
-      const height = 88 + branchIds.length * 62;
-      this.branchBg.setSize(540, height);
-      this.branchBg.setPosition(GAME_WIDTH / 2, GAME_HEIGHT / 2 + 76);
+      const height = 116 + branchIds.length * 64;
+      this.branchBg.setSize(560, height);
+      this.branchBg.setPosition(GAME_WIDTH / 2, GAME_HEIGHT / 2 + 70);
     }
+
+    this.branchPromptText = applyPixelTextStyle(this.add
+      .text(GAME_WIDTH / 2, GAME_HEIGHT / 2 - 16, '做出选择', {
+        align: 'center',
+        color: UI_THEME.colors.textGold,
+        fontFamily: UI_THEME.font.ui,
+        fontSize: '24px',
+        fontStyle: 'bold',
+      })
+    )
+      .setOrigin(0.5)
+      .setDepth(1502)
+      .setScrollFactor(0);
 
     const branchLabels: Record<string, string> = {
       'A-1': '让我去看看芹菜怎么样了',
@@ -610,16 +627,16 @@ export class PlayScene extends Phaser.Scene {
     };
 
     branchIds.forEach((branchId, index) => {
-      const yPos = GAME_HEIGHT / 2 + 40 + index * 60;
+      const yPos = GAME_HEIGHT / 2 + 38 + index * 64;
 
       const btn = this.add
-        .rectangle(GAME_WIDTH / 2, yPos, 460, 46, UI_THEME.colors.surfaceMuted, UI_THEME.alpha.panel)
+        .rectangle(GAME_WIDTH / 2, yPos, 480, 52, UI_THEME.colors.surfaceMuted, UI_THEME.alpha.panel)
         .setDepth(1501)
         .setScrollFactor(0)
         .setInteractive({ useHandCursor: true });
       applyPixelStrokeStyle(btn, UI_THEME.stroke.thin, UI_THEME.colors.borderMuted, 1);
 
-      const label = branchLabels[branchId] ?? branchId;
+      const label = `${index + 1}. ${branchLabels[branchId] ?? branchId}`;
       const txt = applyPixelTextStyle(this.add
         .text(GAME_WIDTH / 2, yPos, label, {
           align: 'center',
@@ -648,6 +665,10 @@ export class PlayScene extends Phaser.Scene {
 
   private hideBranchChoices(): void {
     if (this.branchBg) this.branchBg.setVisible(false);
+    if (this.branchPromptText) {
+      this.branchPromptText.destroy();
+      this.branchPromptText = null;
+    }
     for (const btn of this.branchButtons) {
       btn.destroy();
     }
@@ -664,6 +685,7 @@ export class PlayScene extends Phaser.Scene {
       theme: 'dark-pixel-horror',
       visible: this.branchIds.length > 0,
       background: this.branchBg ? this.boundsOf(this.branchBg) : null,
+      prompt: this.branchPromptText ? { text: this.branchPromptText.text, bounds: this.boundsOf(this.branchPromptText) } : null,
       buttons: this.branchButtons.map((button) => ({ fillColor: button.fillColor, bounds: this.boundsOf(button) })),
       labels: this.branchTexts.map((text) => ({ text: text.text, bounds: this.boundsOf(text) })),
     };
@@ -809,6 +831,7 @@ export class PlayScene extends Phaser.Scene {
       }
       this.currentFloor = floorId;
       this.eventEngine.updateLocation(this.currentFloor, this.currentRoom);
+      this.refreshStoryEntities();
     }
 
     if (position) {
@@ -964,7 +987,10 @@ export class PlayScene extends Phaser.Scene {
       this.replayManager.stopRecording();
     }
     if (recording && this.currentCharacter === 'yangYunRed') {
-      this.replayManager.recordFrame(time, this.playerPosition.x, this.playerPosition.y, this.currentFloor, this.currentRoom, this.currentDirection);
+      this.replayManager.recordFrame(time, this.playerPosition.x, this.playerPosition.y, this.currentFloor, this.currentRoom, this.currentDirection, {
+        danYuxuan: flags.danYuxuanHeadPickedUp === true,
+        qinHaorui: flags.qinHaoruiHeadPickedUp === true,
+      });
     }
 
     const dongSnapshot = {
@@ -993,7 +1019,7 @@ export class PlayScene extends Phaser.Scene {
     const entries = buildStoryEntityDebugEntries(this.eventEngine.getStoryFlags(), {
       floorId: this.currentFloor,
       roomId: this.currentRoom,
-    });
+    }, this.replayManager.getReplayHeadPickups());
     const signature = entries.map((entry) => `${entry.id}:${entry.textureKey}:${entry.floorId}:${entry.roomId}:${entry.x}:${entry.y}`).join('|');
     if (signature === this.storyEntitySignature) return;
 

@@ -100,7 +100,7 @@ export function createDefaultSaveState(): SaveState {
     actId: 'act-1',
     floorId: '4F',
     roomId: null,
-    position: { x: 560, y: 920, facing: 'down' },
+    position: { x: 640, y: 920, facing: 'down' },
     controllableCharacterId: 'yangYunBlue',
     task: '无',
     storyFlags: { ...DEFAULT_STORY_FLAGS },

@@ -3,6 +3,15 @@ import { expect, test } from '@playwright/test';
 import type { SceneDebugState } from '../../src/game/scaffoldState';
 
 const evidenceDir = '.omo/evidence';
+const auditEvidenceDir = '.omo/evidence/gameplay-polish-script-audit';
+
+type VisualBox = {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  visible: boolean;
+};
 
 type SceneWindow = Window &
   typeof globalThis & {
@@ -13,15 +22,47 @@ type SceneWindow = Window &
       setRolePrompt(characterId: string, displayName?: string): void;
       setTimer(remainingMs: number, visible?: boolean): void;
       setCurtain(visible: boolean, title?: string, subtitle?: string): void;
+      setMinorEnding(visible: boolean, body?: string): void;
       setVisible(element: string, visible: boolean): void;
       getDisplayName(characterId: string): string;
       getPortraitKey(characterId: string): string | undefined;
-      getVisualDebugState(): { colors?: { rolePromptBorder?: number; rolePromptBorderBlue?: number; border?: number } };
+      getVisualDebugState(): {
+        task?: VisualBox;
+        timer?: VisualBox;
+        rolePromptCard?: VisualBox;
+        rolePromptTitle?: VisualBox;
+        rolePromptPortrait?: VisualBox | null;
+        rolePromptName?: VisualBox;
+        curtainTitle?: VisualBox;
+        curtainSubtitleCapsule?: VisualBox;
+        curtainSubtitle?: VisualBox;
+        minorEndingTitle?: VisualBox;
+        minorEndingBody?: VisualBox;
+        minorEndingButton?: VisualBox;
+        minorEndingButtonText?: VisualBox;
+        colors?: { rolePromptBorder?: number; rolePromptBorderBlue?: number; border?: number; timer?: string; timerBackground?: string | number };
+      };
     };
   };
 
 async function readSceneState(page: import('@playwright/test').Page): Promise<SceneDebugState | undefined> {
   return page.evaluate(() => (window as SceneWindow).__YING_ZHONG_JIU_SCENE_STATE__);
+}
+
+function expectInsideDesignViewport(box: VisualBox): void {
+  expect(box.visible).toBe(true);
+  expect(box.x).toBeGreaterThanOrEqual(0);
+  expect(box.y).toBeGreaterThanOrEqual(0);
+  expect(box.x + box.width).toBeLessThanOrEqual(1280);
+  expect(box.y + box.height).toBeLessThanOrEqual(720);
+}
+
+function expectBoxesSeparated(first: VisualBox, second: VisualBox): void {
+  const overlaps = first.x < second.x + second.width
+    && first.x + first.width > second.x
+    && first.y < second.y + second.height
+    && first.y + first.height > second.y;
+  expect(overlaps).toBe(false);
 }
 
 test.describe('narrative UI - task overlay', () => {
@@ -177,6 +218,70 @@ test.describe('narrative UI - curtain', () => {
           curtainSubtitle: '敬请期待',
         },
       });
+  });
+
+  test('final curtain layout keeps title, subtitle, and capsule inside the design viewport', async ({ page }) => {
+    await page.goto('/');
+    await expect.poll(() => readSceneState(page), { timeout: 30_000 }).toMatchObject({
+      currentScene: 'GameScene',
+      ready: true,
+    });
+
+    await page.evaluate(() => {
+      (window as SceneWindow).__YING_ZHONG_JIU_NARRATIVE_UI__?.setCurtain(true, '"报假警"', '敬请期待');
+    });
+
+    const visualState = await page.evaluate(() => {
+      return (window as SceneWindow).__YING_ZHONG_JIU_NARRATIVE_UI__?.getVisualDebugState();
+    });
+    const curtainTitle = visualState?.curtainTitle;
+    const curtainSubtitleCapsule = visualState?.curtainSubtitleCapsule;
+    const curtainSubtitle = visualState?.curtainSubtitle;
+    if (!curtainTitle || !curtainSubtitleCapsule || !curtainSubtitle) throw new Error('Missing curtain visual bounds');
+
+    expectInsideDesignViewport(curtainTitle);
+    expectInsideDesignViewport(curtainSubtitleCapsule);
+    expectInsideDesignViewport(curtainSubtitle);
+    expectBoxesSeparated(curtainTitle, curtainSubtitleCapsule);
+    await page.screenshot({ path: `${auditEvidenceDir}/t8b-final-curtain-layout.png` });
+  });
+});
+
+test.describe('narrative UI - minor ending', () => {
+  test('minor ending hides stale dialogue and timer and keeps overlay content inside the design viewport', async ({ page }) => {
+    await page.goto('/');
+    await expect.poll(() => readSceneState(page), { timeout: 30_000 }).toMatchObject({
+      currentScene: 'GameScene',
+      ready: true,
+    });
+
+    await page.evaluate(() => {
+      const ui = (window as SceneWindow).__YING_ZHONG_JIU_NARRATIVE_UI__;
+      ui?.setDialogue('杨云', '这里不该继续显示。', 'portrait.yangYunBlue', true);
+      ui?.setTimer(30_000, true);
+      ui?.setMinorEnding(true, '你触发了错误的选择。');
+    });
+
+    await expect
+      .poll(() => readSceneState(page), { timeout: 5_000 })
+      .toMatchObject({ ui: { minorEndingVisible: true, dialogueVisible: false, timerVisible: false } });
+
+    const visualState = await page.evaluate(() => {
+      return (window as SceneWindow).__YING_ZHONG_JIU_NARRATIVE_UI__?.getVisualDebugState();
+    });
+    const minorEndingTitle = visualState?.minorEndingTitle;
+    const minorEndingBody = visualState?.minorEndingBody;
+    const minorEndingButton = visualState?.minorEndingButton;
+    const minorEndingButtonText = visualState?.minorEndingButtonText;
+    if (!minorEndingTitle || !minorEndingBody || !minorEndingButton || !minorEndingButtonText) throw new Error('Missing minor ending visual bounds');
+
+    expectInsideDesignViewport(minorEndingTitle);
+    expectInsideDesignViewport(minorEndingBody);
+    expectInsideDesignViewport(minorEndingButton);
+    expectInsideDesignViewport(minorEndingButtonText);
+    expectBoxesSeparated(minorEndingTitle, minorEndingBody);
+    expectBoxesSeparated(minorEndingBody, minorEndingButton);
+    await page.screenshot({ path: `${auditEvidenceDir}/t8b-minor-ending-layout.png` });
   });
 });
 
@@ -399,6 +504,57 @@ test.describe('narrative UI - role prompt', () => {
     })).toBe(0x6b1f2c);
     await page.screenshot({ path: `${evidenceDir}/role-prompt-yang-red-border.png` });
   });
+
+  test('role prompt renders the D10 portrait composition in the real canvas UI', async ({ page }) => {
+    await page.goto('/');
+    await expect.poll(() => readSceneState(page), { timeout: 30_000 }).toMatchObject({
+      currentScene: 'GameScene',
+      ready: true,
+    });
+
+    await page.evaluate(() => {
+      (window as SceneWindow).__YING_ZHONG_JIU_NARRATIVE_UI__?.setRolePrompt('yangYunBlue', '杨云');
+    });
+
+    await expect
+      .poll(() => page.evaluate(() => {
+        const visualState = (window as SceneWindow).__YING_ZHONG_JIU_NARRATIVE_UI__?.getVisualDebugState();
+        return {
+          debug: (window as SceneWindow).__YING_ZHONG_JIU_SCENE_STATE__?.ui,
+          visual: visualState,
+        };
+      }), { timeout: 5_000 })
+      .toMatchObject({
+        debug: {
+          rolePromptVisible: true,
+          roleCharacterId: 'yangYunBlue',
+          roleDisplayName: '杨云',
+        },
+        visual: {
+          rolePromptPortrait: { visible: true },
+          colors: { rolePromptBorder: 0x1f3f6b },
+        },
+      });
+
+    const rolePromptState = await page.evaluate(() => {
+      return (window as SceneWindow).__YING_ZHONG_JIU_NARRATIVE_UI__?.getVisualDebugState();
+    });
+
+    expect(rolePromptState?.rolePromptTitle?.visible).toBe(true);
+    expect(Math.abs((rolePromptState?.rolePromptTitle?.x ?? 0) + (rolePromptState?.rolePromptTitle?.width ?? 0) / 2 - 640)).toBeLessThanOrEqual(2);
+    expect(rolePromptState?.rolePromptPortrait?.visible).toBe(true);
+    expect(rolePromptState?.rolePromptName?.visible).toBe(true);
+    expect(rolePromptState?.rolePromptPortrait?.x).toBeLessThan(rolePromptState?.rolePromptName?.x ?? 0);
+    expect(rolePromptState?.rolePromptName?.y).toBeGreaterThan(rolePromptState?.rolePromptPortrait?.y ?? 0);
+    if (rolePromptState?.rolePromptPortrait && rolePromptState.rolePromptName) {
+      expectBoxesSeparated(rolePromptState.rolePromptPortrait, rolePromptState.rolePromptName);
+    }
+    expect(rolePromptState?.rolePromptCard?.x).toBeGreaterThanOrEqual(0);
+    expect((rolePromptState?.rolePromptCard?.x ?? 0) + (rolePromptState?.rolePromptCard?.width ?? 0)).toBeLessThanOrEqual(1280);
+    expect(rolePromptState?.rolePromptCard?.y).toBeGreaterThanOrEqual(0);
+    expect((rolePromptState?.rolePromptCard?.y ?? 0) + (rolePromptState?.rolePromptCard?.height ?? 0)).toBeLessThanOrEqual(720);
+    await page.screenshot({ path: `${auditEvidenceDir}/t8a-role-prompt-d10-yang-blue.png` });
+  });
 });
 
 test.describe('narrative UI - timer', () => {
@@ -433,6 +589,33 @@ test.describe('narrative UI - timer', () => {
           timerRemainingMs: 120_000,
         },
       });
+  });
+
+  test('task and timer HUD remain inside the viewport with danger timer styling', async ({ page }) => {
+    await page.goto('/');
+    await expect.poll(() => readSceneState(page), { timeout: 30_000 }).toMatchObject({
+      currentScene: 'GameScene',
+      ready: true,
+    });
+
+    await page.evaluate(() => {
+      const ui = (window as SceneWindow).__YING_ZHONG_JIU_NARRATIVE_UI__;
+      ui?.setTask('当前任务：调查教学楼');
+      ui?.setTimer(30_000, true);
+    });
+
+    const visualState = await page.evaluate(() => {
+      return (window as SceneWindow).__YING_ZHONG_JIU_NARRATIVE_UI__?.getVisualDebugState();
+    });
+    const task = visualState?.task;
+    const timer = visualState?.timer;
+    if (!task || !timer) throw new Error('Missing HUD visual bounds');
+
+    expectInsideDesignViewport(task);
+    expectInsideDesignViewport(timer);
+    expect(visualState?.colors?.timer).toBe('#ff7a72');
+    expect(visualState?.colors?.timerBackground).toBe(0x141018);
+    await page.screenshot({ path: `${auditEvidenceDir}/t8c-task-timer-hud.png` });
   });
 });
 

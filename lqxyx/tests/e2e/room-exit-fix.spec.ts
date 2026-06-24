@@ -47,6 +47,13 @@ async function startGame(page: import('@playwright/test').Page): Promise<void> {
   });
 }
 
+async function pressFAcrossFrames(page: import('@playwright/test').Page): Promise<void> {
+  await page.keyboard.down('KeyF');
+  await page.waitForTimeout(120);
+  await page.keyboard.up('KeyF');
+  await page.waitForTimeout(120);
+}
+
 test.describe('Room exit fix — exit room after entering', () => {
   test('player can exit room via F key after entering', async ({ page }, testInfo) => {
     test.skip(testInfo.project.name !== 'desktop-chromium', 'desktop project only');
@@ -71,7 +78,7 @@ test.describe('Room exit fix — exit room after entering', () => {
     await page.evaluate(() => {
       (window as SceneWindow).__YING_ZHONG_JIU_PLAY_SCENE_DEBUG__?.setPlayerPosition({ x: 320, y: 580 });
     });
-    await page.keyboard.press('KeyF');
+    await pressFAcrossFrames(page);
     await page.waitForTimeout(500);
 
     // Verify we're in the room
@@ -91,7 +98,7 @@ test.describe('Room exit fix — exit room after entering', () => {
     });
     await page.waitForTimeout(100);
 
-    await page.keyboard.press('KeyF');
+    await pressFAcrossFrames(page);
     await page.waitForTimeout(500);
 
     const stateAfterExit = await readState(page);
@@ -128,7 +135,7 @@ test.describe('Room exit fix — exit room after entering', () => {
     console.log('playerPos:', await page.evaluate(() => (window as SceneWindow).__YING_ZHONG_JIU_PLAY_SCENE_DEBUG__?.getPlayerPosition()));
 
     // Try pressing F
-    await page.keyboard.press('KeyF');
+    await pressFAcrossFrames(page);
     await page.waitForTimeout(300);
     console.log('=== After F press ===');
     console.log('roomId:', (await readState(page))?.map.currentRoomId);
@@ -140,14 +147,14 @@ test.describe('Room exit fix — exit room after entering', () => {
     });
     await page.waitForTimeout(100);
     console.log('playerPos at door:', await page.evaluate(() => (window as SceneWindow).__YING_ZHONG_JIU_PLAY_SCENE_DEBUG__?.getPlayerPosition()));
-    await page.keyboard.press('KeyF');
+    await pressFAcrossFrames(page);
     await page.waitForTimeout(300);
     console.log('=== After F at door ===');
     console.log('roomId:', (await readState(page))?.map.currentRoomId);
     console.log('floorId:', (await readState(page))?.map.currentFloorId);
   });
 
-  test('player can exit room via clicking the in-room door (mobile-style click)', async ({ page }, testInfo) => {
+  test('in-room door has no click hit area; exit remains F-key only', async ({ page }, testInfo) => {
     test.skip(testInfo.project.name !== 'desktop-chromium', 'desktop project only');
 
     await page.goto('/');
@@ -168,15 +175,12 @@ test.describe('Room exit fix — exit room after entering', () => {
     await page.evaluate(() => {
       (window as SceneWindow).__YING_ZHONG_JIU_PLAY_SCENE_DEBUG__?.setPlayerPosition({ x: 320, y: 580 });
     });
-    await page.keyboard.press('KeyF');
+    await pressFAcrossFrames(page);
     await page.waitForTimeout(500);
 
     const stateInRoom = await readState(page);
     expect(stateInRoom?.map.currentRoomId).toBe('gt1-classroom');
 
-    // Trigger pointerdown on the in-room door's hitArea by emitting via Phaser scene
-    // The hitArea was added at world position (852, 144) for the front in-room door of GT1.
-    // We invoke the Phaser scene input emit('pointerdown') on the hitArea directly.
     const exitTriggered = await page.evaluate(() => {
       const game = (window as unknown as { __YING_ZHONG_JIU_GAME__?: { startPlayScene: () => void } }).__YING_ZHONG_JIU_GAME__;
       if (!game) return 'no-game';
@@ -197,9 +201,10 @@ test.describe('Room exit fix — exit room after entering', () => {
     await page.waitForTimeout(500);
 
     const stateAfterClick = await readState(page);
-    expect(stateAfterClick?.map.currentRoomId).toBeNull();
+    expect(exitTriggered).toMatch(/^no-hitArea-found-of-\d+-objs$/);
+    expect(stateAfterClick?.map.currentRoomId).toBe('gt1-classroom');
     expect(stateAfterClick?.map.currentFloorId).toBe('4F');
 
-    await page.screenshot({ path: `${evidenceDir}/room-exit-fix-via-click.png` });
+    await page.screenshot({ path: `${evidenceDir}/room-exit-fix-no-click-hit-area.png` });
   });
 });

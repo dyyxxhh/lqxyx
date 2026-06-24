@@ -297,45 +297,8 @@ describe('EventEngine — black screen and blackScreenDialogueWait timing', () =
   it('processes blackScreen command and waits for duration', () => {
     const { engine, inputLog } = createEngine();
 
-    // Checkpoint B has blackScreen(1000ms) + blackScreenDialogueWait(500ms)
     engine.startFromCheckpoint('B');
-
-    // Skip past checkpoint B command + 3 dialogue commands
     advanceTimes(engine, 4);
-
-    // Next should be blackScreen(1000ms) — engine enters waiting state
-    // But first, let's get through the dialogues...
-    // Actually, checkpoint B commands are:
-    // 0: checkpoint B (non-blocking)
-    // 1: dialogue "运"
-    // 2: dialogue "运"
-    // 3: dialogue "运"
-    // 4: dialogue "气波"
-    // 5: dialogue "你废……"
-    // 6: dialogue "我可不是什么君子。"
-    // 7: dialogue "……物吧"
-    // 8: blackScreen 1000ms
-    // 9: blackScreenDialogueWait 500ms
-    // 10: setFlag
-    // 11: switchCharacter
-    // 12: dialogue
-
-    // Wait, let me recount. Checkpoint B commands (from story.ts):
-    // 0: checkpoint B
-    // 1: dialogue "运" (杨云)
-    // 2: dialogue "运" (但宇轩)
-    // 3: dialogue "运" (杨云)
-    // 4: dialogue "气波" (但宇轩)
-    // 5: dialogue "你废……" (但宇轩)
-    // 6: dialogue "我可不是什么君子。" (杨云)
-    // 7: dialogue "……物吧" (但宇轩)
-    // 8: blackScreen 1000ms
-    // 9: blackScreenDialogueWait 500ms
-    // 10: setFlag danYuxuanBodyProneAndBloody true
-    // 11: switchCharacter yangYunBlue
-    // 12: dialogue "我干了什么？！！！"
-
-    // 7 dialogues to advance through BEFORE blackScreen
     advanceTimes(engine, 7);
 
     // After all dialogues, we should hit the blackScreen command (waiting state)
@@ -345,25 +308,19 @@ describe('EventEngine — black screen and blackScreenDialogueWait timing', () =
     // Pump through the 1000ms black screen
     engine.update(1000);
 
-    // After black screen, we should hit blackScreenDialogueWait
-    // which is also a waiting state (500ms initial black + 500ms dialogue)
-    expect(engine.getCurrentState()).toBe('waiting');
-
-    // Complete the blackScreenDialogueWait (2 × 500ms)
-    engine.update(500); // initial black
-    engine.update(500); // dialogue
+    expect(engine.getCurrentState()).toBe('awaiting_advance');
   });
 
   it('blackScreenDialogueWait completes in exactly 1000ms total', () => {
-    // Create a manual test with just the blackScreenDialogueWait command
     const { engine } = createEngine();
 
-    // Start at checkpoint B, advance through dialogues and blackScreen
-    engine.startFromCheckpoint('B');
-    advanceTimes(engine, 7); // past 7 dialogues
+    engine.startFromCheckpoint('G');
+    engine.selectBranch('B-1');
+    engine.updateLocation('5F', null);
+    engine.updatePlayerPosition({ x: 368, y: 2012 });
+    engine.completeInteraction('F');
 
-    // Now at blackScreen (1000ms)
-    engine.update(1000); // complete black screen
+    engine.update(500);
 
     // Now at blackScreenDialogueWait — should be in waiting state
     expect(engine.getCurrentState()).toBe('waiting');
@@ -382,14 +339,64 @@ describe('EventEngine — black screen and blackScreenDialogueWait timing', () =
     expect(['executing', 'awaiting_advance', 'idle']).toContain(state);
   });
 
+  it('blank structural blackScreenDialogueWait does not show an empty dialogue or require advance', () => {
+    const manifest = createSingleCheckpointManifest([
+      { type: 'blackScreenDialogueWait', durationMs: 500, label: 'blank structural wait' },
+      { type: 'dialogue', speaker: '董继豪', text: '今天周末，我忘了。' },
+    ]);
+    const { engine, ui } = createEngine({ manifest });
+
+    engine.startFromCheckpoint('A');
+    expect(engine.getCurrentState()).toBe('waiting');
+
+    engine.update(500);
+
+    expect(vi.mocked(ui.setDialogue)).not.toHaveBeenCalledWith('', '', undefined, true);
+    expect(engine.getCurrentState()).toBe('waiting');
+
+    engine.update(500);
+
+    expect(engine.getCurrentState()).toBe('awaiting_advance');
+    expect(vi.mocked(ui.setDialogue)).toHaveBeenLastCalledWith(
+      '董继豪',
+      '今天周末，我忘了。',
+      'portrait.dongJihao',
+      true,
+      undefined,
+      undefined,
+    );
+  });
+
+  it('ordinary non-empty dialogue remains visible and blocks until advance after blackScreenDialogueWait', () => {
+    const manifest = createSingleCheckpointManifest([
+      { type: 'blackScreenDialogueWait', durationMs: 500, label: 'blank structural wait' },
+      { type: 'dialogue', speaker: '董继豪', text: '今天周末，我忘了。' },
+      { type: 'task', text: 'after dialogue' },
+    ]);
+    const { engine, uiLog } = createEngine({ manifest });
+
+    engine.startFromCheckpoint('A');
+    engine.update(500);
+    engine.update(500);
+
+    expect(engine.getCurrentState()).toBe('awaiting_advance');
+    expect(uiLog.dialogues[uiLog.dialogues.length - 1]).toMatchObject({ speaker: '董继豪', text: '今天周末，我忘了。' });
+    expect(uiLog.taskTexts).toEqual([]);
+
+    engine.advance();
+
+    expect(uiLog.taskTexts).toEqual(['after dialogue']);
+  });
+
   it('locks input as blackScreen during blackScreenDialogueWait', () => {
     const { engine, inputLog } = createEngine();
 
-    engine.startFromCheckpoint('B');
-    advanceTimes(engine, 7);
-
-    // Complete blackScreen
-    engine.update(1000);
+    engine.startFromCheckpoint('G');
+    engine.selectBranch('B-1');
+    engine.updateLocation('5F', null);
+    engine.updatePlayerPosition({ x: 368, y: 2012 });
+    engine.completeInteraction('F');
+    engine.update(500);
 
     // During blackScreenDialogueWait, input should be locked
     // The engine locks on blackScreenDialogueWait
@@ -961,6 +968,10 @@ describe('EventEngine — input lock/unlock', () => {
 });
 
 describe('EventEngine — curtain and ending', () => {
+  beforeEach(() => {
+    localStorage.clear();
+  });
+
   it('triggers curtain with correct title and subtitle through checkpoint I', () => {
     const { engine, uiLog, onEndingReached } = createEngine();
 
@@ -995,6 +1006,20 @@ describe('EventEngine — curtain and ending', () => {
     engine.update(500); // fade
 
     expect(onEndingReached).toHaveBeenCalledWith('survival-false-report');
+  });
+
+  it('persists the non-returning major ending so the main menu can show 敬请期待', () => {
+    const { engine } = createEngine();
+
+    engine.startFromCheckpoint('I');
+    engine.advance();
+    engine.update(30_000);
+    engine.update(500);
+
+    const raw = localStorage.getItem(SAVE_STATE_STORAGE_KEY);
+    expect(raw).not.toBeNull();
+    const saved = raw === null ? null : JSON.parse(raw) as SaveState;
+    expect(saved?.triggeredEvents).toContain('ending-survival-false-report');
   });
 
   it('curtain command is reachable after ending in checkpoint I', () => {
@@ -1183,6 +1208,22 @@ describe('EventEngine — wait command', () => {
 });
 
 describe('EventEngine — timer mutation safety', () => {
+  it('hides the timer UI when the final running timer expires', () => {
+    const manifest = createSingleCheckpointManifest([
+      { type: 'timer', id: 'final-countdown', action: 'start', durationMs: 1_000 },
+      { type: 'interaction', input: 'F', target: 'hold', result: 'wait' },
+      { type: 'dialogue', speaker: '系统', text: 'after timer' },
+    ]);
+    const { engine, uiLog } = createEngine({ manifest });
+
+    engine.startFromCheckpoint('A');
+    expect(uiLog.timerCalls[uiLog.timerCalls.length - 1]).toEqual({ remainingMs: 1_000, visible: true });
+
+    engine.update(1_000);
+
+    expect(uiLog.timerCalls[uiLog.timerCalls.length - 1]).toEqual({ remainingMs: 0, visible: false });
+  });
+
   it('does not tick timers added by an expiration callback during the same update pass', () => {
     const manifest = createSingleCheckpointManifest([
       { type: 'timer', id: 'first', action: 'start', durationMs: 1 },
@@ -1285,7 +1326,7 @@ describe('EventEngine — physical target validation', () => {
     const { engine } = createEngine({ manifest: createPhysicalTargetManifest({
       floorId: '4F',
       roomId: null,
-      points: [{ x: 832, y: 868, radiusPx: 48 }, { x: 832, y: 1028, radiusPx: 48 }],
+      points: [{ x: 912, y: 868, radiusPx: 48 }, { x: 912, y: 1028, radiusPx: 48 }],
     }) });
 
     engine.startFromCheckpoint('A');
@@ -1298,12 +1339,12 @@ describe('EventEngine — physical target validation', () => {
     const { engine } = createEngine({ manifest: createPhysicalTargetManifest({
       floorId: '4F',
       roomId: null,
-      points: [{ x: 832, y: 868, radiusPx: 48 }, { x: 832, y: 1028, radiusPx: 48 }],
+      points: [{ x: 912, y: 868, radiusPx: 48 }, { x: 912, y: 1028, radiusPx: 48 }],
     }) });
 
     engine.startFromCheckpoint('A');
     engine.updateLocation('4F', null);
-    engine.updatePlayerPosition({ x: 832, y: 1028 });
+    engine.updatePlayerPosition({ x: 912, y: 1028 });
 
     expect(engine.completeInteraction('F')).toBe(true);
     expect(engine.getCurrentState()).toBe('awaiting_advance');
@@ -1410,7 +1451,7 @@ describe('EventEngine — physical target validation', () => {
     expect(engine.getCurrentState()).toBe('awaiting_interaction');
 
     engine.updateLocation('5F', null);
-    engine.updatePlayerPosition({ x: 288, y: 2012 });
+    engine.updatePlayerPosition({ x: 368, y: 2012 });
 
     expect(engine.completeInteraction('F')).toBe(true);
   });
@@ -1444,46 +1485,21 @@ describe('EventEngine — physical target validation', () => {
 
 describe('EventEngine — elevator transition timing', () => {
   it('elevator sequence is fade→wait→switch→fade with correct 500ms timing', () => {
-    // Simulate elevator transition via fade commands
-    // The engine processes: fade out 500ms → switchView (change floor) → fade in 500ms
-    // This can be tested by processing fade commands sequentially
-
     const { engine } = createEngine();
 
-    // Start checkpoint D which has fade out → blackScreen → blackScreenDialogueWait
     engine.startFromCheckpoint('D');
-
-    // Checkpoint D commands:
-    // 0: checkpoint D
-    // 1: task "无"
-    // 2: setFlag
-    // 3: switchCharacter yangYunBlue
-    // 4: dialogue "……"
-    // 5: dialogue "我该怎么办？"
-    // 6: switchCharacter yangYunRed
-    // 7: task "去办公室"
-    // 8: interaction F
-    // 9: fade out 500ms
-    // 10: blackScreen 1000ms
-    // 11: blackScreenDialogueWait 500ms
-
-    // Advance through dialogues
     advanceTimes(engine, 2);
 
     expect(engine.getCurrentState()).toBe('awaiting_interaction');
     engine.updateLocation('4F', null);
-    engine.updatePlayerPosition({ x: 832, y: 868 });
+    engine.updatePlayerPosition({ x: 912, y: 868 });
     engine.completeInteraction('F');
 
-    // fade out 500ms blocks
     expect(engine.getCurrentState()).toBe('waiting');
 
-    // Complete fade out
     engine.update(500);
-    // Now at blackScreen 1000ms
     expect(engine.getCurrentState()).toBe('waiting');
     engine.update(1000);
-    // Now at blackScreenDialogueWait
     expect(engine.getCurrentState()).toBe('waiting');
   });
 });
@@ -1515,7 +1531,6 @@ describe('EventEngine — save persistence', () => {
     engine.startFromCheckpoint('B');
     advanceTimes(engine, 7);
     engine.update(1000); // past blackScreen
-    engine.update(1000); // past blackScreenDialogueWait (2 × 500ms)
 
     // Check that checkpoint B was persisted (first save happened at cmd0)
     const stored = localStorage.getItem(SAVE_STATE_STORAGE_KEY);
@@ -1530,10 +1545,7 @@ describe('EventEngine — save persistence', () => {
     engine.startFromCheckpoint('B');
     advanceTimes(engine, 7);
     engine.update(1000); // past blackScreen
-    engine.update(500);  // past BDSW phase 1
-    engine.update(500);  // past BDSW phase 2
 
-    // After BDSW completes, setFlag + switchCharacter + final dialogue execute
     expect(engine.getCurrentState()).toBe('awaiting_advance');
   });
 });
@@ -2225,20 +2237,18 @@ describe('EventEngine — Bug Fixes (Round 3)', () => {
     expect(flags.qinHaoruiBodyBloodyOnGround).toBe(true);
   });
 
-  it('Bug 3: checkpoint D chains to checkpoint E after blackScreenDialogueWait', () => {
+  it('Bug 3: checkpoint D chains to checkpoint E after office-entry black screen', () => {
     const onCheckpointReached = vi.fn();
     const { engine } = createEngine({ onCheckpointReached });
     engine.startFromCheckpoint('D');
 
     advanceTimes(engine, 2); // past dialogues
     engine.updateLocation('4F', null);
-    engine.updatePlayerPosition({ x: 832, y: 868 });
+    engine.updatePlayerPosition({ x: 912, y: 868 });
     engine.completeInteraction('F');
 
     engine.update(500);  // fade out
     engine.update(1000); // blackScreen
-    engine.update(500);  // bsdw phase 1
-    engine.update(500);  // bsdw phase 2
 
     expect(onCheckpointReached).toHaveBeenCalledWith('E');
   });
@@ -2280,7 +2290,7 @@ describe('EventEngine — Bug Fixes (Round 3)', () => {
 
   it('isInteractionTargetInCurrentLocation: returns true when awaiting_interaction with target in same location as player', () => {
     const manifest = createSingleCheckpointManifest([
-      { type: 'interaction', input: 'F', target: 'office door', result: 'enter', physicalTarget: { floorId: '4F', roomId: null, points: [{ x: 832, y: 868, radiusPx: 48 }] } },
+      { type: 'interaction', input: 'F', target: 'office door', result: 'enter', physicalTarget: { floorId: '4F', roomId: null, points: [{ x: 912, y: 868, radiusPx: 48 }] } },
       { type: 'dialogue', speaker: '系统', text: 'after' },
     ]);
     const { engine } = createEngine({ manifest });

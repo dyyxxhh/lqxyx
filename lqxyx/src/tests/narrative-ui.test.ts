@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { createInitialSceneDebugState, getSceneDebugState, resetSceneDebugState } from '../game/scaffoldState';
+import { GAME_HEIGHT, GAME_WIDTH, createInitialSceneDebugState, getSceneDebugState, resetSceneDebugState } from '../game/scaffoldState';
 import { NarrativeUIManager } from '../ui/NarrativeUIManager';
 import { UI_THEME } from '../ui/uiTheme';
 import * as uiStateModule from '../ui/uiState';
@@ -9,6 +9,7 @@ import {
   DISPLAY_NAMES,
   getDisplayName,
   getPortraitKey,
+  getRolePromptBorderColor,
   getDialoguePortraitKey,
   PORTRAIT_KEYS,
   setNarrativeUiDebugState,
@@ -16,7 +17,11 @@ import {
 
 function chainableUiObject(extra: Record<string, unknown> = {}): Record<string, unknown> {
   const object: Record<string, unknown> = { visible: false, ...extra };
-  object.setOrigin = () => object;
+  object.setOrigin = (originX = 0.5, originY?: number) => {
+    object.originX = originX;
+    object.originY = originY ?? originX;
+    return object;
+  };
   object.setScrollFactor = () => object;
   object.setDepth = () => object;
   object.setVisible = (visible: boolean) => {
@@ -39,6 +44,15 @@ function chainableUiObject(extra: Record<string, unknown> = {}): Record<string, 
     object.displayHeight = height;
     return object;
   };
+  object.setTexture = (textureKey: string) => {
+    object.textureKey = textureKey;
+    return object;
+  };
+  object.setScale = (scaleX: number, scaleY?: number) => {
+    object.scaleX = scaleX;
+    object.scaleY = scaleY ?? scaleX;
+    return object;
+  };
   object.setFillStyle = (color: number, alpha?: number) => {
     object.fillColor = color;
     object.fillAlpha = alpha;
@@ -54,12 +68,73 @@ function chainableUiObject(extra: Record<string, unknown> = {}): Record<string, 
     object.events = events;
     return object;
   };
-  object.getBounds = () => ({ x: 0, y: 0, width: 0, height: 0 });
+  object.getBounds = () => {
+    const x = typeof object.x === 'number' ? object.x : 0;
+    const y = typeof object.y === 'number' ? object.y : 0;
+    const width = typeof object.displayWidth === 'number' && object.displayWidth > 0
+      ? object.displayWidth
+      : typeof object.width === 'number' ? object.width : 0;
+    const height = typeof object.displayHeight === 'number' && object.displayHeight > 0
+      ? object.displayHeight
+      : typeof object.height === 'number' ? object.height : 0;
+    const originX = typeof object.originX === 'number' ? object.originX : 0.5;
+    const originY = typeof object.originY === 'number' ? object.originY : 0.5;
+    return { x: x - width * originX, y: y - height * originY, width, height };
+  };
   return object;
 }
 
 function isEventRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+type VisualBox = {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  visible: boolean;
+};
+
+type NarrativeVisualDebugState = {
+  task?: VisualBox;
+  timer?: VisualBox;
+  curtainTitle?: VisualBox;
+  curtainSubtitleCapsule?: VisualBox;
+  curtainSubtitle?: VisualBox;
+  minorEndingTitle?: VisualBox;
+  minorEndingBody?: VisualBox;
+  minorEndingButton?: VisualBox;
+  minorEndingButtonText?: VisualBox;
+  colors?: { timer?: string; timerBackground?: string | number };
+};
+
+function expectInsideViewport(box: VisualBox): void {
+  expect(box.visible).toBe(true);
+  expect(box.x).toBeGreaterThanOrEqual(0);
+  expect(box.y).toBeGreaterThanOrEqual(0);
+  expect(box.x + box.width).toBeLessThanOrEqual(GAME_WIDTH);
+  expect(box.y + box.height).toBeLessThanOrEqual(GAME_HEIGHT);
+}
+
+function boxesOverlap(first: VisualBox, second: VisualBox): boolean {
+  return first.x < second.x + second.width
+    && first.x + first.width > second.x
+    && first.y < second.y + second.height
+    && first.y + first.height > second.y;
+}
+
+function expectNoOverlap(first: VisualBox, second: VisualBox): void {
+  expect(boxesOverlap(first, second)).toBe(false);
+}
+
+function boundsOf(object: Record<string, unknown>): VisualBox {
+  const getBounds = object.getBounds;
+  if (typeof getBounds !== 'function') {
+    throw new Error('mock object does not expose getBounds');
+  }
+  const bounds = getBounds() as VisualBox;
+  return { ...bounds, visible: object.visible === true };
 }
 
 function createMockScene() {
@@ -352,6 +427,35 @@ describe('dialogue state via debug state', () => {
     expect(state.dialogueSpeaker).toBe('？？？');
     expect(state.dialoguePortraitKey).toBeNull();
   });
+
+  it('generic dialogue show keeps portrait hidden after no-portrait dialogue', () => {
+    resetSceneDebugState();
+    const scene = createMockScene();
+    const ui = new NarrativeUIManager(scene as never);
+
+    ui.setDialogue('董继豪', '我操！真的假的？', 'portrait.dongJihao');
+    ui.setDialogue('？？？', '皇上不好了', undefined, true);
+    ui.setVisible('dialogue', true);
+
+    const dialoguePortrait = scene.add.image.mock.results[0]?.value;
+    expect(dialoguePortrait.visible).toBe(false);
+  });
+
+  it('generic dialogue hide and re-show does not restore a stale portrait', () => {
+    resetSceneDebugState();
+    const scene = createMockScene();
+    const ui = new NarrativeUIManager(scene as never);
+
+    ui.setDialogue('董继豪', '我操！真的假的？', 'portrait.dongJihao');
+    ui.setDialogue('旁白', '窗外传来脚步声。', undefined, true);
+    ui.setVisible('dialogue', false);
+    ui.setVisible('dialogue', true);
+
+    const dialogueBg = scene.add.rectangle.mock.results[1]?.value;
+    const dialoguePortrait = scene.add.image.mock.results[0]?.value;
+    expect(dialogueBg.visible).toBe(true);
+    expect(dialoguePortrait.visible).toBe(false);
+  });
 });
 
 describe('role prompt border color state', () => {
@@ -387,6 +491,70 @@ describe('role prompt border color state', () => {
 });
 
 describe('role prompt state via debug state', () => {
+  it('renders the blue Yang role prompt with D10 title, portrait, layout, border, and debug state', () => {
+    resetSceneDebugState();
+    const scene = createMockScene();
+    const ui = new NarrativeUIManager(scene as never);
+
+    ui.setRolePrompt('yangYunBlue', '杨云');
+
+    const rolePromptBg = scene.add.rectangle.mock.results[2]?.value;
+    const rolePromptCard = scene.add.rectangle.mock.results[3]?.value;
+    const rolePromptTitleText = scene.add.text.mock.results[3]?.value;
+    const rolePromptNameText = scene.add.text.mock.results[4]?.value;
+    const rolePromptPortrait = scene.add.image.mock.results[1]?.value;
+    expect(rolePromptTitleText.text).toBe('你现在是');
+    expect(Math.abs(rolePromptTitleText.x - GAME_WIDTH / 2)).toBeLessThanOrEqual(2);
+    expect(Math.abs(rolePromptTitleText.x - rolePromptCard.x)).toBeLessThanOrEqual(2);
+    expect(rolePromptPortrait.textureKey).toBe(getPortraitKey('yangYunBlue'));
+    expect(rolePromptPortrait.visible).toBe(true);
+    expect(rolePromptCard.strokeColor).toBe(getRolePromptBorderColor('yangYunBlue'));
+    expect(rolePromptTitleText.y).toBeLessThan(rolePromptPortrait.y);
+    expect(rolePromptPortrait.x).toBeLessThan(rolePromptNameText.x);
+    expect(rolePromptNameText.y).toBeGreaterThan(rolePromptPortrait.y);
+    expectNoOverlap(boundsOf(rolePromptPortrait), boundsOf(rolePromptNameText));
+    expect(rolePromptBg.getBounds()).toMatchObject({ x: 0, y: 0, width: GAME_WIDTH, height: GAME_HEIGHT });
+    expect(rolePromptCard.getBounds().x).toBeGreaterThanOrEqual(0);
+    expect(rolePromptCard.getBounds().y).toBeGreaterThanOrEqual(0);
+    expect(rolePromptCard.getBounds().x + rolePromptCard.getBounds().width).toBeLessThanOrEqual(GAME_WIDTH);
+    expect(rolePromptCard.getBounds().y + rolePromptCard.getBounds().height).toBeLessThanOrEqual(GAME_HEIGHT);
+    expect(getSceneDebugState().ui).toMatchObject({
+      rolePromptVisible: true,
+      roleCharacterId: 'yangYunBlue',
+      roleDisplayName: '杨云',
+    });
+  });
+
+  it('renders the red Yang role prompt with D10 portrait, lower-right name, exact border, and blocking semantics', () => {
+    resetSceneDebugState();
+    const scene = createMockScene();
+    const ui = new NarrativeUIManager(scene as never);
+
+    ui.setRolePrompt('yangYunRed', '杨云');
+
+    const rolePromptCard = scene.add.rectangle.mock.results[3]?.value;
+    const rolePromptTitleText = scene.add.text.mock.results[3]?.value;
+    const rolePromptNameText = scene.add.text.mock.results[4]?.value;
+    const rolePromptPortrait = scene.add.image.mock.results[1]?.value;
+    expect(rolePromptTitleText.text).toBe('你现在是');
+    expect(Math.abs(rolePromptTitleText.x - GAME_WIDTH / 2)).toBeLessThanOrEqual(2);
+    expect(rolePromptPortrait.textureKey).toBe(getPortraitKey('yangYunRed'));
+    expect(rolePromptCard.strokeColor).toBe(getRolePromptBorderColor('yangYunRed'));
+    expect(rolePromptPortrait.x).toBeLessThan(rolePromptNameText.x);
+    expect(rolePromptNameText.y).toBeGreaterThan(rolePromptPortrait.y);
+    expectNoOverlap(boundsOf(rolePromptPortrait), boundsOf(rolePromptNameText));
+    expect(rolePromptCard.getBounds().x).toBeGreaterThanOrEqual(0);
+    expect(rolePromptCard.getBounds().y).toBeGreaterThanOrEqual(0);
+    expect(rolePromptCard.getBounds().x + rolePromptCard.getBounds().width).toBeLessThanOrEqual(GAME_WIDTH);
+    expect(rolePromptCard.getBounds().y + rolePromptCard.getBounds().height).toBeLessThanOrEqual(GAME_HEIGHT);
+    expect(ui.isRolePromptBlocking()).toBe(true);
+    expect(getSceneDebugState().ui).toMatchObject({
+      rolePromptVisible: true,
+      roleCharacterId: 'yangYunRed',
+      roleDisplayName: '杨云',
+    });
+  });
+
   it('initial role prompt is hidden', () => {
     resetSceneDebugState();
 
@@ -482,6 +650,25 @@ describe('timer state via debug state', () => {
     expect(state.timerVisible).toBe(false);
     expect(state.timerRemainingMs).toBe(30_000);
   });
+
+  it('task and danger timer HUD stay inside the design viewport with pixel-horror styling', () => {
+    resetSceneDebugState();
+    const scene = createMockScene();
+    const ui = new NarrativeUIManager(scene as never);
+
+    ui.setTask('当前任务：调查教学楼');
+    ui.setTimer(30_000, true);
+
+    const visual = ui.getVisualDebugState() as NarrativeVisualDebugState;
+    const task = visual.task;
+    const timer = visual.timer;
+    if (!task || !timer) throw new Error('missing HUD visual bounds');
+
+    expectInsideViewport(task);
+    expectInsideViewport(timer);
+    expect(visual.colors?.timer).toBe(UI_THEME.colors.textDanger);
+    expect(visual.colors?.timerBackground).toBe(UI_THEME.colors.surfaceRaised);
+  });
 });
 
 describe('curtain state via debug state', () => {
@@ -531,6 +718,31 @@ describe('curtain state via debug state', () => {
     });
   });
 
+  it('final curtain exposes viewport-safe title, subtitle, and capsule bounds with no overlap', () => {
+    resetSceneDebugState();
+    const scene = createMockScene();
+    const ui = new NarrativeUIManager(scene as never);
+
+    ui.setCurtain(true, '"报假警"', '敬请期待');
+
+    const visual = ui.getVisualDebugState() as NarrativeVisualDebugState;
+    expect(visual.curtainTitle).toBeDefined();
+    expect(visual.curtainSubtitleCapsule).toBeDefined();
+    expect(visual.curtainSubtitle).toBeDefined();
+
+    const curtainTitle = visual.curtainTitle;
+    const curtainSubtitleCapsule = visual.curtainSubtitleCapsule;
+    const curtainSubtitle = visual.curtainSubtitle;
+    if (!curtainTitle || !curtainSubtitleCapsule || !curtainSubtitle) throw new Error('missing curtain visual bounds');
+
+    expectInsideViewport(curtainTitle);
+    expectInsideViewport(curtainSubtitleCapsule);
+    expectInsideViewport(curtainSubtitle);
+    expectNoOverlap(curtainTitle, curtainSubtitleCapsule);
+    expect(curtainSubtitleCapsule.width).toBeGreaterThan(curtainSubtitle.width);
+    expect(curtainSubtitleCapsule.height).toBeGreaterThan(curtainSubtitle.height);
+  });
+
   it('curtain hides subtitle button for black screens with empty subtitle', () => {
     resetSceneDebugState();
     const scene = createMockScene();
@@ -547,6 +759,62 @@ describe('curtain state via debug state', () => {
     expect(curtainSubtitleText.visible).toBe(false);
     expect(curtainSubtitleText.text).toBe('');
     expect(getSceneDebugState().ui.curtainSubtitle).toBe('');
+  });
+
+  it('generic curtain hide also hides subtitle button background', () => {
+    resetSceneDebugState();
+    const scene = createMockScene();
+    const ui = new NarrativeUIManager(scene as never);
+
+    ui.setCurtain(true, '下一幕', '敬请期待');
+    ui.setVisible('curtain', false);
+
+    const curtainBg = scene.add.rectangle.mock.results[4]?.value;
+    const curtainButtonBg = scene.add.rectangle.mock.results[5]?.value;
+    const curtainTitleText = scene.add.text.mock.results[6]?.value;
+    const curtainSubtitleText = scene.add.text.mock.results[7]?.value;
+    expect(curtainBg.visible).toBe(false);
+    expect(curtainTitleText.visible).toBe(false);
+    expect(curtainSubtitleText.visible).toBe(false);
+    expect(curtainButtonBg.visible).toBe(false);
+  });
+});
+
+describe('minor ending overlay state', () => {
+  it('minor ending hides stale dialogue and timer while keeping title, body, and button inside the viewport', () => {
+    resetSceneDebugState();
+    const scene = createMockScene();
+    const ui = new NarrativeUIManager(scene as never);
+
+    ui.setDialogue('杨云', '这里不该继续显示。', 'portrait.yangYunBlue', true);
+    ui.setTimer(30_000, true);
+    ui.setMinorEnding(true, '你触发了错误的选择。', () => undefined);
+
+    const state = getSceneDebugState().ui;
+    expect(state.minorEndingVisible).toBe(true);
+    expect(state.dialogueVisible).toBe(false);
+    expect(state.timerVisible).toBe(false);
+
+    const dialogueBg = scene.add.rectangle.mock.results[1]?.value;
+    const timerText = scene.add.text.mock.results[5]?.value;
+    expect(dialogueBg.visible).toBe(false);
+    expect(timerText.visible).toBe(false);
+
+    const visual = ui.getVisualDebugState() as NarrativeVisualDebugState;
+    const minorEndingTitle = visual.minorEndingTitle;
+    const minorEndingBody = visual.minorEndingBody;
+    const minorEndingButton = visual.minorEndingButton;
+    const minorEndingButtonText = visual.minorEndingButtonText;
+    if (!minorEndingTitle || !minorEndingBody || !minorEndingButton || !minorEndingButtonText) throw new Error('missing minor ending visual bounds');
+
+    expectInsideViewport(minorEndingTitle);
+    expectInsideViewport(minorEndingBody);
+    expectInsideViewport(minorEndingButton);
+    expectInsideViewport(minorEndingButtonText);
+    expectNoOverlap(minorEndingTitle, minorEndingBody);
+    expectNoOverlap(minorEndingBody, minorEndingButton);
+    expect(minorEndingButton.width).toBeGreaterThan(minorEndingButtonText.width);
+    expect(minorEndingButton.height).toBeGreaterThan(minorEndingButtonText.height);
   });
 });
 

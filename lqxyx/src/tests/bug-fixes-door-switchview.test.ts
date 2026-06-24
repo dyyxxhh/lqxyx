@@ -208,7 +208,7 @@ describe('Bug Fixes — A-1 door fall-through + switchView position', () => {
     // Same contract as Bug 9 but for awaiting_interaction state.
     // PlayScene must check the return value to avoid the deadlock.
     const manifest = createSingleCheckpointManifest([
-      { type: 'interaction', input: 'F', target: 'office door', result: 'enter', physicalTarget: { floorId: '4F', roomId: null, points: [{ x: 832, y: 868, radiusPx: 48 }] } },
+      { type: 'interaction', input: 'F', target: 'office door', result: 'enter', physicalTarget: { floorId: '4F', roomId: null, points: [{ x: 912, y: 868, radiusPx: 48 }] } },
       { type: 'dialogue', speaker: '系统', text: 'after' },
     ]);
     const { engine } = createEngine({ manifest });
@@ -216,7 +216,6 @@ describe('Bug Fixes — A-1 door fall-through + switchView position', () => {
 
     expect(engine.getCurrentState()).toBe('awaiting_interaction');
 
-    // Player is NOT at the physical target (target is at 832,868)
     engine.updateLocation('4F', null);
     engine.updatePlayerPosition({ x: 560, y: 920 });
 
@@ -415,11 +414,11 @@ describe('Bug Fixes — A-1 door fall-through + switchView position', () => {
 
     const writer = new YangYunReplayManager(stubScene);
     writer.startRecording(0);
-    writer.recordFrame(100, 100, 200, '4F', 'gt1-classroom', 'down');
-    writer.recordFrame(200, 110, 200, '4F', 'gt1-classroom', 'right');
+    writer.recordFrame(100, 100, 200, '4F', 'gt1-classroom', 'down', { danYuxuan: false, qinHaorui: false });
+    writer.recordFrame(200, 110, 200, '4F', 'gt1-classroom', 'right', { danYuxuan: true, qinHaorui: false });
     writer.stopRecording();
 
-    expect(localStorage.getItem('ying-zhong-jiu.replay-buffer.v1')).not.toBeNull();
+    expect(localStorage.getItem('ying-zhong-jiu.replay-buffer.v1')).toContain('"headPickups":{"danYuxuan":true,"qinHaorui":false}');
 
     const reader = new YangYunReplayManager(stubScene);
     reader.restoreBuffer();
@@ -582,6 +581,98 @@ describe('Bug Fixes — A-1 door fall-through + switchView position', () => {
     expect(textureCalls).toContain('sprite.yangYunRed.right.step');
   });
 
+  it('Bug (Yang Yun replay leg jitter): replay does not reset the same walking texture every update', async () => {
+    const { YangYunReplayManager } = await import('../scenes/YangYunReplayManager');
+    const textureCalls: string[] = [];
+    const sprite = {
+      visible: false,
+      setOrigin: vi.fn(() => sprite),
+      setDepth: vi.fn(() => sprite),
+      setVisible: vi.fn((visible: boolean) => { sprite.visible = visible; return sprite; }),
+      setPosition: vi.fn(() => sprite),
+      setTexture: vi.fn((key: string) => { textureCalls.push(key); return sprite; }),
+      destroy: vi.fn(),
+    };
+    const stubScene = {
+      add: { sprite: vi.fn(() => sprite) },
+      textures: { exists: () => true },
+    } as unknown as Phaser.Scene;
+    const manager = new YangYunReplayManager(stubScene);
+
+    manager.startRecording(0);
+    manager.recordFrame(0, 100, 300, '4F', 'gt1-classroom', 'up');
+    manager.recordFrame(200, 100, 220, '4F', 'gt1-classroom', 'up');
+    manager.recordFrame(220, 100, 140, '4F', 'gt1-classroom', 'up');
+    manager.stopRecording();
+    manager.startReplay(0, { x: 100, y: 300, floorId: '4F', roomId: 'gt1-classroom' });
+    textureCalls.length = 0;
+
+    manager.update(200, 16, { x: 100, y: 300, floorId: '4F', roomId: 'gt1-classroom' });
+    manager.update(220, 16, { x: 100, y: 300, floorId: '4F', roomId: 'gt1-classroom' });
+
+    expect(textureCalls).toEqual(['sprite.yangYunRed.up.rightLeg']);
+  });
+
+  it('Bug (Yang Yun replay leg jitter): replay stays moving between sparse same-direction samples', async () => {
+    const { YangYunReplayManager } = await import('../scenes/YangYunReplayManager');
+    const textureCalls: string[] = [];
+    const sprite = {
+      visible: false,
+      setOrigin: vi.fn(() => sprite),
+      setDepth: vi.fn(() => sprite),
+      setVisible: vi.fn((visible: boolean) => { sprite.visible = visible; return sprite; }),
+      setPosition: vi.fn(() => sprite),
+      setTexture: vi.fn((key: string) => { textureCalls.push(key); return sprite; }),
+      destroy: vi.fn(),
+    };
+    const stubScene = {
+      add: { sprite: vi.fn(() => sprite) },
+      textures: { exists: () => true },
+    } as unknown as Phaser.Scene;
+    const manager = new YangYunReplayManager(stubScene);
+
+    manager.startRecording(0);
+    manager.recordFrame(0, 100, 200, '4F', 'gt1-classroom', 'right');
+    manager.recordFrame(200, 180, 200, '4F', 'gt1-classroom', 'right');
+    manager.stopRecording();
+    manager.startReplay(0, { x: 100, y: 200, floorId: '4F', roomId: 'gt1-classroom' });
+    textureCalls.length = 0;
+
+    manager.update(100, 16, { x: 100, y: 200, floorId: '4F', roomId: 'gt1-classroom' });
+
+    expect(textureCalls.at(-1)).toBe('sprite.yangYunRed.right.step');
+  });
+
+  it('Bug (Yang Yun replay heads): replay exposes head pickup state from the active replay frame', async () => {
+    const { YangYunReplayManager } = await import('../scenes/YangYunReplayManager');
+    const sprite = {
+      visible: false,
+      setOrigin: vi.fn(() => sprite),
+      setDepth: vi.fn(() => sprite),
+      setVisible: vi.fn((visible: boolean) => { sprite.visible = visible; return sprite; }),
+      setPosition: vi.fn(() => sprite),
+      setTexture: vi.fn(() => sprite),
+      destroy: vi.fn(),
+    };
+    const stubScene = {
+      add: { sprite: vi.fn(() => sprite) },
+      textures: { exists: () => true },
+    } as unknown as Phaser.Scene;
+    localStorage.setItem('ying-zhong-jiu.replay-buffer.v1', JSON.stringify([
+      { t: 0, x: 100, y: 200, floorId: '4F', roomId: 'gt1-classroom', direction: 'right', headPickups: { danYuxuan: false, qinHaorui: false } },
+      { t: 500, x: 120, y: 200, floorId: '4F', roomId: 'gt1-classroom', direction: 'right', headPickups: { danYuxuan: true, qinHaorui: false } },
+      { t: 1_000, x: 140, y: 200, floorId: '4F', roomId: 'gt2-classroom', direction: 'right', headPickups: { danYuxuan: true, qinHaorui: true } },
+    ]));
+    const manager = new YangYunReplayManager(stubScene);
+
+    manager.restoreBuffer();
+    manager.startReplay(0, { x: 100, y: 200, floorId: '4F', roomId: 'gt1-classroom' });
+    expect(manager.getDebugState()).toMatchObject({ headPickups: { danYuxuan: false, qinHaorui: false } });
+
+    manager.update(500, 16, { x: 100, y: 200, floorId: '4F', roomId: 'gt1-classroom' });
+    expect(manager.getDebugState()).toMatchObject({ headPickups: { danYuxuan: true, qinHaorui: false } });
+  });
+
   it('Bug (survival chase): Yang Yun follows Dong Jihao across room and elevator boundaries', async () => {
     const { YangYunReplayManager } = await import('../scenes/YangYunReplayManager');
     const sprite = {
@@ -670,7 +761,7 @@ describe('Bug Fixes — A-1 door fall-through + switchView position', () => {
 
     manager.update(1_180, 16, { x: manager.getDebugState().x + 1, y: manager.getDebugState().y - 4, floorId: '4F', roomId: null });
 
-    expect(textureCalls.at(-1)?.startsWith('sprite.yangYunRed.right.')).toBe(true);
+    expect(textureCalls.every((key) => key.startsWith('sprite.yangYunRed.right.'))).toBe(true);
   });
 
   it('Bug (survival chase pathing): Yang Yun walks from GT2 through the corridor toward GT1 instead of freezing', async () => {

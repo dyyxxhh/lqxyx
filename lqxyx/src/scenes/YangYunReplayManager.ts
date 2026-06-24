@@ -11,6 +11,12 @@ export interface ReplayFrame {
   floorId: FloorId;
   roomId: RoomId | null;
   direction: CharacterDirection;
+  headPickups?: ReplayHeadPickupState;
+}
+
+export interface ReplayHeadPickupState {
+  readonly danYuxuan: boolean;
+  readonly qinHaorui: boolean;
 }
 
 export interface DongJihaoSnapshot {
@@ -44,8 +50,10 @@ export class YangYunReplayManager {
   private currentFloor: FloorId = '4F';
   private currentRoom: RoomId | null = null;
   private currentDirection: CharacterDirection = 'down';
+  private currentHeadPickups: ReplayHeadPickupState = { danYuxuan: false, qinHaorui: false };
   private moving = false;
   private animationTime = 0;
+  private activeTextureKey: string | null = null;
 
   public constructor(scene: Phaser.Scene) {
     this.scene = scene;
@@ -57,9 +65,14 @@ export class YangYunReplayManager {
     this.recordStart = time;
   }
 
-  public recordFrame(time: number, x: number, y: number, floorId: FloorId, roomId: RoomId | null, direction: CharacterDirection): void {
+  public recordFrame(time: number, x: number, y: number, floorId: FloorId, roomId: RoomId | null, direction: CharacterDirection, headPickups?: ReplayHeadPickupState): void {
     if (this.phase !== 'recording') return;
-    this.buffer.push({ t: time - this.recordStart, x, y, floorId, roomId, direction });
+    const frame: ReplayFrame = { t: time - this.recordStart, x, y, floorId, roomId, direction };
+    if (headPickups) {
+      this.buffer.push({ ...frame, headPickups });
+      return;
+    }
+    this.buffer.push(frame);
   }
 
   public stopRecording(): void {
@@ -107,6 +120,7 @@ export class YangYunReplayManager {
     this.currentFloor = first.floorId;
     this.currentRoom = first.roomId;
     this.currentDirection = first.direction;
+    this.currentHeadPickups = first.headPickups ?? { danYuxuan: false, qinHaorui: false };
     this.phase = 'replaying';
     this.replayStart = time;
     this.replayIndex = 0;
@@ -125,13 +139,17 @@ export class YangYunReplayManager {
     this.animationTime = time;
     const previousX = this.currentX;
     const previousY = this.currentY;
+    const previousPhase = this.phase;
     if (this.phase === 'replaying') {
       this.advanceReplay(time);
     }
     if (this.phase === 'chasing') {
       this.advanceChase(deltaMs, dongJihao);
     }
-    this.moving = Math.hypot(this.currentX - previousX, this.currentY - previousY) > 0.5;
+    const positionChanged = Math.hypot(this.currentX - previousX, this.currentY - previousY) > 0.5;
+    this.moving = previousPhase === 'replaying'
+      ? positionChanged || this.isReplaySegmentMoving()
+      : positionChanged;
     this.refreshSpriteVisibility(dongJihao);
   }
 
@@ -152,11 +170,12 @@ export class YangYunReplayManager {
   public destroy(): void {
     this.sprite?.destroy();
     this.sprite = null;
+    this.activeTextureKey = null;
     this.buffer = [];
     this.phase = 'idle';
   }
 
-  public getDebugState(): { phase: Phase; bufferLength: number; replayIndex: number; chaseEnabled: boolean; x: number; y: number; floorId: FloorId; roomId: RoomId | null; visible: boolean } {
+  public getDebugState(): { phase: Phase; bufferLength: number; replayIndex: number; chaseEnabled: boolean; x: number; y: number; floorId: FloorId; roomId: RoomId | null; visible: boolean; headPickups: ReplayHeadPickupState } {
     return {
       phase: this.phase,
       bufferLength: this.buffer.length,
@@ -167,7 +186,12 @@ export class YangYunReplayManager {
       floorId: this.currentFloor,
       roomId: this.currentRoom,
       visible: this.isVisible(),
+      headPickups: this.currentHeadPickups,
     };
+  }
+
+  public getReplayHeadPickups(): ReplayHeadPickupState | null {
+    return this.phase === 'idle' || this.phase === 'recording' ? null : this.currentHeadPickups;
   }
 
   private advanceReplay(time: number): void {
@@ -180,6 +204,7 @@ export class YangYunReplayManager {
       this.currentFloor = frame.floorId;
       this.currentRoom = frame.roomId;
       this.currentDirection = frame.direction;
+      this.currentHeadPickups = frame.headPickups ?? this.currentHeadPickups;
       this.replayIndex++;
     }
     if (this.replayIndex >= this.buffer.length) {
@@ -189,6 +214,13 @@ export class YangYunReplayManager {
         this.phase = 'done';
       }
     }
+  }
+
+  private isReplaySegmentMoving(): boolean {
+    if (this.phase !== 'replaying') return false;
+    const nextFrame = this.buffer[this.replayIndex];
+    if (!nextFrame) return false;
+    return Math.hypot(nextFrame.x - this.currentX, nextFrame.y - this.currentY) > 0.5;
   }
 
   private advanceChase(deltaMs: number, dongJihao: DongJihaoSnapshot): void {
@@ -324,6 +356,7 @@ export class YangYunReplayManager {
     sprite.setDepth(REPLAY_SPRITE_DEPTH);
     sprite.setVisible(false);
     this.sprite = sprite;
+    this.activeTextureKey = idleKey;
   }
 
   private refreshSpriteVisibility(dongJihao: DongJihaoSnapshot): void {
@@ -336,8 +369,9 @@ export class YangYunReplayManager {
     this.sprite.setVisible(sameRoom);
     this.sprite.setPosition(this.currentX, this.currentY);
     const textureKey = this.getCurrentTextureKey();
-    if (this.scene.textures.exists(textureKey)) {
+    if (textureKey !== this.activeTextureKey && this.scene.textures.exists(textureKey)) {
       this.sprite.setTexture(textureKey);
+      this.activeTextureKey = textureKey;
     }
   }
 

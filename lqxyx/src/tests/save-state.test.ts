@@ -99,7 +99,7 @@ describe('checkpoint save state manager', () => {
       actId: 'act-1',
       floorId: '4F',
       roomId: null,
-      position: { x: 560, y: 920, facing: 'down' },
+      position: { x: 640, y: 920, facing: 'down' },
       controllableCharacterId: 'yangYunBlue',
       task: '无',
       storyFlags: { communicationDisabled: false },

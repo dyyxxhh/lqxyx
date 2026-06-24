@@ -11,6 +11,11 @@ export interface StoryEntityDebugEntry {
 
 export type StoryFlags = Readonly<Record<string, boolean>>;
 
+export interface StoryEntityHeadPickupState {
+  readonly danYuxuan: boolean;
+  readonly qinHaorui: boolean;
+}
+
 export interface StoryEntityRenderContext {
   readonly floorId: '4F' | '5F';
   readonly roomId: 'gt1-classroom' | 'gt2-classroom' | string | null;
@@ -18,11 +23,10 @@ export interface StoryEntityRenderContext {
 
 const STORY_ENTITY_DEPTH = 6;
 
-export function buildStoryEntityDebugEntries(flags: StoryFlags, context?: StoryEntityRenderContext): StoryEntityDebugEntry[] {
+export function buildStoryEntityDebugEntries(flags: StoryFlags, context?: StoryEntityRenderContext, replayHeadPickups?: StoryEntityHeadPickupState | null): StoryEntityDebugEntry[] {
   const entries: StoryEntityDebugEntry[] = [];
-  const replayRestoresHeads = flags.yangYunReplayRestoresHeads === true;
-  const danYuxuanHeadPickedUp = flags.danYuxuanHeadPickedUp === true && !(replayRestoresHeads && flags.yangYunReplayDanHeadPickedUp !== true);
-  const qinHaoruiHeadPickedUp = flags.qinHaoruiHeadPickedUp === true && !(replayRestoresHeads && flags.yangYunReplayQinHeadPickedUp !== true);
+  const danYuxuanHeadPickedUp = replayHeadPickups?.danYuxuan ?? flags.danYuxuanHeadPickedUp === true;
+  const qinHaoruiHeadPickedUp = replayHeadPickups?.qinHaorui ?? flags.qinHaoruiHeadPickedUp === true;
 
   // 但宇轩 visual state — priority: head-picked-up > head-only (A-2 ate body) > lying-bloody (A-1 / killed) > lying-clean > standing.
   // After head pickup: render the headless body part — UNLESS A-2 was triggered, in which case the body was already eaten and

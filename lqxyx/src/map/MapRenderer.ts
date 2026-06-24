@@ -9,9 +9,6 @@ const DOOR_FILL_COLOR = 0x5c4221;
 const DOOR_STROKE_COLOR = 0xa37435;
 const DOOR_STROKE_WIDTH = 2;
 const DOOR_HOVER_COLOR = 0x8f6330;
-const IN_ROOM_DOOR_FILL_COLOR = 0xd6a84f;
-const IN_ROOM_DOOR_STROKE_COLOR = 0xffe08a;
-const IN_ROOM_DOOR_STROKE_WIDTH = 4;
 const WALL_COLOR = 0x1a171c;
 const ROOM_WALL_COLOR = 0x17131a;
 const ELEVATOR_FADE_DURATION = 500;
@@ -26,7 +23,7 @@ const FLOOR_SOURCE_TILE_Y = 0;
 const FLOOR_TILE_FRAME = 'single-floor-tile-192';
 const CORRIDOR_FLOOR_TILE_DISPLAY_SIZE = 120;
 const CORRIDOR_LEFT_DOOR_SURFACE_COLOR = WALL_COLOR;
-const CORRIDOR_LEFT_DOOR_SURFACE_X = 0;
+const CORRIDOR_LEFT_DOOR_SURFACE_X = 80;
 const CORRIDOR_LEFT_DOOR_SURFACE_WIDTH = 300;
 
 export const CLASSROOM_DESK_TARGET_HEIGHT = 48;
@@ -134,7 +131,7 @@ export class MapRenderer {
     this.corridorObjects.push(leftDoorSurface);
 
     const rightDoorSurface = this.scene.add.rectangle(
-      840,
+      920,
       corridor.bounds.y + corridor.bounds.height / 2,
       40,
       corridor.bounds.height,
@@ -366,12 +363,12 @@ export class MapRenderer {
       bounds.y + bounds.height / 2,
       bounds.width,
       bounds.height,
-      IN_ROOM_DOOR_FILL_COLOR,
+      DOOR_FILL_COLOR,
       1,
     );
     doorRect.setOrigin(0.5, 0.5);
     doorRect.setDepth(4);
-    doorRect.setStrokeStyle(IN_ROOM_DOOR_STROKE_WIDTH, IN_ROOM_DOOR_STROKE_COLOR, 1);
+    doorRect.setStrokeStyle(DOOR_STROKE_WIDTH, DOOR_STROKE_COLOR, 1);
     this.roomObjects.push(doorRect);
 
     // No clickable hit area: room exit happens only when the player

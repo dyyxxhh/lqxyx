@@ -51,7 +51,12 @@ function chainableObject(extra: Record<string, unknown> = {}): Record<string, un
     object.tileScaleY = y;
     return object;
   };
-  object.setStrokeStyle = () => object;
+  object.setStrokeStyle = (width: number, color: number, alpha = 1) => {
+    object.strokeWidth = width;
+    object.strokeColor = color;
+    object.strokeAlpha = alpha;
+    return object;
+  };
   object.setInteractive = () => object;
   object.eventHandlers = new Map<string, () => void>();
   object.on = (event: string, handler: () => void) => {
@@ -178,6 +183,17 @@ describe('map renderer', () => {
     }
   });
 
+  it('map-renderer: centers corridor walkable strip and spawn on the game midpoint', () => {
+    for (const floor of Object.values(schoolMaps.floors)) {
+      const walkable = floor.corridor.walkableBounds[0];
+      const centerSpawn = floor.corridor.spawnPoints.find((point) => point.id.endsWith('corridor-center'));
+
+      expect(walkable).toBeDefined();
+      expect(walkable!.x + walkable!.width / 2).toBe(GAME_WIDTH / 2);
+      expect(centerSpawn?.x).toBe(GAME_WIDTH / 2);
+    }
+  });
+
   it('map-renderer: 4F left door labels match expected order', () => {
     const leftLabels = schoolMaps.floors['4F'].corridor.doors
       .filter((d) => d.side === 'left')
@@ -203,8 +219,8 @@ describe('map renderer', () => {
     renderer.renderCorridor('4F');
 
     const gt2FrontLabel = mock.texts.find((text) => text.text === 'GT2前门');
-    expect(gt2FrontLabel).toMatchObject({ x: 308, originX: 0 });
-    expect(gt2FrontLabel?.x as number).toBeGreaterThan(300);
+    expect(gt2FrontLabel).toMatchObject({ x: 388, originX: 0 });
+    expect(gt2FrontLabel?.x as number).toBeGreaterThan(380);
   });
 
   it('map-renderer: floor metadata uses one real tile from the 2x2 source image', () => {
@@ -426,11 +442,9 @@ describe('map renderer', () => {
   });
 
   it('map-renderer: CollisionManager.isWalkable returns false inside collision zones', () => {
-    // 4F corridor collision zones include walls on the sides
-    // Left wall: x 0-260, y 0-1920
-    expect(collision.isWalkable(50, 500, '4F')).toBe(false); // inside left wall
-    expect(collision.isWalkable(400, 500, '4F')).toBe(true); // walkable center
-    expect(collision.isWalkable(900, 500, '4F')).toBe(false); // inside right wall
+    expect(collision.isWalkable(50, 500, '4F')).toBe(false);
+    expect(collision.isWalkable(400, 500, '4F')).toBe(true);
+    expect(collision.isWalkable(960, 500, '4F')).toBe(false);
   });
 
   it('map-renderer: CollisionManager.getCorridorBounds returns full corridor rectangle', () => {
@@ -532,10 +546,10 @@ describe('map renderer', () => {
     expect(floorImages.every((image) => image.displayWidth === 120 && image.displayHeight === 120)).toBe(true);
 
     const leftDoorSurface = mock.rectangles.find(
-      (rectangle) => rectangle.color === 0x1a171c && rectangle.x === 150 && rectangle.width === 300,
+      (rectangle) => rectangle.color === 0x1a171c && rectangle.x === 230 && rectangle.width === 300,
     );
     expect(leftDoorSurface).toMatchObject({
-      x: 150,
+      x: 230,
       y: 960,
       width: 300,
       height: 1920,
@@ -595,9 +609,13 @@ describe('map renderer', () => {
     renderer.renderRoom('gt2-classroom');
 
     const doorSizedObjects = mock.rectangles.filter(
-      (r) => (r.width as number) === 24 && (r.height as number) === 128 && r.color === 0xd6a84f,
+      (r) => (r.width as number) === 24 && (r.height as number) === 128 && r.color === 0x5c4221,
     );
     expect(doorSizedObjects).toHaveLength(2);
+    expect(doorSizedObjects).toEqual([
+      expect.objectContaining({ strokeColor: 0xa37435, strokeWidth: 2 }),
+      expect.objectContaining({ strokeColor: 0xa37435, strokeWidth: 2 }),
+    ]);
     expect(doorSizedObjects.map((door) => ({ x: door.x, y: door.y, width: door.width, height: door.height }))).toEqual([
       { x: 852, y: 144, width: 24, height: 128 },
       { x: 852, y: 1136, width: 24, height: 128 },

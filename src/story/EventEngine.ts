@@ -910,6 +910,15 @@ export class EventEngine {
   }
 
   private handleEnding(command: Extract<StoryCommand, { type: 'ending' }>): void {
+    // Stop every running timer the moment any ending fires. Without this, a
+    // timer started earlier in the act (e.g. yang-yun-visible-failure-window
+    // at checkpoint I) keeps ticking after a major ending and can expire
+    // later — on mobile, exiting fullscreen resizes the camera, flips the
+    // visibility predicate true, and lets the stale timer fire its
+    // onTimerExpired → triggerEnding('saozi'), overwriting the major ending
+    // with the minor one. triggerEndingById already stops timers; this covers
+    // the command-chain path.
+    this.stopActiveTimers();
     this.inputManager.lock('ending');
     this.mutable.triggeredEvents = [...this.mutable.triggeredEvents, `ending-${command.id}`];
     this.onEndingReached(command.id);

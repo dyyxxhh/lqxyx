@@ -167,6 +167,20 @@ export class YangYunReplayManager {
     });
   }
 
+  /**
+   * Synchronously refresh the replay sprite's visibility, position, and texture
+   * to match a new player context (floor/room) WITHOUT advancing the replay or
+   * chase timeline. PlayScene calls this immediately after a synchronous door
+   * transition or switchView so the sprite does not render at its old in-world
+   * coordinates for one frame before the next update() tick.
+   */
+  public refreshVisibilityForContext(dongJihao: DongJihaoSnapshot): void {
+    if (this.phase === 'idle' || this.phase === 'recording') {
+      return;
+    }
+    this.refreshSpriteVisibility(dongJihao);
+  }
+
   public destroy(): void {
     this.sprite?.destroy();
     this.sprite = null;

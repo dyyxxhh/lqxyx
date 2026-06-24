@@ -30,20 +30,24 @@ const ORIENTATION_DEPTH = 1010;
 const ORIENTATION_TEXT_DEPTH = 1011;
 const INPUT_TUTORIAL_STORAGE_PREFIX = 'ying-zhong-jiu.input-tutorial-shown.v1';
 const INPUT_TUTORIAL_DURATION_MS = 3_000;
+const SCALE_SYNC_DELAYS_MS = [50, 150, 300] as const;
 
 const DIRECTION_ANGLES = [0, 45, 90, 135, 180, 225, 270, 315] as const;
 
-function quantizeTo8Directions(angle: number): { x: number; y: number } {
-  const normalized = ((angle % 360) + 360) % 360;
+export function resolveJoystickMovementVector(dx: number, dy: number): { readonly x: number; readonly y: number } {
+  if (dx === 0 && dy === 0) return { x: 0, y: 0 };
+
+  const angleDegrees = Phaser.Math.RadToDeg(Math.atan2(-dy, dx));
+  const normalized = ((angleDegrees % 360) + 360) % 360;
   let closestAngle = 0;
   let minDiff = Infinity;
 
-  for (const a of DIRECTION_ANGLES) {
-    let diff = Math.abs(normalized - a);
+  for (const directionAngle of DIRECTION_ANGLES) {
+    let diff = Math.abs(normalized - directionAngle);
     if (diff > 180) diff = 360 - diff;
     if (diff < minDiff) {
       minDiff = diff;
-      closestAngle = a;
+      closestAngle = directionAngle;
     }
   }
 
@@ -98,6 +102,7 @@ export class InputManager {
   private fullscreenStatus: FullscreenStatus = 'idle';
   private fullscreenAvailable = true;
   private fullscreenFallbackTimeout: ReturnType<typeof setTimeout> | null = null;
+  private scaleSyncTimeouts: ReturnType<typeof setTimeout>[] = [];
 
   // Orientation
   private orientationStatus: OrientationStatus = 'landscape';
@@ -120,6 +125,7 @@ export class InputManager {
   private tutorialOverlay: Phaser.GameObjects.Rectangle | null = null;
   private tutorialText: Phaser.GameObjects.Text | null = null;
   private tutorialHideTimeout: ReturnType<typeof setTimeout> | null = null;
+  private tutorialPending = false;
 
   // Cleanup bindings
   private boundVisibilityChange: (() => void) | null = null;
@@ -370,11 +376,9 @@ export class InputManager {
       { align: 'center', color: UI_THEME.colors.textGold, fontFamily: UI_THEME.font.ui, fontSize: '22px', fontStyle: 'bold' },
     )).setOrigin(0.5).setScrollFactor(0).setDepth(TUTORIAL_TEXT_DEPTH);
 
-    this.markInputTutorialSeen();
-    this.tutorialHideTimeout = setTimeout(() => {
-      this.tutorialHideTimeout = null;
-      this.hideInputTutorial();
-    }, INPUT_TUTORIAL_DURATION_MS);
+    this.tutorialPending = true;
+    this.hideInputTutorial();
+    this.showInputTutorialIfAllowed();
   }
 
   private hasSeenInputTutorial(): boolean {
@@ -394,6 +398,25 @@ export class InputManager {
   private hideInputTutorial(): void {
     this.tutorialOverlay?.setVisible(false);
     this.tutorialText?.setVisible(false);
+  }
+
+  private showInputTutorialIfAllowed(): void {
+    if (!this.tutorialPending) return;
+    if (!this.tutorialOverlay || !this.tutorialText) return;
+    if (this.isBlockingPromptVisible()) return;
+
+    this.tutorialPending = false;
+    this.tutorialOverlay.setVisible(true);
+    this.tutorialText.setVisible(true);
+    this.markInputTutorialSeen();
+    this.tutorialHideTimeout = setTimeout(() => {
+      this.tutorialHideTimeout = null;
+      this.hideInputTutorial();
+    }, INPUT_TUTORIAL_DURATION_MS);
+  }
+
+  private isBlockingPromptVisible(): boolean {
+    return this.fullscreenOverlay?.visible === true || this.orientationOverlay?.visible === true;
   }
 
   private onPointerDown(pointer: Phaser.Input.Pointer): void {
@@ -445,9 +468,7 @@ export class InputManager {
       return;
     }
 
-    const angle = Phaser.Math.RadToDeg(Math.atan2(-dy, dx));
-    const quantized = quantizeTo8Directions(angle);
-    this.movementVector = quantized;
+    this.movementVector = resolveJoystickMovementVector(dx, dy);
 
     const ratio = clampedDist / distance;
     const thumbX = this.joystickStartX + dx * ratio;
@@ -577,6 +598,7 @@ export class InputManager {
       this.fullscreenStatus = 'entered';
       this.clearFullscreenFallbackTimeout();
       this.hideAllFullscreenPrompts();
+      this.scheduleScaleSync();
       this.updateDebugState();
     };
     this.scene.scale.on('enterfullscreen', this.boundEnterFullscreen);
@@ -612,9 +634,13 @@ export class InputManager {
   private syncFullscreenFromDocument(): void {
     if (typeof document === 'undefined') return;
     if (document.fullscreenElement) {
+      const enteredFullscreen = this.fullscreenStatus !== 'entered';
       this.fullscreenStatus = 'entered';
       this.clearFullscreenFallbackTimeout();
       this.hideAllFullscreenPrompts();
+      if (enteredFullscreen) {
+        this.scheduleScaleSync();
+      }
       this.updateDebugState();
       return;
     }
@@ -672,6 +698,7 @@ export class InputManager {
     }
     this.hideMainFullscreenPrompt();
     this.showFullscreenReentry();
+    this.showInputTutorialIfAllowed();
     this.updateDebugState();
   }
 
@@ -685,6 +712,7 @@ export class InputManager {
   }
 
   private showMainFullscreenPrompt(): void {
+    this.hideInputTutorial();
     if (this.fullscreenOverlay) this.fullscreenOverlay.setVisible(true);
     if (this.fullscreenButton) this.fullscreenButton.setVisible(true);
     if (this.fullscreenButtonLabel) this.fullscreenButtonLabel.setVisible(true);
@@ -699,6 +727,7 @@ export class InputManager {
     this.hideMainFullscreenPrompt();
     if (this.fullscreenReentryBtn) this.fullscreenReentryBtn.setVisible(false);
     if (this.fullscreenReentryLabel) this.fullscreenReentryLabel.setVisible(false);
+    this.showInputTutorialIfAllowed();
   }
 
   private showFullscreenReentry(): void {
@@ -734,12 +763,7 @@ export class InputManager {
         this.showMainFullscreenPrompt();
       }
 
-      // Update canvas bounds so pointer coordinates stay correct
-      try {
-        this.scene.scale.updateBounds();
-      } catch {
-        // best-effort; Phaser 4 may throw if bounds not initialized yet
-      }
+      this.scheduleScaleSync();
 
       // Reset joystick on orientation change to avoid stuck input
       this.resetJoystick();
@@ -755,6 +779,38 @@ export class InputManager {
     const isPortrait = this.orientationStatus === 'portrait';
     if (this.orientationOverlay) this.orientationOverlay.setVisible(isPortrait);
     if (this.orientationText) this.orientationText.setVisible(isPortrait);
+    if (isPortrait) {
+      this.hideInputTutorial();
+    } else {
+      this.showInputTutorialIfAllowed();
+    }
+  }
+
+  private scheduleScaleSync(): void {
+    this.clearScaleSyncTimeouts();
+    this.syncScaleBounds();
+    for (const delay of SCALE_SYNC_DELAYS_MS) {
+      this.scaleSyncTimeouts.push(setTimeout(() => {
+        this.syncScaleBounds();
+      }, delay));
+    }
+  }
+
+  private syncScaleBounds(): void {
+    try {
+      this.scene.scale.updateBounds();
+      const maybeRefresh = this.scene.scale as Phaser.Scale.ScaleManager & { refresh?: () => void };
+      maybeRefresh.refresh?.();
+    } catch {
+    }
+  }
+
+  private clearScaleSyncTimeouts(): void {
+    if (!this.scaleSyncTimeouts) return;
+    for (const timeout of this.scaleSyncTimeouts) {
+      clearTimeout(timeout);
+    }
+    this.scaleSyncTimeouts = [];
   }
 
   // ── Cleanup Listeners ───────────────────────────────────────
@@ -859,6 +915,7 @@ export class InputManager {
     }
 
     this.clearFullscreenFallbackTimeout();
+    this.clearScaleSyncTimeouts();
     if (this.tutorialHideTimeout !== null) {
       clearTimeout(this.tutorialHideTimeout);
       this.tutorialHideTimeout = null;

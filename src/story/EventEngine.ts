@@ -291,6 +291,8 @@ export class EventEngine {
       const runningSave = Object.values(this.mutable.timers).find((t) => t.status === 'running');
       if (runningSave) {
         this.narrativeUI.setTimer(runningSave.remainingMs, true);
+      } else {
+        this.narrativeUI.setTimer(0, false);
       }
     }
 
@@ -916,6 +918,8 @@ export class EventEngine {
       this.pendingReturnCheckpoint = command.returnsToCheckpoint;
       this.narrativeUI.setMinorEnding(true, command.title, () => this.advance());
       this.state = 'awaiting_advance';
+    } else {
+      this.persistSave();
     }
 
     this.syncDebugState();
@@ -967,8 +971,7 @@ export class EventEngine {
       // Hide curtain and show dialogue on top
       this.narrativeUI.setCurtain(false);
 
-      // Show dialogue — use generic "系统" speaker for B-1 style, or show dialogue from surrounding context
-      this.narrativeUI.setDialogue('', '', undefined, true);
+      this.narrativeUI.setDialogue('', '', undefined, false);
 
       // Start the second 500ms wait
       this.startWait(500);

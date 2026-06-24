@@ -83,7 +83,7 @@ describe('display names', () => {
 
 });
 
-describe('resolveDirection — diagonal movement', () => {
+describe('resolveDirection — vertical-preferred diagonal animation poses', () => {
   it('cardinal directions', () => {
     expect(resolveDirection({ x: 1, y: 0 })).toBe('right');
     expect(resolveDirection({ x: -1, y: 0 })).toBe('left');
@@ -91,14 +91,10 @@ describe('resolveDirection — diagonal movement', () => {
     expect(resolveDirection({ x: 0, y: 1 })).toBe('down');
   });
 
-  it('diagonal NE/SE/NW/SW — vertical preferred', () => {
-    // NE: x=1, y=-1 → up (dy !== 0, dy < 0)
+  it('diagonal vectors use up/down animation poses while preserving diagonal movement', () => {
     expect(resolveDirection({ x: 1, y: -1 })).toBe('up');
-    // SE: x=1, y=1 → down
-    expect(resolveDirection({ x: 1, y: 1 })).toBe('down');
-    // NW: x=-1, y=-1 → up
     expect(resolveDirection({ x: -1, y: -1 })).toBe('up');
-    // SW: x=-1, y=1 → down
+    expect(resolveDirection({ x: 1, y: 1 })).toBe('down');
     expect(resolveDirection({ x: -1, y: 1 })).toBe('down');
   });
 

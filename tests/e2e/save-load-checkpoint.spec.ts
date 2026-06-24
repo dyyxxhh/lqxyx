@@ -18,6 +18,9 @@ type SceneWindow = Window &
     __YING_ZHONG_JIU_PLAY_SCENE_DEBUG__?: {
       getPlayerPosition(): { x: number; y: number };
     };
+    __YING_ZHONG_JIU_GAME_MENU_DEBUG__?: {
+      getContinueAffordanceVisualState(): Array<{ text?: string; interactive: boolean; visible: boolean }>;
+    };
   };
 
 async function readState(page: import('@playwright/test').Page): Promise<SceneDebugState | undefined> {
@@ -98,6 +101,44 @@ test.describe('Save/Load — Checkpoint Restore', () => {
     expect(state?.menu.hasContinue).toBe(true);
 
     await page.screenshot({ path: `${evidenceDir}/task-17-save-valid-detected.png` });
+  });
+
+  test('completed save seeded before page load shows only completed-state menu block', async ({ page }) => {
+    await page.addInitScript((key) => {
+      localStorage.setItem(key, JSON.stringify({
+        schemaVersion: 1,
+        checkpointId: 'I',
+        actId: 'act-1',
+        floorId: '5F',
+        roomId: null,
+        position: { x: 620, y: 920, facing: 'down' },
+        controllableCharacterId: 'yangYunBlue',
+        task: '活着',
+        storyFlags: {},
+        branchChoices: {},
+        timers: {},
+        inventory: [],
+        pickups: {},
+        triggeredEvents: ['ending-survival-false-report'],
+      }));
+    }, SAVE_KEY);
+
+    await page.goto('/');
+    await expect(page.locator('canvas')).toBeVisible();
+    await expect.poll(() => readState(page), { timeout: 30_000 }).toMatchObject({
+      currentScene: 'GameScene',
+      ready: true,
+      menu: { hasContinue: true },
+    });
+
+    const affordance = await page.evaluate(() => {
+      return (window as SceneWindow).__YING_ZHONG_JIU_GAME_MENU_DEBUG__?.getContinueAffordanceVisualState() ?? [];
+    });
+
+    expect(affordance.map((item) => item.text).filter(Boolean)).toEqual(['第一幕已完成', '敬请期待']);
+    expect(affordance.some((item) => item.text === '继续游戏')).toBe(false);
+    expect(affordance.every((item) => !item.interactive)).toBe(true);
+    await page.screenshot({ path: `.omo/evidence/gameplay-polish-script-audit/t8c-completed-save-import-menu.png` });
   });
 
   test('Continue menu action restores saved room checkpoint through runtime UI', async ({ page }) => {

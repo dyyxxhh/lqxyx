@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 
+import { storyManifest } from '../data/story';
 import {
   GAME_HEIGHT,
   GAME_WIDTH,
@@ -21,6 +22,7 @@ export class GameScene extends Phaser.Scene {
   private mapRenderer: MapRenderer | null = null;
   private startButton!: Phaser.GameObjects.Rectangle;
   private continueButton: Phaser.GameObjects.Rectangle | null = null;
+  private continueAffordance: Phaser.GameObjects.GameObject[] = [];
   private saveCodeStatusText: Phaser.GameObjects.Text | null = null;
   private readonly UI_BASE_DEPTH = 980;
   private readonly UI_TEXT_DEPTH = 981;
@@ -46,6 +48,9 @@ export class GameScene extends Phaser.Scene {
     this.inputManager = new InputManager(this);
     if (typeof window !== 'undefined') {
       (window as unknown as Record<string, unknown>).__YING_ZHONG_JIU_INPUT_MANAGER__ = this.inputManager;
+      (window as unknown as Record<string, unknown>).__YING_ZHONG_JIU_GAME_MENU_DEBUG__ = {
+        getContinueAffordanceVisualState: () => this.getContinueAffordanceVisualState(),
+      };
     }
 
     this.narrativeUI = new NarrativeUIManager(this);
@@ -194,12 +199,13 @@ export class GameScene extends Phaser.Scene {
       this.startNewGame();
     });
 
+    this.continueAvailable = hasContinue && !completedSave;
+
     // Also allow keyboard F/Enter to start
     if (this.input.keyboard) {
       this.input.keyboard.on('keydown-F', this.handleKeyboardF);
       this.input.keyboard.on('keydown-ENTER', this.handleKeyboardEnter);
       this.input.keyboard.on('keydown-C', this.handleKeyboardC);
-      this.continueAvailable = hasContinue && !completedSave;
     }
   }
 
@@ -240,14 +246,16 @@ export class GameScene extends Phaser.Scene {
 
   private createContinueButton(): void {
     if (this.continueButton) return;
+    const affordance = this.getContinueAffordance();
     this.continueButton = this.add
       .rectangle(GAME_WIDTH / 2, this.CONTINUE_Y, 360, 72, UI_THEME.colors.surfaceMuted)
       .setOrigin(0.5)
       .setDepth(this.UI_BASE_DEPTH)
       .setInteractive({ useHandCursor: true });
+    affordance.push(this.continueButton);
     applyPixelStrokeStyle(this.continueButton, UI_THEME.stroke.medium, UI_THEME.colors.gold, 0.88);
 
-    applyPixelTextStyle(this.add
+    const label = applyPixelTextStyle(this.add
       .text(GAME_WIDTH / 2, this.CONTINUE_Y, '继续游戏', {
         align: 'center',
         color: UI_THEME.colors.text,
@@ -258,6 +266,7 @@ export class GameScene extends Phaser.Scene {
     )
       .setOrigin(0.5)
       .setDepth(this.UI_TEXT_DEPTH);
+    affordance.push(label);
 
     this.continueButton.on('pointerover', () => {
       this.continueButton?.setFillStyle(UI_THEME.colors.accentHover);
@@ -271,22 +280,72 @@ export class GameScene extends Phaser.Scene {
   }
 
   private createCompletedContinueButton(): void {
-    this.add
+    const affordance = this.getContinueAffordance();
+    const button = this.add
       .rectangle(GAME_WIDTH / 2, this.CONTINUE_Y, 360, 72, UI_THEME.colors.surfaceMuted, UI_THEME.alpha.panel)
       .setOrigin(0.5)
       .setDepth(this.UI_BASE_DEPTH);
+    affordance.push(button);
 
-    applyPixelTextStyle(this.add
-      .text(GAME_WIDTH / 2, this.CONTINUE_Y, '敬请期待', {
+    const title = applyPixelTextStyle(this.add
+      .text(GAME_WIDTH / 2, this.CONTINUE_Y - 16, '第一幕已完成', {
         align: 'center',
-        color: UI_THEME.colors.textMuted,
+        color: UI_THEME.colors.textGold,
         fontFamily: UI_THEME.font.ui,
-        fontSize: '32px',
+        fontSize: '22px',
         fontStyle: 'bold',
       })
     )
       .setOrigin(0.5)
       .setDepth(this.UI_TEXT_DEPTH);
+    affordance.push(title);
+
+    const subtitle = applyPixelTextStyle(this.add
+      .text(GAME_WIDTH / 2, this.CONTINUE_Y + 16, '敬请期待', {
+        align: 'center',
+        color: UI_THEME.colors.textMuted,
+        fontFamily: UI_THEME.font.ui,
+        fontSize: '22px',
+        fontStyle: 'bold',
+      })
+    )
+      .setOrigin(0.5)
+      .setDepth(this.UI_TEXT_DEPTH);
+    affordance.push(subtitle);
+  }
+
+  private getContinueAffordance(): Phaser.GameObjects.GameObject[] {
+    this.continueAffordance ??= [];
+    return this.continueAffordance;
+  }
+
+  private replaceContinueAffordance(completed: boolean): void {
+    const affordance = this.getContinueAffordance();
+    for (const object of affordance) {
+      object.destroy();
+    }
+    affordance.length = 0;
+    this.continueButton = null;
+
+    if (completed) {
+      this.continueAvailable = false;
+      this.createCompletedContinueButton();
+      return;
+    }
+
+    this.continueAvailable = true;
+    this.createContinueButton();
+  }
+
+  private getContinueAffordanceVisualState(): Array<{ text?: string; interactive: boolean; visible: boolean }> {
+    return this.getContinueAffordance().map((object) => {
+      const candidate = object as Phaser.GameObjects.GameObject & { text?: string; input?: { enabled?: boolean }; visible?: boolean; interactive?: boolean };
+      return {
+        ...(candidate.text === undefined ? {} : { text: candidate.text }),
+        interactive: candidate.input?.enabled === true || candidate.interactive === true,
+        visible: candidate.visible !== false,
+      };
+    });
   }
 
   private showExportSaveCode(): void {
@@ -305,13 +364,7 @@ export class GameScene extends Phaser.Scene {
     const result = importSaveJson(json);
     if (result.status === 'imported') {
       refreshSaveDebugState();
-      if (this.isCompletedState(result.state)) {
-        this.continueAvailable = false;
-        this.createCompletedContinueButton();
-      } else {
-        this.continueAvailable = true;
-        this.createContinueButton();
-      }
+      this.replaceContinueAffordance(this.isCompletedState(result.state));
       this.saveCodeStatusText?.setText('导入成功');
       return;
     }
@@ -325,7 +378,13 @@ export class GameScene extends Phaser.Scene {
   }
 
   private isCompletedState(state: SaveState): boolean {
-    return state.triggeredEvents.some((eventId) => eventId.startsWith('ending-'));
+    const playableAct = storyManifest.acts.find((act) => act.status === 'playable');
+    const completedEndingIds = new Set(
+      playableAct?.endings
+        .filter((ending) => ending.kind === 'major' && !ending.returnsToCheckpoint)
+        .map((ending) => `ending-${ending.id}`) ?? [],
+    );
+    return state.triggeredEvents.some((eventId) => completedEndingIds.has(eventId));
   }
 
   public shutdown(): void {
@@ -337,6 +396,7 @@ export class GameScene extends Phaser.Scene {
     this.narrativeUI = null;
     this.mapRenderer = null;
     this.continueButton = null;
+    this.getContinueAffordance().length = 0;
     this.saveCodeStatusText = null;
   }
 }

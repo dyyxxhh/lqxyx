@@ -33,6 +33,7 @@ interface BranchVisualDebugState {
   theme: string;
   visible: boolean;
   background: VisualBox | null;
+  prompt?: { text: string; bounds: VisualBox };
   buttons: Array<{ fillColor: number; bounds: VisualBox }>;
   labels: Array<{ text: string; bounds: VisualBox }>;
 }
@@ -142,7 +143,6 @@ async function showPolishState(page: import('@playwright/test').Page): Promise<v
     const ui = (window as SceneWindow).__YING_ZHONG_JIU_NARRATIVE_UI__;
     ui?.setTask('当前任务：调查教学楼');
     ui?.setDialogue('董继豪', '嘿，你来得正好。这边有点情况需要你帮忙看看。', 'portrait.dongJihao', true);
-    ui?.setRolePrompt('dongJihao', '董继豪');
   });
   await page.waitForTimeout(200);
 }
@@ -173,7 +173,14 @@ test.describe('Task 15 UI polish', () => {
     expect(evidence.ui?.task.visible).toBe(true);
     expect(evidence.ui?.dialogue.visible).toBe(true);
     expect(evidence.ui && overlaps(evidence.ui.task, evidence.ui.dialogue)).toBe(false);
+    expect(evidence.branch?.prompt?.text.trim().length).toBeGreaterThan(0);
+    expect(evidence.branch?.prompt?.bounds.visible).toBe(true);
     expect(evidence.branch?.buttons).toHaveLength(2);
+    expect(evidence.branch?.buttons.every((button) => button.bounds.width >= 44 && button.bounds.height >= 44)).toBe(true);
+    expect(evidence.branch?.labels.map((label) => label.text)).toEqual([
+      expect.stringMatching(/^1[.、]/),
+      expect.stringMatching(/^2[.、]/),
+    ]);
     expect(evidence.branch?.labels.every((label) => label.bounds.width <= 460)).toBe(true);
 
     await page.evaluate(() => (window as SceneWindow).__YING_ZHONG_JIU_NARRATIVE_UI__?.setTask('无'));
@@ -186,7 +193,11 @@ test.describe('Task 15 UI polish', () => {
     });
     expect(hoverFill).not.toBeNull();
 
-    await page.screenshot({ path: `${evidenceDir}/task-15-desktop-ui-polish.png` });
+    await page.evaluate(() => {
+      (window as SceneWindow).__YING_ZHONG_JIU_NARRATIVE_UI__?.setVisible('rolePrompt', false);
+    });
+    await page.waitForTimeout(500);
+    await page.locator('canvas').screenshot({ path: `.omo/evidence/gameplay-polish-script-audit/t8c-branch-choice-panel.png` });
   });
 
   test('mobile landscape controls, task, dialogue, and touch feedback stay separated', async ({ page }, testInfo) => {

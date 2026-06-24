@@ -71,8 +71,7 @@ describe('story entity visibility from flags', () => {
       qinHaoruiBodyBloodyOnGround: true,
       danYuxuanHeadPickedUp: true,
       qinHaoruiHeadPickedUp: true,
-      yangYunReplayRestoresHeads: true,
-    });
+    }, undefined, { danYuxuan: false, qinHaorui: false });
     expect(beforeReplayPickup).toEqual([
       expect.objectContaining({ id: 'danYuxuanProneBloody', textureKey: 'sprite.danYuxuan.lyingBloody' }),
       expect.objectContaining({ id: 'qinHaoruiProneBloody', textureKey: 'sprite.qinHaorui.lyingBloody' }),
@@ -83,9 +82,7 @@ describe('story entity visibility from flags', () => {
       qinHaoruiBodyBloodyOnGround: true,
       danYuxuanHeadPickedUp: true,
       qinHaoruiHeadPickedUp: true,
-      yangYunReplayRestoresHeads: true,
-      yangYunReplayDanHeadPickedUp: true,
-    });
+    }, undefined, { danYuxuan: true, qinHaorui: false });
     expect(afterDanReplayPickup).toEqual([
       expect.objectContaining({ id: 'danYuxuanBodyOnly', textureKey: 'sprite.danYuxuan.bodyPart' }),
       expect.objectContaining({ id: 'qinHaoruiProneBloody', textureKey: 'sprite.qinHaorui.lyingBloody' }),

@@ -84,18 +84,39 @@ test.describe('mobile input', () => {
     expect(state?.input.deviceMode).toBe('mobile');
   });
 
-  test('joystick touch produces non-zero movement vector', async ({ page }) => {
+  test('joystick touch snaps to eight-direction movement vectors', async ({ page }) => {
     await dispatchTouch(page, 'touchstart', [{ id: 0, x: 200, y: 600 }], [0]);
     await page.waitForTimeout(50);
 
-    await dispatchTouch(page, 'touchmove', [{ id: 0, x: 280, y: 600 }], [0]);
+    await dispatchTouch(page, 'touchmove', [{ id: 0, x: 260, y: 570 }], [0]);
     await page.waitForTimeout(100);
 
-    // Poll for movement vector change
+    await expect.poll(
+      () => readSceneState(page).then((s) => s?.input.movementVector),
+      { timeout: 3000, intervals: [50] },
+    ).toMatchObject({
+      x: expect.any(Number),
+      y: expect.any(Number),
+    });
+
+    const vector = (await readSceneState(page))?.input.movementVector;
+    if (vector === undefined) {
+      throw new Error('movement vector missing after analog joystick poll');
+    }
+
+    expect(vector).toEqual({ x: 1, y: -1 });
+
+    await dispatchTouch(page, 'touchmove', [{ id: 0, x: 280, y: 600 }], [0]);
     await expect.poll(
       () => readSceneState(page).then((s) => s?.input.movementVector),
       { timeout: 3000, intervals: [50] },
     ).toEqual({ x: 1, y: 0 });
+
+    await dispatchTouch(page, 'touchmove', [{ id: 0, x: 120, y: 600 }], [0]);
+    await expect.poll(
+      () => readSceneState(page).then((s) => s?.input.movementVector),
+      { timeout: 3000, intervals: [50] },
+    ).toEqual({ x: -1, y: 0 });
 
     await dispatchTouch(page, 'touchend', [], [0]);
     await page.waitForTimeout(200);

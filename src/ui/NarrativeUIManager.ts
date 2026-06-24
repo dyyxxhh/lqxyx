@@ -28,11 +28,22 @@ const DIALOGUE_WORD_WRAP = BG_RIGHT - DIALOGUE_TEXT_X - 30;
 const TASK_Y = 34;
 const TASK_HEIGHT = 44;
 
-const ROLE_PROMPT_CARD_WIDTH = 420;
-const ROLE_PROMPT_CARD_HEIGHT = 220;
+const ROLE_PROMPT_CARD_WIDTH = 520;
+const ROLE_PROMPT_CARD_HEIGHT = 300;
+const ROLE_PROMPT_TITLE_Y = GAME_HEIGHT / 2 - 106;
+const ROLE_PROMPT_PORTRAIT_SIZE = 136;
+const ROLE_PROMPT_PORTRAIT_X = GAME_WIDTH / 2 - 92;
+const ROLE_PROMPT_PORTRAIT_Y = GAME_HEIGHT / 2 + 4;
+const ROLE_PROMPT_NAME_X = GAME_WIDTH / 2 + 138;
+const ROLE_PROMPT_NAME_Y = GAME_HEIGHT / 2 + 28;
+const ROLE_PROMPT_NAME_WRAP = 172;
 
 const TIMER_X = 1200;
 const TIMER_Y = 100;
+const TIMER_BACKGROUND_COLOR = UI_THEME.colors.surfaceRaised;
+const TIMER_BACKGROUND_CSS = '#141018';
+
+const MINOR_ENDING_BODY_WRAP = 760;
 
 // ── Depth constants ───────────────────────────────────────────────
 const UI_BG_DEPTH = 1000;
@@ -53,12 +64,15 @@ export class NarrativeUIManager {
   private dialoguePortrait: Phaser.GameObjects.Image;
   private dialogueSpeakerText: Phaser.GameObjects.Text;
   private dialogueBodyText: Phaser.GameObjects.Text;
+  private dialogueHasPortrait = false;
 
   // Role prompt
   private rolePromptBg: Phaser.GameObjects.Rectangle;
   private rolePromptCard: Phaser.GameObjects.Rectangle;
   private rolePromptTitleText: Phaser.GameObjects.Text;
+  private rolePromptPortrait: Phaser.GameObjects.Image;
   private rolePromptText: Phaser.GameObjects.Text;
+  private rolePromptHasPortrait = false;
 
   // Timer
   private timerText: Phaser.GameObjects.Text;
@@ -69,6 +83,7 @@ export class NarrativeUIManager {
   private curtainTitleText: Phaser.GameObjects.Text;
   private curtainSubtitleButtonBg: Phaser.GameObjects.Rectangle;
   private curtainSubtitleText: Phaser.GameObjects.Text;
+  private curtainHasSubtitle = false;
 
   // Minor ending overlay (shown after returnsToCheckpoint endings, blocks until
   // the player clicks the "返回检查点" button).
@@ -165,9 +180,9 @@ export class NarrativeUIManager {
     applyPixelStrokeStyle(this.rolePromptCard, UI_THEME.stroke.medium, UI_THEME.colors.border, 1);
 
     this.rolePromptTitleText = applyPixelTextStyle(scene.add
-      .text(GAME_WIDTH / 2, GAME_HEIGHT / 2 - 58, '你现在是', {
+      .text(GAME_WIDTH / 2, ROLE_PROMPT_TITLE_Y, '你现在是', {
         align: 'center',
-        color: UI_THEME.colors.textMuted,
+        color: UI_THEME.colors.textGold,
         fontFamily: UI_THEME.font.ui,
         fontSize: '30px',
         fontStyle: 'bold',
@@ -178,13 +193,22 @@ export class NarrativeUIManager {
       .setDepth(CURTAIN_DEPTH + 12)
       .setVisible(false);
 
+    this.rolePromptPortrait = scene.add
+      .image(ROLE_PROMPT_PORTRAIT_X, ROLE_PROMPT_PORTRAIT_Y, '')
+      .setDisplaySize(ROLE_PROMPT_PORTRAIT_SIZE, ROLE_PROMPT_PORTRAIT_SIZE)
+      .setOrigin(0.5)
+      .setScrollFactor(0)
+      .setDepth(CURTAIN_DEPTH + 12)
+      .setVisible(false);
+
     this.rolePromptText = applyPixelTextStyle(scene.add
-      .text(GAME_WIDTH / 2, GAME_HEIGHT / 2 + 30, '', {
+      .text(ROLE_PROMPT_NAME_X, ROLE_PROMPT_NAME_Y, '', {
         align: 'center',
         color: UI_THEME.colors.text,
         fontFamily: UI_THEME.font.ui,
         fontSize: '52px',
         fontStyle: 'bold',
+        wordWrap: { width: ROLE_PROMPT_NAME_WRAP },
       })
     )
       .setOrigin(0.5)
@@ -200,7 +224,7 @@ export class NarrativeUIManager {
         fontFamily: UI_THEME.font.ui,
         fontSize: '36px',
         fontStyle: 'bold',
-        backgroundColor: '#141018ee',
+        backgroundColor: TIMER_BACKGROUND_CSS,
         padding: { x: 16, y: 8 },
       })
     )
@@ -284,6 +308,7 @@ export class NarrativeUIManager {
         color: UI_THEME.colors.text,
         fontFamily: UI_THEME.font.ui,
         fontSize: '36px',
+        wordWrap: { width: MINOR_ENDING_BODY_WRAP },
       })
     )
       .setOrigin(0.5)
@@ -353,10 +378,11 @@ export class NarrativeUIManager {
   }
 
   public setDialogue(speaker: string, text: string, portraitKey?: string, visible = true, tone?: string, bodyAction?: string): void {
+    this.dialogueHasPortrait = portraitKey !== undefined && portraitKey !== '';
     this.dialogueBg.setVisible(visible);
     this.dialogueSpeakerText.setVisible(visible);
     this.dialogueBodyText.setVisible(visible);
-    this.dialoguePortrait.setVisible(visible && portraitKey !== undefined);
+    this.dialoguePortrait.setVisible(visible && this.dialogueHasPortrait);
 
     if (visible) {
       this.dialogueSpeakerText.setText(speaker);
@@ -392,12 +418,27 @@ export class NarrativeUIManager {
     this.rolePromptBg.setVisible(visible);
     this.rolePromptCard.setVisible(visible);
     this.rolePromptTitleText.setVisible(visible);
+    this.rolePromptPortrait.setVisible(false);
     this.rolePromptText.setVisible(visible);
 
     if (visible) {
+      const portraitKey = getPortraitKey(characterId);
+      this.rolePromptHasPortrait = portraitKey !== undefined;
       this.rolePromptText.setText(name);
-      applyPixelStrokeStyle(this.rolePromptCard, UI_THEME.stroke.medium, getRolePromptBorderColor(characterId), 1);
+      if (portraitKey) {
+        this.rolePromptPortrait.setTexture(portraitKey);
+        this.rolePromptPortrait.setDisplaySize(ROLE_PROMPT_PORTRAIT_SIZE, ROLE_PROMPT_PORTRAIT_SIZE);
+        this.rolePromptPortrait.setScale(
+          ROLE_PROMPT_PORTRAIT_SIZE / this.rolePromptPortrait.width,
+          ROLE_PROMPT_PORTRAIT_SIZE / this.rolePromptPortrait.height,
+        );
+        this.rolePromptPortrait.setVisible(true);
+      }
+    } else {
+      this.rolePromptHasPortrait = false;
+      this.rolePromptText.setText('');
     }
+    applyPixelStrokeStyle(this.rolePromptCard, UI_THEME.stroke.medium, getRolePromptBorderColor(characterId), 1);
 
     setNarrativeUiDebugState({
       rolePromptVisible: visible,
@@ -430,6 +471,7 @@ export class NarrativeUIManager {
     const curtainSubtitle = subtitle ?? '敬请期待';
     const hasSubtitle = visible && curtainSubtitle !== '';
     const isEndingCurtain = visible && ((title ?? '') !== '' || curtainSubtitle !== '');
+    this.curtainHasSubtitle = hasSubtitle;
 
     this.curtainBg.setFillStyle(isEndingCurtain ? UI_THEME.colors.surface : 0x000000, isEndingCurtain ? 0.98 : 1);
     this.curtainBg.setVisible(visible);
@@ -461,6 +503,14 @@ export class NarrativeUIManager {
   }
 
   public setMinorEnding(visible: boolean, body?: string, onConfirm?: () => void): void {
+    if (visible) {
+      this.dialogueBg.setVisible(false);
+      this.dialogueSpeakerText.setVisible(false);
+      this.dialogueBodyText.setVisible(false);
+      this.dialoguePortrait.setVisible(false);
+      this.timerText.setVisible(false);
+    }
+
     this.minorEndingBg.setVisible(visible);
     this.minorEndingTitleText.setVisible(visible);
     this.minorEndingBodyText.setVisible(visible);
@@ -476,9 +526,19 @@ export class NarrativeUIManager {
       this.minorEndingOnConfirm = null;
     }
 
+    if (visible) {
+      setNarrativeUiDebugState({
+        dialogueVisible: false,
+        timerVisible: false,
+        minorEndingVisible: true,
+        minorEndingBody: body ?? '',
+      });
+      return;
+    }
+
     setNarrativeUiDebugState({
-      minorEndingVisible: visible,
-      minorEndingBody: visible ? body ?? '' : '',
+      minorEndingVisible: false,
+      minorEndingBody: '',
     });
   }
 
@@ -492,12 +552,13 @@ export class NarrativeUIManager {
         this.dialogueBg.setVisible(visible);
         this.dialogueSpeakerText.setVisible(visible);
         this.dialogueBodyText.setVisible(visible);
-        this.dialoguePortrait.setVisible(visible);
+        this.dialoguePortrait.setVisible(visible && this.dialogueHasPortrait);
         break;
       case 'rolePrompt':
         this.rolePromptBg.setVisible(visible);
         this.rolePromptCard.setVisible(visible);
         this.rolePromptTitleText.setVisible(visible);
+        this.rolePromptPortrait.setVisible(visible && this.rolePromptHasPortrait);
         this.rolePromptText.setVisible(visible);
         setNarrativeUiDebugState({ rolePromptVisible: visible });
         break;
@@ -507,7 +568,8 @@ export class NarrativeUIManager {
       case 'curtain':
         this.curtainBg.setVisible(visible);
         this.curtainTitleText.setVisible(visible);
-        this.curtainSubtitleText.setVisible(visible);
+        this.curtainSubtitleButtonBg.setVisible(visible && this.curtainHasSubtitle);
+        this.curtainSubtitleText.setVisible(visible && this.curtainHasSubtitle);
         break;
       case 'minorEnding':
         this.minorEndingBg.setVisible(visible);
@@ -537,13 +599,26 @@ export class NarrativeUIManager {
     return {
       theme: 'dark-pixel-horror',
       task: this.boundsOf(this.taskBg),
+      timer: this.boundsOf(this.timerText),
       dialogue: this.boundsOf(this.dialogueBg),
       dialoguePortrait: this.dialoguePortrait.visible ? this.imageDisplayBoundsOf(this.dialoguePortrait) : null,
       rolePrompt: this.boundsOf(this.rolePromptBg),
       rolePromptCard: this.boundsOf(this.rolePromptCard),
+      rolePromptTitle: this.boundsOf(this.rolePromptTitleText),
+      rolePromptPortrait: this.rolePromptPortrait.visible ? this.imageDisplayBoundsOf(this.rolePromptPortrait) : null,
+      rolePromptName: this.boundsOf(this.rolePromptText),
+      curtainTitle: this.boundsOf(this.curtainTitleText),
+      curtainSubtitleCapsule: this.boundsOf(this.curtainSubtitleButtonBg),
+      curtainSubtitle: this.boundsOf(this.curtainSubtitleText),
+      minorEndingTitle: this.boundsOf(this.minorEndingTitleText),
+      minorEndingBody: this.boundsOf(this.minorEndingBodyText),
+      minorEndingButton: this.boundsOf(this.minorEndingButtonBg),
+      minorEndingButtonText: this.boundsOf(this.minorEndingButtonText),
       colors: {
         task: this.taskBg.fillColor,
         dialogue: this.dialogueBg.fillColor,
+        timer: UI_THEME.colors.textDanger,
+        timerBackground: TIMER_BACKGROUND_COLOR,
         border: UI_THEME.colors.border,
         rolePromptBorder: this.rolePromptCard.strokeColor,
         rolePromptBorderBlue: UI_THEME.colors.borderBlue,

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { InputManager } from '../input/InputManager';
+import { InputManager, resolveJoystickMovementVector } from '../input/InputManager';
 
 vi.mock('phaser', () => ({
   default: {
@@ -287,36 +287,41 @@ describe('input lock semantics', () => {
   });
 });
 
-describe('movement vector quantization', () => {
-  it('computes 8-direction vectors from angle', () => {
-    // 0° = East
-    expect(vectorFromAngle(0)).toEqual({ x: 1, y: 0 });
-    // 45° = Northeast
-    expect(vectorFromAngle(45)).toEqual({ x: 1, y: -1 });
-    // 90° = North
-    expect(vectorFromAngle(90)).toEqual({ x: 0, y: -1 });
-    // 135° = Northwest
-    expect(vectorFromAngle(135)).toEqual({ x: -1, y: -1 });
-    // 180° = West
-    expect(vectorFromAngle(180)).toEqual({ x: -1, y: 0 });
-    // 225° = Southwest
-    expect(vectorFromAngle(225)).toEqual({ x: -1, y: 1 });
-    // 270° = South
-    expect(vectorFromAngle(270)).toEqual({ x: 0, y: 1 });
-    // 315° = Southeast
-    expect(vectorFromAngle(315)).toEqual({ x: 1, y: 1 });
-    // Wrap-around
-    expect(vectorFromAngle(360)).toEqual({ x: 1, y: 0 });
-    expect(vectorFromAngle(-90)).toEqual({ x: 0, y: 1 });
+describe('mobile joystick movement vector', () => {
+  it('snaps joystick drag to exactly eight directions including left and right', () => {
+    expect(resolveJoystickMovementVector(80, 0)).toEqual({ x: 1, y: 0 });
+    expect(resolveJoystickMovementVector(0, -80)).toEqual({ x: 0, y: -1 });
+    expect(resolveJoystickMovementVector(-80, 0)).toEqual({ x: -1, y: 0 });
+    expect(resolveJoystickMovementVector(0, 80)).toEqual({ x: 0, y: 1 });
+    expect(resolveJoystickMovementVector(60, -30)).toEqual({ x: 1, y: -1 });
+    expect(resolveJoystickMovementVector(-60, -30)).toEqual({ x: -1, y: -1 });
+    expect(resolveJoystickMovementVector(-60, 30)).toEqual({ x: -1, y: 1 });
+    expect(resolveJoystickMovementVector(60, 30)).toEqual({ x: 1, y: 1 });
   });
 
-  it('returns zero vector for idempotent cases', () => {
-    // Slight angle deviations quantize to nearest 8-direction
-    expect(vectorFromAngle(5)).toEqual({ x: 1, y: 0 });
-    expect(vectorFromAngle(88)).toEqual({ x: 0, y: -1 });
-    expect(vectorFromAngle(92)).toEqual({ x: 0, y: -1 });
-    expect(vectorFromAngle(178)).toEqual({ x: -1, y: 0 });
-    expect(vectorFromAngle(272)).toEqual({ x: 0, y: 1 });
+  it('preserves eight-direction joystick movement through pointer drag', () => {
+    const manager = Object.create(InputManager.prototype) as unknown as {
+      getMovementVector: InputManager['getMovementVector'];
+      locked: boolean;
+      movementVector: { x: number; y: number };
+      joystickPointerId: number | null;
+      joystickStartX: number;
+      joystickStartY: number;
+      joystickThumb: { setPosition: (x: number, y: number) => void } | null;
+      onPointerMove: (pointer: { x: number; y: number; id: number }) => void;
+    };
+
+    manager.locked = false;
+    manager.movementVector = { x: 0, y: 0 };
+    manager.joystickPointerId = 3;
+    manager.joystickStartX = 200;
+    manager.joystickStartY = 600;
+    manager.joystickThumb = { setPosition: () => undefined };
+
+    manager.onPointerMove({ x: 260, y: 570, id: 3 });
+
+    const vector = manager.getMovementVector();
+    expect(vector).toEqual({ x: 1, y: -1 });
   });
 });
 
@@ -425,6 +430,39 @@ describe('fullscreen status machine', () => {
     }
   });
 
+  it('suppresses first-run tutorial while fullscreen prompt is visible, then shows it after dismissal', () => {
+    stubCanvasContext();
+    vi.useFakeTimers();
+    try {
+      localStorage.clear();
+      withFullscreenElement(null, () => {
+        const scene = createMobileInputSceneStub();
+        const manager = new InputManager(scene);
+
+        expect(manager.getVisualDebugState()).toMatchObject({
+          fullscreenPrompt: expect.objectContaining({ visible: true }),
+          tutorial: expect.objectContaining({ visible: false }),
+        });
+
+        scene.emitRectanglePointerUp('暂不');
+
+        expect(manager.getVisualDebugState()).toMatchObject({
+          fullscreenPrompt: expect.objectContaining({ visible: false }),
+          tutorial: expect.objectContaining({ visible: true, text: expect.stringContaining('左侧') }),
+        });
+
+        vi.advanceTimersByTime(3_000);
+        expect(manager.getVisualDebugState()).toMatchObject({
+          tutorial: expect.objectContaining({ visible: false }),
+        });
+
+        manager.destroy();
+      });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('keeps portrait-to-landscape from re-showing after denial while document is fullscreen, but re-shows when it is not fullscreen', () => {
     stubCanvasContext();
     withFullscreenElement(null, (setFullscreenElement) => {
@@ -456,6 +494,38 @@ describe('fullscreen status machine', () => {
 
       manager.destroy();
     });
+  });
+
+  it('refreshes Phaser scale across fullscreen portrait-to-landscape recovery', () => {
+    stubCanvasContext();
+    vi.useFakeTimers();
+    try {
+      withFullscreenElement(document.body, () => {
+        const scene = createMobileInputSceneStub();
+        const manager = new InputManager(scene);
+        scene.scaleSyncCalls.updateBounds = 0;
+        scene.scaleSyncCalls.refresh = 0;
+
+        scene.scale.isPortrait = true;
+        scene.emitScale('orientationchange', 'portrait-primary');
+        scene.scale.isPortrait = false;
+        scene.emitScale('orientationchange', 'landscape-primary');
+
+        expect(scene.scaleSyncCalls.updateBounds).toBe(2);
+        expect(scene.scaleSyncCalls.refresh).toBe(2);
+
+        vi.advanceTimersByTime(300);
+
+        expect(scene.scaleSyncCalls.updateBounds).toBe(5);
+        expect(scene.scaleSyncCalls.refresh).toBe(5);
+        expect(manager.getFullscreenStatus()).toBe('entered');
+        expect(manager.getOrientationStatus()).toBe('landscape');
+
+        manager.destroy();
+      });
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('syncs document fullscreenchange into status and fullscreen prompt visibility', () => {
@@ -583,31 +653,6 @@ describe('orientation status', () => {
   });
 });
 
-// ── Pure helper extracted for testing ─────────────────────────
-
-const DIRECTION_ANGLES = [0, 45, 90, 135, 180, 225, 270, 315] as const;
-
-function vectorFromAngle(angle: number): { x: number; y: number } {
-  const normalized = ((angle % 360) + 360) % 360;
-  let closestAngle = 0;
-  let minDiff = Infinity;
-
-  for (const a of DIRECTION_ANGLES) {
-    let diff = Math.abs(normalized - a);
-    if (diff > 180) diff = 360 - diff;
-    if (diff < minDiff) {
-      minDiff = diff;
-      closestAngle = a;
-    }
-  }
-
-  const cos = Math.cos((closestAngle * Math.PI) / 180);
-  const sin = Math.sin((closestAngle * Math.PI) / 180);
-  const x = Math.abs(cos) < 0.3 ? 0 : cos > 0 ? 1 : -1;
-  const y = Math.abs(sin) < 0.3 ? 0 : sin > 0 ? -1 : 1;
-  return { x, y };
-}
-
 function stubCanvasContext(): void {
   Object.defineProperty(HTMLCanvasElement.prototype, 'getContext', {
     configurable: true,
@@ -663,6 +708,10 @@ type StubGameObject = {
 type MobileInputSceneStub = Phaser.Scene & {
   scale: Phaser.Scene['scale'] & {
     isPortrait: boolean;
+  };
+  scaleSyncCalls: {
+    updateBounds: number;
+    refresh: number;
   };
   emitScale: (event: string, orientation: string) => void;
   emitRectanglePointerUp: (label: '全屏' | '暂不') => void;
@@ -732,6 +781,10 @@ function createMobileInputSceneStub(): MobileInputSceneStub {
   let acceptButton: StubGameObject | null = null;
   let dismissButton: StubGameObject | null = null;
   const canvas = document.createElement('canvas');
+  const scaleSyncCalls = {
+    updateBounds: 0,
+    refresh: 0,
+  };
   const scene = {
     sys: {
       game: {
@@ -772,8 +825,14 @@ function createMobileInputSceneStub(): MobileInputSceneStub {
         scaleCallbacks.delete(event);
       },
       startFullscreen: () => undefined,
-      updateBounds: () => undefined,
+      updateBounds: () => {
+        scaleSyncCalls.updateBounds += 1;
+      },
+      refresh: () => {
+        scaleSyncCalls.refresh += 1;
+      },
     },
+    scaleSyncCalls,
     emitScale: (event: string, orientation: string) => {
       scaleCallbacks.get(event)?.(orientation);
     },

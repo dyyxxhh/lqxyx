@@ -3,7 +3,7 @@ import type { InputManager, InputLockReason } from '../input/InputManager';
 import type { NarrativeUIManager } from '../ui/NarrativeUIManager';
 import { EventEngine } from '../story/EventEngine';
 import { resetSceneDebugState } from '../game/scaffoldState';
-import { storyManifest, type CheckpointId, type BranchId } from '../data/story';
+import { storyManifest, type CheckpointId, type BranchId, type StoryAct, type StoryBranch, type StoryCheckpoint } from '../data/story';
 import { createDefaultSaveState, loadSaveState, type SaveState } from '../state/saveState';
 
 // ── Test helpers ───────────────────────────────────────────────
@@ -119,7 +119,69 @@ function advanceTimes(engine: EventEngine, count: number): void {
   for (let i = 0; i < count; i++) engine.advance();
 }
 
+function getFirstAct(): StoryAct {
+  const act = storyManifest.acts.find((candidate) => candidate.id === 'act-1');
+  if (act === undefined) throw new Error('act-1 fixture missing');
+  return act;
+}
+
+function getCheckpoint(id: CheckpointId): StoryCheckpoint {
+  const checkpoint = getFirstAct().checkpoints.find((candidate) => candidate.id === id);
+  if (checkpoint === undefined) throw new Error(`checkpoint ${id} fixture missing`);
+  return checkpoint;
+}
+
+function getBranch(id: BranchId): StoryBranch {
+  const branch = getFirstAct().branches.find((candidate) => candidate.id === id);
+  if (branch === undefined) throw new Error(`branch ${id} fixture missing`);
+  return branch;
+}
+
 // ── Tests ──────────────────────────────────────────────────────
+
+describe('First Act — Story Timing Data', () => {
+  it('checkpoint B Dan kill goes from blood-black 1000ms directly to body-state change', () => {
+    const checkpoint = getCheckpoint('B');
+    const bloodBlackIndex = checkpoint.commands.findIndex(
+      (command) => command.type === 'blackScreen' && command.durationMs === 1_000 && command.asset === '血迹黑屏',
+    );
+
+    expect(checkpoint.commands.slice(bloodBlackIndex, bloodBlackIndex + 5)).toEqual([
+      { type: 'blackScreen', durationMs: 1_000, asset: '血迹黑屏' },
+      { type: 'setFlag', id: 'danYuxuanStandingVisible', value: false },
+      { type: 'setFlag', id: 'danYuxuanBodyProneAndBloody', value: true },
+      { type: 'switchCharacter', characterId: 'yangYunBlue', visibleName: '杨云', control: 'player' },
+      { type: 'dialogue', speaker: '杨云', text: '我干了什么？！！！' },
+    ]);
+  });
+
+  it('checkpoint D office entry has fade 500 plus black 1000 then checkpoint E flow', () => {
+    const checkpoint = getCheckpoint('D');
+    const officeInteractionIndex = checkpoint.commands.findIndex(
+      (command) => command.type === 'interaction' && command.target === '办公室门口两门任一',
+    );
+
+    expect(checkpoint.commands.slice(officeInteractionIndex + 1, officeInteractionIndex + 4)).toEqual([
+      { type: 'fade', direction: 'out', durationMs: 500 },
+      { type: 'blackScreen', durationMs: 1_000 },
+      { type: 'gotoCheckpoint', id: 'E' },
+    ]);
+  });
+
+  it('branch B-1 principal-office path keeps its black-screen dialogue wait and weekend dialogue', () => {
+    const branch = getBranch('B-1');
+    const fadeIndex = branch.commands.findIndex(
+      (command) => command.type === 'fade' && command.direction === 'out' && command.durationMs === 500,
+    );
+
+    expect(branch.commands.slice(fadeIndex, fadeIndex + 4)).toEqual([
+      { type: 'fade', direction: 'out', durationMs: 500 },
+      { type: 'blackScreenDialogueWait', durationMs: 500, label: '校长办公室黑屏正常对白等待' },
+      { type: 'dialogue', speaker: '董继豪', text: '今天周末，我忘了。' },
+      { type: 'wait', durationMs: 3_000, label: '意识到周末后等待' },
+    ]);
+  });
+});
 
 describe('First Act — Checkpoint A-I Flow', () => {
   beforeEach(() => {
@@ -159,10 +221,7 @@ describe('First Act — Checkpoint A-I Flow', () => {
     expect(onCheckpointReached).toHaveBeenCalledWith('B');
 
     engine.update(1000); // past blackScreen
-    engine.update(500);  // past BDSW phase 1
-    engine.update(500);  // past BDSW phase 2
 
-    // After BDSW, setFlag + switchCharacter + final dialogue execute
     expect(engine.getCurrentState()).toBe('awaiting_advance');
   });
 
@@ -173,8 +232,6 @@ describe('First Act — Checkpoint A-I Flow', () => {
 
     advanceTimes(engine, 7); // past 7 pre-blackscreen dialogues
     engine.update(1000); // blackScreen
-    engine.update(500);  // bsdw phase 1
-    engine.update(500);  // bsdw phase 2
 
     // Now at final dialogue "我干了什么？！！！"
     expect(engine.getCurrentState()).toBe('awaiting_advance');
@@ -329,7 +386,7 @@ describe('First Act — Branch Selection', () => {
     engine.startFromCheckpoint('G');
     engine.selectBranch('B-1');
     engine.updateLocation('5F', null);
-    engine.updatePlayerPosition({ x: 288, y: 2012 });
+    engine.updatePlayerPosition({ x: 368, y: 2012 });
     engine.completeInteraction('F');
 
     // B-1: task, interaction(F), fade(500), bsdw(500), dialogue, wait(3s), dialogue, blackScreen(1s), deathFlash(4200), blackScreen(1s), ending(blocking), advance, fade(500), checkpoint G
@@ -452,7 +509,7 @@ describe('First Act — Endings and Curtain', () => {
     engine.startFromCheckpoint('G');
     engine.selectBranch('B-1');
     engine.updateLocation('5F', null);
-    engine.updatePlayerPosition({ x: 288, y: 2012 });
+    engine.updatePlayerPosition({ x: 368, y: 2012 });
     engine.completeInteraction('F');
 
     // Pump through B-1: fade500 → bsdw1000 → adv dialogue → wait3000 → adv → black1000 → death4200 → black1000 → ending(blocking) → advance → fade500 → checkpoint G
@@ -494,7 +551,7 @@ describe('First Act — Endings and Curtain', () => {
     engine.startFromCheckpoint('G');
     engine.selectBranch('B-1');
     engine.updateLocation('5F', null);
-    engine.updatePlayerPosition({ x: 288, y: 2012 });
+    engine.updatePlayerPosition({ x: 368, y: 2012 });
     engine.completeInteraction('F');
     engine.update(500);
     engine.update(500);
@@ -527,7 +584,7 @@ describe('First Act — Endings and Curtain', () => {
     engine.startFromCheckpoint('G');
     engine.selectBranch('B-1');
     engine.updateLocation('5F', null);
-    engine.updatePlayerPosition({ x: 288, y: 2012 });
+    engine.updatePlayerPosition({ x: 368, y: 2012 });
     engine.completeInteraction('F');
     engine.update(500);
     engine.update(500);
@@ -553,7 +610,7 @@ describe('First Act — Endings and Curtain', () => {
     engine.startFromCheckpoint('G');
     engine.selectBranch('B-1');
     engine.updateLocation('5F', null);
-    engine.updatePlayerPosition({ x: 288, y: 2012 });
+    engine.updatePlayerPosition({ x: 368, y: 2012 });
     engine.completeInteraction('F');
 
     expect(uiLog.taskTexts[uiLog.taskTexts.length - 1]).toBe('无');

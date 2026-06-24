@@ -222,7 +222,22 @@ test.describe('dialogue advance input regression', () => {
     await page.screenshot({ path: evidenceDir + '/task-1-mobile-dialogue-advance.png' });
   });
 
-  test('desktop mouse click advances the checkpoint A Dan dialogue and unlocks input', async ({ page }, testInfo) => {
+  function expectAdvancedToCheckpointBDialogue(
+    after: CuoshouDebugSnapshot,
+    before: CuoshouDebugSnapshot | null = null,
+  ): void {
+    if (before) {
+      expect(after.engine.commandIndex).not.toBe(before.engine.commandIndex);
+    }
+    expect(after.engine.state).toBe('awaiting_advance');
+    expect(after.state?.story.currentCheckpointId).toBe('B');
+    expect(after.state?.story.currentCommandIndex).toBe(1);
+    expect(after.state?.ui.dialogueText).toBe('运');
+    expect(after.state?.input.lockActive).toBe(true);
+    expect(after.state?.input.lockReason).toBe('dialogue');
+  }
+
+  test('desktop mouse click advances the checkpoint A Dan dialogue into checkpoint B', async ({ page }, testInfo) => {
     test.skip(testInfo.project.name !== 'desktop-chromium', 'desktop project only');
 
     await page.goto('/');
@@ -246,11 +261,10 @@ test.describe('dialogue advance input regression', () => {
 
     await clickDialogueArea(page);
 
-    await expect.poll(() => getEngineSnapshot(page), { timeout: 5_000 }).toMatchObject({
-      state: 'idle',
-    });
     await expect.poll(() => readState(page), { timeout: 5_000 }).toMatchObject({
-      input: { lockActive: false },
+      story: { currentCheckpointId: 'B' },
+      ui: { dialogueText: '运' },
+      input: { lockActive: true, lockReason: 'dialogue' },
     });
 
     await page.screenshot({ path: evidenceDir + '/checkpoint-a-dan-dialogue-click-advance.png' });
@@ -382,8 +396,8 @@ test.describe('dialogue advance input regression', () => {
 
   async function walkToGt1FrontDoorWithKeyboard(page: import('@playwright/test').Page): Promise<void> {
     await holdKey(page, 'a', 1_150);
-    await holdKey(page, 's', 1_450);
-    await page.keyboard.press('f');
+    await holdKey(page, 'w', 1_450);
+    await holdKey(page, 'f', 100);
     await expect.poll(() => readState(page), { timeout: 5_000 }).toMatchObject({
       map: { currentFloorId: '4F', currentRoomId: 'gt1-classroom' },
     });
@@ -395,8 +409,8 @@ test.describe('dialogue advance input regression', () => {
   ): Promise<void> {
     const trace: CuoshouDebugSnapshot[] = [];
     trace.push(await captureCuoshouDebugSnapshot(page, 'real-nav-after-enter-gt1'));
-    await holdKey(page, 's', 510);
-    trace.push(await captureCuoshouDebugSnapshot(page, 'real-nav-after-walk-s-510'));
+    await holdKey(page, 's', 1_950);
+    trace.push(await captureCuoshouDebugSnapshot(page, 'real-nav-after-walk-s-1950'));
     await testInfo.attach('s5-real-nav-proximity-trace.json', {
       body: JSON.stringify(trace.map(summariseSnapshot), null, 2),
       contentType: 'application/json',
@@ -433,9 +447,7 @@ test.describe('dialogue advance input regression', () => {
     await page.waitForTimeout(150);
 
     const after = await captureCuoshouDebugSnapshot(page, 's5-desktop-real-nav-after-advance');
-    expect(after.engine.commandIndex).toBeGreaterThan(before.engine.commandIndex);
-    expect(after.engine.state).not.toBe('awaiting_advance');
-    expect(after.state?.input.lockActive).toBe(false);
+    expectAdvancedToCheckpointBDialogue(after, before);
 
     await page.screenshot({ path: evidenceDir + '/s5-desktop-real-nav-cuoshou-advance.png' });
     await testInfo.attach('s5-desktop-real-nav-cuoshou-debug.json', {
@@ -463,9 +475,7 @@ test.describe('dialogue advance input regression', () => {
 
     const after = await captureCuoshouDebugSnapshot(page, 's5-desktop-f-after-advance');
 
-    expect(after.engine.commandIndex).toBeGreaterThan(before.engine.commandIndex);
-    expect(after.engine.state).not.toBe('awaiting_advance');
-    expect(after.state?.input.lockActive).toBe(false);
+    expectAdvancedToCheckpointBDialogue(after, before);
 
     await page.screenshot({ path: evidenceDir + '/s5-desktop-f-cuoshou-advance.png' });
     await testInfo.attach('s5-desktop-f-cuoshou-debug.json', {
@@ -493,9 +503,7 @@ test.describe('dialogue advance input regression', () => {
 
     const after = await captureCuoshouDebugSnapshot(page, 's5-desktop-click-after-advance');
 
-    expect(after.engine.commandIndex).toBeGreaterThan(before.engine.commandIndex);
-    expect(after.engine.state).not.toBe('awaiting_advance');
-    expect(after.state?.input.lockActive).toBe(false);
+    expectAdvancedToCheckpointBDialogue(after, before);
 
     await page.screenshot({ path: evidenceDir + '/s5-desktop-click-cuoshou-advance.png' });
     await testInfo.attach('s5-desktop-click-cuoshou-debug.json', {
@@ -540,9 +548,7 @@ test.describe('dialogue advance input regression', () => {
         },
       });
 
-      expect(after.engine.commandIndex).toBeGreaterThan(before.engine.commandIndex);
-      expect(after.engine.state).not.toBe('awaiting_advance');
-      expect(after.state?.input.lockActive).toBe(false);
+      expectAdvancedToCheckpointBDialogue(after, before);
 
       await page.screenshot({ path: evidenceDir + '/s5-mobile-tap-cuoshou-advance.png' });
       await testInfo.attach('s5-mobile-tap-cuoshou-debug.json', {

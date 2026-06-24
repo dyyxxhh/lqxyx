@@ -14,6 +14,10 @@ type SceneWindow = Window &
       setInteractContext: (a: 'F' | 'Q' | null) => void;
       getMovementVector: () => { x: number; y: number };
       consumeInteract: () => { action: string | null; pressed: boolean };
+      getVisualDebugState: () => {
+        fullscreenPrompt: { visible: boolean } | null;
+        tutorial: { visible: boolean; text: string } | null;
+      };
     };
     __YING_ZHONG_JIU_NARRATIVE_UI_MANAGER__?: {
       setDialogue: (speaker: string, text: string, portraitKey?: string, visible?: boolean) => void;
@@ -120,6 +124,13 @@ async function enterPlayScene(page: import('@playwright/test').Page): Promise<vo
   await page.waitForTimeout(100);
 }
 
+async function clickGamePoint(page: import('@playwright/test').Page, x: number, y: number): Promise<void> {
+  const canvas = page.locator('canvas');
+  const box = await canvas.boundingBox();
+  if (!box) throw new Error('Canvas not found');
+  await page.mouse.click(box.x + (x / 1280) * box.width, box.y + (y / 720) * box.height);
+}
+
 test.describe('mobile layout', () => {
   test.beforeEach(async ({}, testInfo) => {
     testInfo.skip(testInfo.project.name !== 'mobile-landscape-chromium', 'mobile landscape only');
@@ -181,6 +192,34 @@ test.describe('mobile layout', () => {
     await page.waitForTimeout(300);
 
     await page.screenshot({ path: `${evidenceDir}/task-15-simultaneous-touch.png` });
+  });
+
+  test('fullscreen prompt suppresses first-run tutorial until dismissed', async ({ page }) => {
+    await page.addInitScript(() => localStorage.clear());
+    await page.goto('/');
+    await expect(page.locator('canvas')).toBeVisible();
+    await expect.poll(() => readSceneState(page), { timeout: 30_000 }).toMatchObject({
+      currentScene: 'GameScene',
+      ready: true,
+    });
+
+    await expect.poll(() => page.evaluate(() => {
+      return (window as SceneWindow).__YING_ZHONG_JIU_INPUT_MANAGER__?.getVisualDebugState();
+    }), { timeout: 5_000 }).toMatchObject({
+      fullscreenPrompt: { visible: true },
+      tutorial: { visible: false },
+    });
+
+    await clickGamePoint(page, 760, 104);
+
+    await expect.poll(() => page.evaluate(() => {
+      return (window as SceneWindow).__YING_ZHONG_JIU_INPUT_MANAGER__?.getVisualDebugState();
+    }), { timeout: 5_000 }).toMatchObject({
+      fullscreenPrompt: { visible: false },
+      tutorial: { visible: true },
+    });
+
+    await page.screenshot({ path: `.omo/evidence/gameplay-polish-script-audit/t8c-fullscreen-tutorial-stacking.png` });
   });
 
   test('viewport resize keeps joystick mapping correct', async ({ page }) => {

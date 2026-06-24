@@ -7,9 +7,7 @@ import { storyManifest, type StoryPhysicalTarget, type StoryPhysicalTargetRequir
  *
  * These tests assert that interaction physicalTarget points match the
  * center of the corresponding map door bounds.  Currently story.ts
- * has stale coordinates (principal y=1696 instead of 2012, office
- * y=1044/1204 instead of 868/1028) so these tests are expected to
- * FAIL RED until story.ts is corrected.
+ * has stale coordinates when story interaction points drift from map door centers.
  */
 
 /** Return the center point of a MapRectangle. */
@@ -49,7 +47,7 @@ function singlePhysicalTarget(requirement: StoryPhysicalTargetRequirement | unde
 }
 
 describe("story physical targets match map door centers", () => {
-  it("五楼校长办公室门口 → principals-office-front-5f center (288, 2012)", () => {
+  it("五楼校长办公室门口 → principals-office-front-5f center", () => {
     const interaction = interactionByTarget("五楼校长办公室门口");
     const door = doorById("5F", "principals-office-front-5f");
     const expected = centerOf(door.bounds);
@@ -59,7 +57,7 @@ describe("story physical targets match map door centers", () => {
     expect(physicalTarget.points[0]!.y).toBe(expected.y);
   });
 
-  it("办公室门口两门任一 → 4f-office-front center (832, 868) and 4f-office-back center (832, 1028)", () => {
+  it("办公室门口两门任一 → 4f-office-front center and 4f-office-back center", () => {
     const interaction = interactionByTarget("办公室门口两门任一");
     const frontDoor = doorById("4F", "4f-office-front");
     const backDoor = doorById("4F", "4f-office-back");

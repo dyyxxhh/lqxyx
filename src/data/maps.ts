@@ -341,44 +341,44 @@ function room(
 }
 
 const corridorBounds = rect(0, 0, 1280, 1920);
-const corridorWalkable = [rect(300, 80, 520, 1760)];
-const corridorCollision = [rect(0, 0, 260, 1920), rect(860, 0, 420, 1920), rect(260, 0, 600, 56), rect(260, 1864, 600, 56)];
-const corridorOcclusion = [rect(260, 0, 600, 96), rect(260, 1824, 600, 96)];
+const corridorWalkable = [rect(380, 80, 520, 1760)];
+const corridorCollision = [rect(0, 0, 340, 1920), rect(940, 0, 340, 1920), rect(340, 0, 600, 56), rect(340, 1864, 600, 56)];
+const corridorOcclusion = [rect(340, 0, 600, 96), rect(340, 1824, 600, 96)];
 const fifthFloorCorridorBounds = rect(0, 0, 1280, 2280);
-const fifthFloorCorridorWalkable = [rect(300, 80, 520, 2120)];
-const fifthFloorCorridorCollision = [rect(0, 0, 260, 2280), rect(860, 0, 420, 2280), rect(260, 0, 600, 56), rect(260, 2224, 600, 56)];
-const fifthFloorCorridorOcclusion = [rect(260, 0, 600, 96), rect(260, 2184, 600, 96)];
+const fifthFloorCorridorWalkable = [rect(380, 80, 520, 2120)];
+const fifthFloorCorridorCollision = [rect(0, 0, 340, 2280), rect(940, 0, 340, 2280), rect(340, 0, 600, 56), rect(340, 2224, 600, 56)];
+const fifthFloorCorridorOcclusion = [rect(340, 0, 600, 96), rect(340, 2184, 600, 96)];
 
 const fourthFloorLeftDoors: CorridorDoor[] = [
-  roomDoor("4f-gt2-front", "GT2前门", "4F", "left", 1, rect(276, 100, 24, DOOR_HEIGHT), "gt2-classroom", "gt2-front-entry", "GT2 classroom front door"),
-  roomDoor("4f-gt2-back", "GT2后门", "4F", "left", 2, rect(276, 260, 24, DOOR_HEIGHT), "gt2-classroom", "gt2-back-entry"),
-  roomDoor("4f-gt1-front", "GT1前门", "4F", "left", 3, rect(276, 516, 24, DOOR_HEIGHT), "gt1-classroom", "gt1-front-entry", "GT1 classroom front door"),
-  roomDoor("4f-gt1-back", "GT1后门", "4F", "left", 4, rect(276, 676, 24, DOOR_HEIGHT), "gt1-classroom", "gt1-back-entry"),
-  roomDoor("4f-class-1-1-front", "高一一班前门", "4F", "left", 5, rect(276, 932, 24, DOOR_HEIGHT), "class-1-1", "class-1-1-front-entry"),
-  roomDoor("4f-class-1-1-back", "高一一班后门", "4F", "left", 6, rect(276, 1092, 24, DOOR_HEIGHT), "class-1-1", "class-1-1-back-entry"),
-  roomDoor("4f-class-1-2-front", "高一二班前门", "4F", "left", 7, rect(276, 1348, 24, DOOR_HEIGHT), "class-1-2", "class-1-2-front-entry"),
-  roomDoor("4f-class-1-2-back", "高一二班后门", "4F", "left", 8, rect(276, 1508, 24, DOOR_HEIGHT), "class-1-2", "class-1-2-back-entry"),
+  roomDoor("4f-gt2-front", "GT2前门", "4F", "left", 1, rect(356, 100, 24, DOOR_HEIGHT), "gt2-classroom", "gt2-front-entry", "GT2 classroom front door"),
+  roomDoor("4f-gt2-back", "GT2后门", "4F", "left", 2, rect(356, 260, 24, DOOR_HEIGHT), "gt2-classroom", "gt2-back-entry"),
+  roomDoor("4f-gt1-front", "GT1前门", "4F", "left", 3, rect(356, 516, 24, DOOR_HEIGHT), "gt1-classroom", "gt1-front-entry", "GT1 classroom front door"),
+  roomDoor("4f-gt1-back", "GT1后门", "4F", "left", 4, rect(356, 676, 24, DOOR_HEIGHT), "gt1-classroom", "gt1-back-entry"),
+  roomDoor("4f-class-1-1-front", "高一一班前门", "4F", "left", 5, rect(356, 932, 24, DOOR_HEIGHT), "class-1-1", "class-1-1-front-entry"),
+  roomDoor("4f-class-1-1-back", "高一一班后门", "4F", "left", 6, rect(356, 1092, 24, DOOR_HEIGHT), "class-1-1", "class-1-1-back-entry"),
+  roomDoor("4f-class-1-2-front", "高一二班前门", "4F", "left", 7, rect(356, 1348, 24, DOOR_HEIGHT), "class-1-2", "class-1-2-front-entry"),
+  roomDoor("4f-class-1-2-back", "高一二班后门", "4F", "left", 8, rect(356, 1508, 24, DOOR_HEIGHT), "class-1-2", "class-1-2-back-entry"),
 ];
 
 const fourthFloorDoors: CorridorDoor[] = [
   ...fourthFloorLeftDoors,
-  elevatorDoor("4f-elevator", "4F", "5F", 1, rect(820, 388, 24, DOOR_HEIGHT)),
-  roomDoor("4f-office-front", "办公室前门", "4F", "right", 2, rect(820, 804, 24, DOOR_HEIGHT), "office-4f", "office-front-entry", "office front door"),
-  roomDoor("4f-office-back", "办公室后门", "4F", "right", 3, rect(820, 964, 24, DOOR_HEIGHT), "office-4f", "office-back-entry", "office back door"),
+  elevatorDoor("4f-elevator", "4F", "5F", 1, rect(900, 388, 24, DOOR_HEIGHT)),
+  roomDoor("4f-office-front", "办公室前门", "4F", "right", 2, rect(900, 804, 24, DOOR_HEIGHT), "office-4f", "office-front-entry", "office front door"),
+  roomDoor("4f-office-back", "办公室后门", "4F", "right", 3, rect(900, 964, 24, DOOR_HEIGHT), "office-4f", "office-back-entry", "office back door"),
 ];
 
 const fifthFloorDoors: CorridorDoor[] = [
-  backgroundDoor("5f-background-class-1-front", "五楼普通班级一前门", "5F", 1, rect(276, 100, 24, DOOR_HEIGHT)),
-  backgroundDoor("5f-background-class-1-back", "五楼普通班级一后门", "5F", 2, rect(276, 260, 24, DOOR_HEIGHT)),
-  backgroundDoor("5f-background-class-2-front", "五楼普通班级二前门", "5F", 3, rect(276, 516, 24, DOOR_HEIGHT)),
-  backgroundDoor("5f-background-class-2-back", "五楼普通班级二后门", "5F", 4, rect(276, 676, 24, DOOR_HEIGHT)),
-  backgroundDoor("5f-background-class-3-front", "五楼普通班级三前门", "5F", 5, rect(276, 932, 24, DOOR_HEIGHT)),
-  backgroundDoor("5f-background-class-3-back", "五楼普通班级三后门", "5F", 6, rect(276, 1092, 24, DOOR_HEIGHT)),
-  backgroundDoor("5f-background-class-4-front", "五楼普通班级四前门", "5F", 7, rect(276, 1348, 24, DOOR_HEIGHT)),
-  backgroundDoor("5f-background-class-4-back", "五楼普通班级四后门", "5F", 8, rect(276, 1508, 24, DOOR_HEIGHT)),
-  roomDoor("principals-office-front-5f", "校长办公室", "5F", "left", 9, rect(276, 1948, 24, 128), "principals-office-5f", "principals-office-front-entry", "五楼校长办公室门口"),
-  elevatorDoor("5f-elevator", "5F", "4F", 1, rect(820, 360, 24, 128)),
-  roomDoor("5f-communication-control-back", "学校通信控制室后门", "5F", "right", 2, rect(820, 1140, 24, 128), "communication-control-5f", "communication-control-back-entry", "five-floor communication control back door"),
+  backgroundDoor("5f-background-class-1-front", "五楼普通班级一前门", "5F", 1, rect(356, 100, 24, DOOR_HEIGHT)),
+  backgroundDoor("5f-background-class-1-back", "五楼普通班级一后门", "5F", 2, rect(356, 260, 24, DOOR_HEIGHT)),
+  backgroundDoor("5f-background-class-2-front", "五楼普通班级二前门", "5F", 3, rect(356, 516, 24, DOOR_HEIGHT)),
+  backgroundDoor("5f-background-class-2-back", "五楼普通班级二后门", "5F", 4, rect(356, 676, 24, DOOR_HEIGHT)),
+  backgroundDoor("5f-background-class-3-front", "五楼普通班级三前门", "5F", 5, rect(356, 932, 24, DOOR_HEIGHT)),
+  backgroundDoor("5f-background-class-3-back", "五楼普通班级三后门", "5F", 6, rect(356, 1092, 24, DOOR_HEIGHT)),
+  backgroundDoor("5f-background-class-4-front", "五楼普通班级四前门", "5F", 7, rect(356, 1348, 24, DOOR_HEIGHT)),
+  backgroundDoor("5f-background-class-4-back", "五楼普通班级四后门", "5F", 8, rect(356, 1508, 24, DOOR_HEIGHT)),
+  roomDoor("principals-office-front-5f", "校长办公室", "5F", "left", 9, rect(356, 1948, 24, 128), "principals-office-5f", "principals-office-front-entry", "五楼校长办公室门口"),
+  elevatorDoor("5f-elevator", "5F", "4F", 1, rect(900, 360, 24, 128)),
+  roomDoor("5f-communication-control-back", "学校通信控制室后门", "5F", "right", 2, rect(900, 1140, 24, 128), "communication-control-5f", "communication-control-back-entry", "five-floor communication control back door"),
 ];
 
 const fourthFloorRooms: Record<Exclude<RoomId, "communication-control-5f" | "principals-office-5f">, RoomArea> = {
@@ -475,8 +475,8 @@ function corridor(id: string, label: string, floorId: FloorId, doors: CorridorDo
     collisionZones: floorId === "5F" ? fifthFloorCorridorCollision : corridorCollision,
     occlusionZones: floorId === "5F" ? fifthFloorCorridorOcclusion : corridorOcclusion,
     spawnPoints: [
-      spawn(`${floorId.toLowerCase()}-elevator-arrival`, 796, elevatorArrivalY, "left"),
-      spawn(`${floorId.toLowerCase()}-corridor-center`, 560, 920, "down"),
+      spawn(`${floorId.toLowerCase()}-elevator-arrival`, 876, elevatorArrivalY, "left"),
+      spawn(`${floorId.toLowerCase()}-corridor-center`, 640, 920, "down"),
     ],
     floorTile,
     doors,

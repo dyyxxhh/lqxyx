@@ -832,4 +832,92 @@ describe('Bug Fixes — A-1 door fall-through + switchView position', () => {
 
     expect(manager.getDebugState()).toMatchObject({ floorId: '5F', roomId: null });
   });
+
+  it('Bug (door transition replay ghost): replay sprite hides synchronously when player context changes between update() calls', async () => {
+    // During a door transition PlayScene synchronously renders the new room and
+    // repositions the player, but updateYangYunReplay() does not run again until
+    // the next frame. Without a synchronous visibility refresh, the replay
+    // sprite (Yang Yun) remains visible at its old in-world coordinates for one
+    // rendered frame, appearing as a ghost walking through the door / lying
+    // body still shown on the new screen.
+    //
+    // The contract: after the player's floor/room changes (e.g. via door
+    // transition), PlayScene MUST call refreshVisibilityForContext() so the
+    // replay sprite's visibility reflects the new context before Phaser renders
+    // the next frame.
+    const { YangYunReplayManager } = await import('../scenes/YangYunReplayManager');
+    const sprite = {
+      visible: false,
+      setOrigin: vi.fn(() => sprite),
+      setDepth: vi.fn(() => sprite),
+      setVisible: vi.fn((visible: boolean) => { sprite.visible = visible; return sprite; }),
+      setPosition: vi.fn(() => sprite),
+      setTexture: vi.fn(() => sprite),
+      destroy: vi.fn(),
+    };
+    const stubScene = {
+      add: { sprite: vi.fn(() => sprite) },
+      textures: { exists: () => true },
+    } as unknown as Phaser.Scene;
+    const manager = new YangYunReplayManager(stubScene);
+
+    // Yang Yun replay recorded inside gt1-classroom at (760, 520) facing down.
+    manager.startRecording(0);
+    manager.recordFrame(0, 760, 520, '4F', 'gt1-classroom', 'down');
+    manager.stopRecording();
+
+    // Replay starts while Dong Jihao is also in gt1-classroom → sprite visible.
+    manager.startReplay(0, { x: 760, y: 520, floorId: '4F', roomId: 'gt1-classroom' });
+    expect(manager.getDebugState().visible).toBe(true);
+
+    // Dong Jihao exits the room (door transition). The new context is the 4F
+    // corridor. BEFORE the fix, sprite.visible stays true here because no
+    // update() runs. AFTER the fix, refreshVisibilityForContext() hides it.
+    manager.refreshVisibilityForContext({ x: 560, y: 920, floorId: '4F', roomId: null });
+    expect(manager.getDebugState().visible).toBe(false);
+
+    // And when Dong Jihao walks back into the same room, the sprite reappears
+    // synchronously without needing an update() call.
+    manager.refreshVisibilityForContext({ x: 760, y: 520, floorId: '4F', roomId: 'gt1-classroom' });
+    expect(manager.getDebugState().visible).toBe(true);
+  });
+
+  it('Bug (door transition replay ghost): refreshVisibilityForContext does not advance replay position or phase', async () => {
+    // The synchronous refresh must be a pure visibility update — it must NOT
+    // advance the replay buffer, change the sprite's recorded position, or
+    // mutate the phase. Otherwise it would desync the replay timeline.
+    const { YangYunReplayManager } = await import('../scenes/YangYunReplayManager');
+    const sprite = {
+      visible: false,
+      setOrigin: vi.fn(() => sprite),
+      setDepth: vi.fn(() => sprite),
+      setVisible: vi.fn((visible: boolean) => { sprite.visible = visible; return sprite; }),
+      setPosition: vi.fn(() => sprite),
+      setTexture: vi.fn(() => sprite),
+      destroy: vi.fn(),
+    };
+    const stubScene = {
+      add: { sprite: vi.fn(() => sprite) },
+      textures: { exists: () => true },
+    } as unknown as Phaser.Scene;
+    const manager = new YangYunReplayManager(stubScene);
+
+    manager.startRecording(0);
+    manager.recordFrame(0, 100, 100, '4F', 'gt1-classroom', 'down');
+    manager.recordFrame(500, 120, 140, '4F', 'gt1-classroom', 'down');
+    manager.stopRecording();
+
+    manager.startReplay(0, { x: 100, y: 100, floorId: '4F', roomId: 'gt1-classroom' });
+    const beforePhase = manager.getDebugState().phase;
+    const beforeReplayIndex = manager.getDebugState().replayIndex;
+    const beforeX = manager.getDebugState().x;
+    const beforeY = manager.getDebugState().y;
+
+    manager.refreshVisibilityForContext({ x: 560, y: 920, floorId: '4F', roomId: null });
+
+    expect(manager.getDebugState().phase).toBe(beforePhase);
+    expect(manager.getDebugState().replayIndex).toBe(beforeReplayIndex);
+    expect(manager.getDebugState().x).toBe(beforeX);
+    expect(manager.getDebugState().y).toBe(beforeY);
+  });
 });

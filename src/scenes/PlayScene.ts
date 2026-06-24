@@ -421,6 +421,7 @@ export class PlayScene extends Phaser.Scene {
         this.eventEngine.updateLocation(this.currentFloor, this.currentRoom);
         this.refreshStoryEntities();
         this.movePlayerToElevatorArrival(targetFloor);
+        this.refreshReplayVisibility();
       });
       return true;
     }
@@ -438,6 +439,7 @@ export class PlayScene extends Phaser.Scene {
       this.playerSprite.setPosition(this.playerPosition.x, this.playerPosition.y);
       this.eventEngine.updatePlayerPosition(this.playerPosition);
       this.syncCharacterDebugState();
+      this.refreshReplayVisibility();
       return true;
     }
 
@@ -471,6 +473,7 @@ export class PlayScene extends Phaser.Scene {
     this.playerSprite.setPosition(this.playerPosition.x, this.playerPosition.y);
     this.eventEngine.updatePlayerPosition(this.playerPosition);
     this.syncCharacterDebugState();
+    this.refreshReplayVisibility();
   }
 
   private getRoomSpawnPoint(roomId: RoomId, spawnPointId: string) {
@@ -850,6 +853,8 @@ export class PlayScene extends Phaser.Scene {
       }
       this.syncCharacterDebugState();
     }
+
+    this.refreshReplayVisibility();
   }
 
   private onCheckpointReached(checkpointId: CheckpointId): void {
@@ -1037,6 +1042,15 @@ export class PlayScene extends Phaser.Scene {
       sprite.setDepth(entry.depth);
       this.storyEntitySprites.push(sprite);
     }
+  }
+
+  private refreshReplayVisibility(): void {
+    this.replayManager?.refreshVisibilityForContext({
+      x: this.playerPosition.x,
+      y: this.playerPosition.y,
+      floorId: this.currentFloor,
+      roomId: this.currentRoom,
+    });
   }
 
   shutdown(): void {

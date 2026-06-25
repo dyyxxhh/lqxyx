@@ -180,7 +180,7 @@ impl App {
 
     fn pkg(&self, command: crate::cli::PkgCommand) -> Result<()> {
         match command {
-            crate::cli::PkgCommand::Info { .. } => Self::not_implemented("pkg info"),
+            crate::cli::PkgCommand::Info { path } => self.pkg_info(&path),
             crate::cli::PkgCommand::Install { .. } => Self::not_implemented("pkg install"),
             crate::cli::PkgCommand::Download { .. } | crate::cli::PkgCommand::Dl { .. } => {
                 Self::not_implemented("pkg download")
@@ -189,6 +189,47 @@ impl App {
             crate::cli::PkgCommand::Share { .. } => Self::not_implemented("pkg share"),
             crate::cli::PkgCommand::List => Self::not_implemented("pkg list"),
         }
+    }
+
+    /// `pkg info <path>`: read a `.mcm` file, parse it, and print a normalized
+    /// summary. Read-only — installs nothing. Heavy lifting lives in
+    /// `mcm_package::parse_mcm_package`.
+    fn pkg_info(&self, path: &std::path::Path) -> Result<()> {
+        let text = fs::read_to_string(path).with_context(|| format!("read {}", path.display()))?;
+        let pkg = crate::mcm_package::parse_mcm_package(&text)?;
+        println!("name: {}", pkg.name);
+        println!("version: {}", pkg.version);
+        if let Some(desc) = &pkg.description {
+            println!("description: {desc}");
+        }
+        if let Some(gv) = &pkg.game_version {
+            println!("game_version: {gv}");
+        }
+        if let Some(loader) = &pkg.loader {
+            println!("loader: {loader}");
+        }
+        println!("schema_version: {}", pkg.schema_version);
+        println!("dependencies: {}", pkg.dependencies.len());
+        println!("mods: {}", pkg.mods.len());
+        println!("shaderpacks: {}", pkg.shaderpacks.len());
+        println!("resourcepacks: {}", pkg.resourcepacks.len());
+        println!("datapacks: {}", pkg.datapacks.len());
+        println!("saves: {}", pkg.saves.len());
+        println!("configs: {}", pkg.configs.len());
+        if let Some(actions) = &pkg.actions {
+            println!("actions: {}", actions.len());
+        }
+        if let Some(launch) = &pkg.launch {
+            println!(
+                "launch.game: {}",
+                launch.game.as_deref().unwrap_or("(unset)")
+            );
+            println!("launch.args: {}", launch.args.len());
+        }
+        if pkg.local.is_some() {
+            println!("local: present (excluded from public export)");
+        }
+        Ok(())
     }
 
     fn do_file(&self, _file: Option<PathBuf>, _yes: bool) -> Result<()> {

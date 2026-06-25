@@ -291,3 +291,52 @@ Total: 14 lib tests (unchanged count).
 - MODIFIED: `src/app.rs` (load_config migration + removed game() stub; not_implemented pub(crate))
 - MODIFIED: `src/lib.rs` (added game_cmd/game_model modules + docstring)
 - NEW: `.omo/evidence/task-5-mcm-minecraft-manager-expansion.txt`
+
+## [2026-06-25 23:50:00 UTC] Task: 6 — Define `.mcm` package schema and parser boundary
+
+**Status:** COMPLETE. All 162 tests green (23 lib + 44 char + 28 game_config + 7 help + 17 mc_target + 30 mcm_package + 13 mvp). `cargo fmt --check` clean. `cargo clippy --all-targets --all-features -- -D warnings` clean. Evidence at `.omo/evidence/task-6-mcm-minecraft-manager-expansion.txt`.
+
+### What changed
+
+**New module** (`src/mcm_package.rs`, 177 pure LOC):
+- `McmPackage` struct — schema-versioned, all fields typed (no `serde_json::Value` in domain logic except opaque `LocalPrivate` container)
+- `parse_mcm_package(json: &str) -> Result<McmPackage>` — single boundary parser enforcing: size (≤10MB), depth (≤64), secret-field rejection (recursive, case-insensitive, markers: `token`/`secret`/`password`/`credential`/`api_key`), schema version (only 1), package-name normalization, asset-path traversal checks
+- `validate_package_name` — `[a-z0-9-]`, 1-64 chars, alphanumeric start/end, no consecutive hyphens, reserved names (`mcm` + Windows reserved)
+- `validate_asset_path` — rejects empty/null/`..`/absolute/backslash/Windows-reserved components
+- Supporting types: `Dependency`, `ModEntry`, `Asset`, `AssetSource` (embedded|referenced), `Action`, `ActionKind` (shell), `LaunchRequest`, `LocalPrivate`
+
+**`pkg info` wired** (`src/app.rs`, 192→227 pure LOC):
+- `PkgCommand::Info { path }` now reads file → `parse_mcm_package` → prints normalized summary
+- Other `pkg` subcommands stay `not_implemented()` (task 10)
+
+**`src/lib.rs`** (21→23 pure LOC): added `mod mcm_package` + re-exports `parse_mcm_package`/`McmPackage` + docstring entry
+
+**Tests** (`tests/mcm_package.rs`, 30 tests):
+- Pure parser unit tests: valid (minimal/full/all-optional/longest-name), schema version (unknown/missing), name validation (7 tests: reserved/uppercase/underscore/hyphens/length), secrets (top-level/nested/array), size/depth, path traversal (6 bad + 1 valid nested), missing fields, empty object
+- CLI-surface tests (8): valid print, missing file, secret field, path traversal, unknown schema, reserved name, local present, stub install/list
+
+### Key decisions
+1. **Secret scan runs on `serde_json::Value` BEFORE typed parse** — so secrets in `LocalPrivate` (which uses opaque `Value`) are caught. The scan is recursive over objects/arrays, case-insensitive on keys.
+2. **`LocalPrivate` uses opaque `serde_json::Value`** for `settings`/`history` — this is the ONLY place `Value` appears in the schema, and domain logic never interprets it. This is acceptable because: (a) secret scan already ran, (b) it's explicitly local/private, (c) future tasks define the structure.
+3. **Windows-reserved-name check is shared** between `validate_package_name` and `validate_asset_path` via `is_windows_reserved_stem` — reuses the concept from `src/safety.rs` without coupling.
+4. **`AssetSource` is an enum** (embedded|referenced) not a string — parse-don't-validate at the boundary.
+5. **`Action` is Linux-shell-only** (`ActionKind::Shell`) — per task spec; Windows shell actions rejected at schema level.
+6. **Depth check uses `json_depth()`** (scalar=0, object/array=1+max child) — catches deeply nested JSON before typed parse.
+
+### Boundary discipline
+- `parse_mcm_package` is the ONLY function that accepts raw JSON
+- All validators (`validate_package_name`, `validate_asset_path`) operate on typed `&str`/`&String`, not `Value`
+- `pkg_info` in `app.rs` calls `parse_mcm_package` then prints typed fields — never touches `Value`
+
+### Stub boundaries (for downstream tasks)
+- `pkg install/download/dl/make/share/list` → task 10
+- `do [file]` → task 10 (will reuse `parse_mcm_package`)
+- Top-level `install [target]` → task 10 (will reuse `parse_mcm_package`)
+- Full safety/confirmation policy → task 7 (`pkg info` is read-only, doesn't need it)
+
+### Files touched
+- NEW: `src/mcm_package.rs` (177 pure LOC)
+- NEW: `tests/mcm_package.rs` (30 tests)
+- MODIFIED: `src/lib.rs` (21→23 pure LOC)
+- MODIFIED: `src/app.rs` (192→227 pure LOC)
+- NEW: `.omo/evidence/task-6-mcm-minecraft-manager-expansion.txt`

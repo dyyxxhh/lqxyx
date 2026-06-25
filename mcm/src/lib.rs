@@ -11,6 +11,7 @@
 //! - `jar_info` — local jar metadata reader (fabric.mod.json / mods.toml / mcmod.info)
 //! - `install` — install planning (`build_plan`, `select_artifact`, `read_mod_list`)
 //! - `mc_target` — `game install` smart target parser (`mc`, `mc1.21.1-neoforge-21.1.172`, ...)
+//! - `mcm_package` — schema-versioned `.mcm` package types + boundary parser
 //! - `app` — `App` struct, config/lock IO, provider dispatch, `run()` entry point
 //! - `profile_cmd` — `mods add`/`use`/`show`/`profile-list` implementations on `App`
 //! - `game_cmd` — `game default/list/info/rename/config/remove` implementations on `App`
@@ -28,6 +29,7 @@ mod jar_info;
 mod lifecycle;
 mod lock;
 mod mc_target;
+mod mcm_package;
 mod profile_cmd;
 mod provider;
 mod queries;
@@ -37,6 +39,7 @@ mod util;
 pub use cli::{Cli, Command, GameCommand, ModsCommand, PkgCommand, ProviderChoice, SourceCommand};
 pub use config::Side;
 pub use mc_target::{parse_mc_target, Loader, McTarget};
+pub use mcm_package::{parse_mcm_package, McmPackage};
 
 pub fn run(cli: Cli) -> anyhow::Result<()> {
     app::run(cli)

@@ -117,3 +117,59 @@ These are the exact current behaviors locked by `tests/characterization.rs`. The
 
 ### Git note
 The entire `mcm/` directory is currently UNTRACKED in the parent `/nas/lucky` repo (no `mcm/.git`). The commit will be the first to track `mcm/` test files. Only test files + evidence + notepad are staged.
+
+## [2026-06-25 12:45:00 UTC] Task: 2 — Split oversized Rust architecture without changing behavior
+
+**Status:** COMPLETE. All 73 tests green (14 lib + 44 char + 13 mvp + 2 help), run 3x stable. `cargo clippy --all-targets --all-features -- -D warnings` clean. `src/` fmt-clean. Evidence at `.omo/evidence/task-2-mcm-minecraft-manager-expansion.txt`.
+
+### What changed
+`src/lib.rs` (2530 lines) split into 18 focused modules. `src/lib.rs` is now a 17-line thin re-export hub (`mod` declarations + `pub use` for `Cli`/`Command`/`ProfileCommand`/`ProviderChoice`/`Side` + `pub fn run`). `src/main.rs` unchanged. `Cargo.toml` unchanged. No new deps. All 26 characterization quirks preserved (tests green).
+
+### Final module map (where symbols live)
+
+| File | Pure LOC | Role | Key symbols |
+|---|---|---|---|
+| `src/lib.rs` | 17 | thin re-export hub | `pub fn run`, `pub use {Cli, Command, ProfileCommand, ProviderChoice, Side}` |
+| `src/cli.rs` | 75 | Clap derive structs | `Cli`, `ProviderChoice`, `Command`, `ProfileCommand` |
+| `src/config.rs` | 25 | TOML config types | `Side`, `Config`, `Profile`, `ProfileSnapshot` |
+| `src/lock.rs` | 85 | lock state + reachability | `LockState`, `InstalledMod`, `InstallReason`, `reachable_required_deps`, `remove_owned_file`, `test_installed_mod` (cfg test) |
+| `src/provider.rs` | 85 | Provider trait + shared types | `Provider` trait, `Project`, `Candidate`, `Artifact`, `ReleaseKind`, `Dependency`, `DependencyKind`, `Plan`, `PlannedInstall`, `group_projects`, `candidate_summary` + submod declarations |
+| `src/provider/composite.rs` | 59 | composite provider | `CompositeProvider` |
+| `src/provider/mock.rs` | 246 | mock provider + fixtures | `MockProvider`, `filter_project`, `mock_projects`, `mock_jar_bytes`, `artifact`/`artifact_beta`/`artifact_alpha`/`dep` helpers, `test_helpers` mod; SIZE_OK on `mock_projects` data table |
+| `src/provider/modrinth.rs` | 294 | Modrinth provider | `ModrinthProvider`, `ModrinthSearchResponse`/`ModrinthProjectHit`/`ModrinthProject`/`ModrinthVersion`/`ModrinthFile`/`ModrinthDependency` DTOs, `modrinth_project_from_parts`/`modrinth_artifact_from_version`/mappers; SIZE_OK (test fixture bulk) |
+| `src/provider/curseforge.rs` | 439 | CurseForge provider | `CurseForgeProvider`, `curseforge_project_from_parts`/`curseforge_artifact_from_file`/mappers, redirect-leak tests; SIZE_OK (test fixture bulk) |
+| `src/provider/curseforge_dto.rs` | 33 | CurseForge JSON DTOs | `CurseForgeListResponse`, `CurseForgeSingleResponse`, `CurseForgeMod`, `CurseForgeFile`, `CurseForgeHash`, `CurseForgeDependency` |
+| `src/safety.rs` | 178 | security helpers | `DOWNLOAD_HOST_ALLOWLIST`, `sanitize_filename`, `validate_download_url`, `is_blocked_ip`, `confirm_install` + filename-safety tests |
+| `src/jar_info.rs` | 86 | local jar metadata | `local_jar_info`, `print_json_field`, `print_mcmod_info_fields` + zip test |
+| `src/install.rs` | 421 | install planning | `search_install_roots`, `deps_by_kind`, `build_plan`, `print_plan`, `select_artifact`, `artifact_is_better`, `parse_dotted_version`, `read_mod_list`; SIZE_OK (test fixture bulk) |
+| `src/app.rs` | 120 | App struct + run() | `App` struct, `App::new`, `config_path`/`lock_path`/`load_config`/`save_config`/`active_profile`/`load_lock`/`save_lock`/`provider`, `pub(crate) fn run` |
+| `src/profile_cmd.rs` | 65 | profile command | `impl App { fn profile }` |
+| `src/queries.rs` | 92 | query commands | `impl App { fn search / fn info / fn list / fn status }` |
+| `src/lifecycle.rs` | 130 | install/remove/autoremove | `impl App { fn install / fn remove / fn autoremove }` |
+| `src/util.rs` | 16 | IO helpers | `atomic_write`, `sha256_hex` |
+
+### SIZE_OK justifications
+Files >250 pure LOC all exceed the ceiling only because of their `#[cfg(test)] mod tests` blocks (test fixture, stays with the code it exercises). Non-test source in every file is ≤230 LOC:
+- `install.rs`: 221 non-test + 200 test = 421
+- `curseforge.rs`: 34 non-test + 405 test = 439 (redirect-leak + JSON-mapping regression tests)
+- `modrinth.rs`: 229 non-test + 65 test = 294
+- `mock.rs`: 246 total, SIZE_OK on `mock_projects()` data table (pure deterministic test-fixture data)
+
+### Test placement
+- 4 unit tests in `safety::tests` (sanitize, validate_url)
+- 1 unit test in `jar_info::tests` (mcmod.info zip)
+- 1 unit test in `provider::modrinth::tests` (JSON mapping)
+- 4 unit tests in `provider::curseforge::tests` (JSON mapping, download-request, redirect-leak x2)
+- 3 unit tests in `install::tests` (select_artifact, build_plan reachability, composite merge)
+- 1 test helper `test_installed_mod` in `lock.rs` (cfg test)
+- 1 test helper module `test_helpers` in `provider/mock.rs` (cfg test): re-exports `artifact`/`dep` + `test_profile()`
+Total: 14 lib tests (unchanged count).
+
+### fmt note
+`tests/characterization.rs` has PRE-EXISTING `cargo fmt --check` diffs (from Task 1, before this refactor). Per task constraints ("Do NOT modify `tests/characterization.rs`"), these were not touched. All `src/` files are fmt-clean (verified via `rustfmt --check` on each).
+
+### Adversarial QA results
+- `flaky tests`: 3 consecutive `cargo test` runs all green (73/73 each). No flakiness.
+- `dirty worktree`: after commit, only expected files staged (src/ + evidence + learnings). `tests/characterization.rs` reverted to original (no fmt changes leaked in).
+- `misleading success output`: refactor compiles AND all 44 characterization tests pass — behavior unchanged.
+- `stale_state`: no leftover `mod` declarations in lib.rs for removed modules; lib.rs contains exactly the current module list.

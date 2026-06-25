@@ -3,6 +3,7 @@
 //! Module map:
 //! - `cli` — Clap derive structs (`Cli`, `Command`, `ModsCommand`, `ProviderChoice`, ...)
 //! - `config` — `Side`, `Config`, `Profile`, `ProfileSnapshot` (TOML persistence types)
+//! - `game_model` — `GameRecord`, `GameConfig`, `GlobalConfig`, profile→game migration
 //! - `lock` — `LockState`, `InstalledMod`, `InstallReason` + reachability/removal helpers
 //! - `provider` — `Provider` trait, shared types (`Project`/`Artifact`/...), `CompositeProvider`
 //!   + submodules: `mock`, `modrinth`, `curseforge`, `curseforge_dto`
@@ -12,6 +13,7 @@
 //! - `mc_target` — `game install` smart target parser (`mc`, `mc1.21.1-neoforge-21.1.172`, ...)
 //! - `app` — `App` struct, config/lock IO, provider dispatch, `run()` entry point
 //! - `profile_cmd` — `mods add`/`use`/`show`/`profile-list` implementations on `App`
+//! - `game_cmd` — `game default/list/info/rename/config/remove` implementations on `App`
 //! - `queries` — `search`/`info`/`list`/`status` command implementations on `App`
 //! - `lifecycle` — `install`/`remove`/`autoremove` command implementations on `App`
 //! - `util` — `atomic_write`, `sha256_hex`
@@ -19,6 +21,8 @@
 mod app;
 mod cli;
 mod config;
+mod game_cmd;
+mod game_model;
 mod install;
 mod jar_info;
 mod lifecycle;

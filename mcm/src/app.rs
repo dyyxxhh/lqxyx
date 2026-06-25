@@ -50,13 +50,18 @@ impl App {
     pub(crate) fn load_config(&self) -> Result<Config> {
         let path = self.config_path();
         if !path.exists() {
-            return Ok(Config {
-                active_profile: None,
-                profiles: std::collections::BTreeMap::new(),
-            });
+            return Ok(Config::default());
         }
         let text = fs::read_to_string(&path).with_context(|| format!("read {}", path.display()))?;
-        toml::from_str(&text).with_context(|| format!("parse {}", path.display()))
+        let mut config: Config =
+            toml::from_str(&text).with_context(|| format!("parse {}", path.display()))?;
+        // One-way in-memory migration: if old profile data exists and no games
+        // have been recorded yet, derive game records from profiles so `game`
+        // commands see them. Old profile data is preserved on disk; the
+        // migrated games are not persisted (that would race with `mods add`
+        // which still operates on the legacy profile model).
+        crate::game_model::migrate_profiles_to_games(&mut config);
+        Ok(config)
     }
 
     pub(crate) fn save_config(&self, config: &Config) -> Result<()> {
@@ -137,7 +142,7 @@ pub(crate) fn run(cli: Cli) -> Result<()> {
 }
 
 impl App {
-    fn not_implemented(name: &str) -> Result<()> {
+    pub(crate) fn not_implemented(name: &str) -> Result<()> {
         Err(anyhow!("{name} is not implemented yet"))
     }
 
@@ -183,22 +188,6 @@ impl App {
             crate::cli::PkgCommand::Make { .. } => Self::not_implemented("pkg make"),
             crate::cli::PkgCommand::Share { .. } => Self::not_implemented("pkg share"),
             crate::cli::PkgCommand::List => Self::not_implemented("pkg list"),
-        }
-    }
-
-    fn game(&self, command: crate::cli::GameCommand) -> Result<()> {
-        match command {
-            crate::cli::GameCommand::Default { .. } => Self::not_implemented("game default"),
-            crate::cli::GameCommand::Install { target, .. } => {
-                // Validate the smart target grammar even though install is stubbed.
-                crate::mc_target::parse_mc_target(&target).map_err(anyhow::Error::msg)?;
-                Self::not_implemented("game install")
-            }
-            crate::cli::GameCommand::Remove { .. } => Self::not_implemented("game remove"),
-            crate::cli::GameCommand::Info { .. } => Self::not_implemented("game info"),
-            crate::cli::GameCommand::Rename { .. } => Self::not_implemented("game rename"),
-            crate::cli::GameCommand::Config { .. } => Self::not_implemented("game config"),
-            crate::cli::GameCommand::List => Self::not_implemented("game list"),
         }
     }
 

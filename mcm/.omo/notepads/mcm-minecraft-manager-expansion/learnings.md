@@ -244,3 +244,50 @@ Total: 14 lib tests (unchanged count).
 - `run` → task 22
 - `config` → task 5
 - `install [target]` (top-level) → task 10
+
+## [2026-06-25 22:30:00 UTC] Task: 5 — Typed config model for ~/mcm, games, paths, precedence
+
+**Status:** COMPLETE. All 132 tests green (23 lib + 44 char + 28 game_config + 7 help + 17 mc_target + 13 mvp). `cargo fmt --check` clean. `cargo clippy --all-targets --all-features -- -D warnings` clean. Evidence at `.omo/evidence/task-5-mcm-minecraft-manager-expansion.txt`.
+
+### What changed
+
+**New game model** (`src/game_model.rs`, 95 pure LOC):
+- `GameRecord { name, root_dir, mc_version: Option, loader: Option, version_config: GameConfig }`
+- `GameConfig { java_path, jvm_args, extra_args, env: BTreeMap }` — version-scoped config (all `Option`/default)
+- `GlobalConfig { root_dir: PathBuf }` — default root is `~/mcm` via `directories::UserDirs`
+- `migrate_profiles_to_games(&mut Config)` — one-way in-memory migration; old profile data preserved
+
+**Config extended** (`src/config.rs`, 54 pure LOC):
+- `Config` now has `games: BTreeMap<String, GameRecord>`, `default_game: Option<String>`, `global: GlobalConfig` alongside legacy `active_profile`/`profiles`
+- All new fields `#[serde(default)]` → old config.toml files deserialize cleanly
+- `Config` now derives `Default` (replaces manual `Config { active_profile: None, profiles: ... }` in `load_config`)
+
+**Game commands** (`src/game_cmd.rs`, 174 pure LOC):
+- `game default [name]` — no arg prints default or "no default game"; with arg sets (validates game exists)
+- `game list` — BTreeMap order, `*` marker for default
+- `game info <name>` — root_dir, mc_version, loader, java_path, jvm_args, extra_args, env
+- `game rename <old> <new>` — updates config + default pointer; refuses if new name exists
+- `game config <name>` — show-only (CLI has no `--set` flag; task 4 didn't define one)
+- `game remove <name> --yes` — removes config record only; never touches disk; clears default if needed
+- `game install` — remains stub (task 20); validates target grammar before stub
+
+**Migration design** (critical for downstream tasks):
+- Migration runs **in-memory** on every `load_config` when `profiles` non-empty and `games` empty
+- Migration is **NOT persisted** — `mods add` re-saves config with empty games, which would race
+- No stderr warning (would break 44 characterization tests that assert exact stderr)
+- Old profile data is never deleted; `mods` commands continue using `profiles` directly
+
+### Key decisions
+1. `game config` is show-only because task 4's `GameCommand::Config { name }` has no set flag. Setting fields needs a future CLI change.
+2. `game remove` only removes the config record, never disk files. Full safety policy is task 7.
+3. Default root `~/mcm` uses `directories::UserDirs` (not `ProjectDirs`) since it's user home, not app data.
+4. `not_implemented` made `pub(crate)` so `game_cmd.rs` can call it for `game install` stub.
+
+### Files touched
+- NEW: `src/game_model.rs` (95 pure LOC)
+- NEW: `src/game_cmd.rs` (174 pure LOC)
+- NEW: `tests/game_config.rs` (28 tests)
+- MODIFIED: `src/config.rs` (25 → 54 pure LOC)
+- MODIFIED: `src/app.rs` (load_config migration + removed game() stub; not_implemented pub(crate))
+- MODIFIED: `src/lib.rs` (added game_cmd/game_model modules + docstring)
+- NEW: `.omo/evidence/task-5-mcm-minecraft-manager-expansion.txt`

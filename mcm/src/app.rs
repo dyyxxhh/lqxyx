@@ -169,15 +169,6 @@ impl App {
         }
     }
 
-    fn source(&self, command: crate::cli::SourceCommand) -> Result<()> {
-        match command {
-            crate::cli::SourceCommand::Add { .. } => Self::not_implemented("source add"),
-            crate::cli::SourceCommand::Remove { .. } => Self::not_implemented("source remove"),
-            crate::cli::SourceCommand::Info { .. } => Self::not_implemented("source info"),
-            crate::cli::SourceCommand::List => Self::not_implemented("source list"),
-        }
-    }
-
     fn pkg(&self, command: crate::cli::PkgCommand) -> Result<()> {
         match command {
             crate::cli::PkgCommand::Info { path } => self.pkg_info(&path),

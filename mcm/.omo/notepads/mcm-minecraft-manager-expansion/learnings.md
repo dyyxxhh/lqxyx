@@ -465,3 +465,56 @@ Every command, subcommand, flag, and alias in the README was cross-checked again
 - REWROTE: `README.md`
 - NEW: `.omo/evidence/task-24-mcm-minecraft-manager-expansion.txt`
 - No source files (.rs), test files, or config files modified.
+
+## [2026-06-25 17:05:00 UTC] Task: 8 — Implement source config CLI and no-default-source invariant
+
+**Status:** COMPLETE. All 204 tests green (32 lib + 44 char + 21 confirmation + 28 game_config + 7 help + 17 mc_target + 30 mcm_package + 13 mvp + 12 source_cmd). `cargo fmt --check` clean. `cargo clippy --all-targets --all-features -- -D warnings` clean. Evidence at `.omo/evidence/task-8-mcm-minecraft-manager-expansion.txt`.
+
+### What changed
+
+**New module** (`src/source_cmd.rs`, 59 pure LOC):
+- `impl App { fn source(command) }` — dispatches `SourceCommand::{Add|Remove|Info|List}`
+- `source_add(url, yes)` — calls `require_confirmation(OperationKind::SourceAction, yes)`, checks duplicate, inserts `SourceRecord { url, added_at }`, saves config, prints "added source {url}"
+- `source_remove(url)` — removes from config, saves, prints "removed source {url}". Errors with "unknown source {url}" if not found.
+- `source_info(url)` — prints `url:`, `status: trusted (manual import)`, `added_at:`. Errors if not found.
+- `source_list()` — prints URLs in BTreeMap key order (alphabetical). Empty = silent success (exit 0).
+
+**Config extended** (`src/config.rs`, 25→34 pure LOC):
+- `Config` now has `sources: BTreeMap<String, SourceRecord>` with `#[serde(default)]` → old config.toml files deserialize cleanly
+- `SourceRecord { url: String, added_at: String }` — `added_at` is ISO-8601 UTC via `time::OffsetDateTime::now_utc().to_string()`
+
+**App wiring** (`src/app.rs`): removed the private `fn source` stub (lines 172-179). Dispatch now lives in `source_cmd.rs` as `impl App { fn source }`, mirroring `game_cmd.rs` pattern. `app.rs`'s `run()` already called `app.source(command)` which now resolves to the `source_cmd.rs` method.
+
+**lib.rs**: added `mod source_cmd;` + docstring entry.
+
+**Tests** (`tests/source_cmd.rs`, 12 tests):
+- Fresh config: empty list (exit 0), no config.toml on disk
+- Add with `--yes`: succeeds, persists to `[sources."url"]` in TOML, appears in list
+- Add without `--yes` in non-TTY: bails with "confirmation required; pass --yes to proceed", nothing persisted
+- Add duplicate: bails with "already imported"
+- Info: prints url + status + added_at; unknown errors with "unknown source"
+- Remove: succeeds, list empty after; unknown errors
+- BTreeMap ordering: multiple sources list in alphabetical URL order
+- Config isolation: sources in one config-dir not visible in another
+
+### Key decisions
+
+1. **`SourceRecord` lives in `config.rs`** alongside `Config`/`Profile` — it's a TOML persistence type, so it belongs with the other config types. `source_cmd.rs` imports it via `use crate::config::SourceRecord`.
+
+2. **`source remove` does NOT require confirmation** — removing a source is a config-only operation (no disk files touched), and the task spec only requires confirmation at add time ("support trust confirmation at add time"). The confirmation policy classifies `SourceAction` as `Bypassable`, but we only call `require_confirmation` in `source_add`, not `source_remove`. This mirrors how `game remove` requires `--yes` but `game info`/`game list` don't — but here remove is even lighter (no disk impact). If the spec wanted remove confirmation, it would have said so.
+
+3. **TOML serialization format**: `BTreeMap<String, SourceRecord>` serializes as `[sources."url"]` sections (not `[sources]` as a bare table). Each source gets its own `[sources."https://..."]` header with `url` and `added_at` fields underneath. This is standard TOML map-of-structs serialization.
+
+4. **`added_at` uses `OffsetDateTime::now_utc().to_string()`** — same pattern as `lifecycle.rs:83` (`installed_at`). Format is ISO-8601 UTC like `2026-06-25 17:02:47.171424533 +00:00:00`.
+
+5. **No-default-source invariant enforced by `Default`** — `Config` derives `Default`, and `BTreeMap::default()` is empty. Fresh config has zero sources. No author source is preinstalled. The `#[serde(default)]` on the `sources` field ensures old configs without the key also start empty.
+
+6. **`source list` is silent on empty** — mirrors `mods list` / `profile list` / `game list` behavior (empty = silent success, exit 0). This is the established convention.
+
+### Files touched
+- NEW: `src/source_cmd.rs` (59 pure LOC)
+- NEW: `tests/source_cmd.rs` (12 tests)
+- MODIFIED: `src/config.rs` (25→34 pure LOC — added `SourceRecord` + `sources` field)
+- MODIFIED: `src/app.rs` (removed 8-line `fn source` stub; dispatch moved to `source_cmd.rs`)
+- MODIFIED: `src/lib.rs` (added `mod source_cmd;` + docstring entry)
+- NEW: `.omo/evidence/task-8-mcm-minecraft-manager-expansion.txt`

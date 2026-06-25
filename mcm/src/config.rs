@@ -27,6 +27,20 @@ pub(crate) struct Config {
     pub(crate) default_game: Option<String>,
     #[serde(default)]
     pub(crate) global: GlobalConfig,
+    // Manually imported custom sources (URL → record). Fresh config starts
+    // empty — no author source is preinstalled. Defaulted so old config.toml
+    // files without this key deserialize cleanly.
+    #[serde(default)]
+    pub(crate) sources: BTreeMap<String, SourceRecord>,
+}
+
+/// A manually imported custom source. Importing makes it trusted; actionable
+/// operations on sources still require confirmation via the centralized policy.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub(crate) struct SourceRecord {
+    pub(crate) url: String,
+    /// ISO-8601 UTC timestamp of when the source was added.
+    pub(crate) added_at: String,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

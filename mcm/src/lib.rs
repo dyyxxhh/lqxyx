@@ -16,6 +16,7 @@
 //! - `app` — `App` struct, config/lock IO, provider dispatch, `run()` entry point
 //! - `profile_cmd` — `mods add`/`use`/`show`/`profile-list` implementations on `App`
 //! - `game_cmd` — `game default/list/info/rename/config/remove` implementations on `App`
+//! - `source_cmd` — `source add/remove/info/list` implementations on `App`
 //! - `queries` — `search`/`info`/`list`/`status` command implementations on `App`
 //! - `lifecycle` — `install`/`remove`/`autoremove` command implementations on `App`
 //! - `util` — `atomic_write`, `sha256_hex`
@@ -36,6 +37,7 @@ mod profile_cmd;
 mod provider;
 mod queries;
 mod safety;
+mod source_cmd;
 mod util;
 
 pub use cli::{Cli, Command, GameCommand, ModsCommand, PkgCommand, ProviderChoice, SourceCommand};

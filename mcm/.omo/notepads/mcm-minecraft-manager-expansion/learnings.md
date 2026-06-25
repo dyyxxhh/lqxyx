@@ -422,3 +422,46 @@ Total: 14 lib tests (unchanged count).
 - `root_escalation_helper` is ready for task 20 (game install) to call when root privileges are needed.
 - `confirm_typed` is ready for MC-critical interactive prompts in future tasks.
 - `NonBypassable` policy is defined but no existing operation uses it yet (future root/system changes will).
+
+## [2026-06-26 00:45:00 UTC] Task: 24 — Write deployment, operations, and user docs
+
+**Status:** COMPLETE. README rewritten (69 → 327 lines). All 12 required sections covered. Evidence at `.omo/evidence/task-24-mcm-minecraft-manager-expansion.txt`.
+
+### What changed
+- REWROTE: `README.md` (69 lines → 327 lines) — full Minecraft manager docs
+- NEW: `.omo/evidence/task-24-mcm-minecraft-manager-expansion.txt`
+
+### Sections covered (12/12)
+1. Overview — apt-like Minecraft manager (not just mods)
+2. CLI grammar — install, upgrade, full-upgrade, source, pkg, game, do, run, config, mods (alias mod)
+3. .mcm package schema — schema version 1, fields, secret-field rejection, path traversal protection
+4. Custom sources — source add/remove/info/list, trust model, zero sources on fresh install
+5. Confirmation policy — --yes/-y bypasses, autoremove MC-critical, read-only never prompts, NonBypassable
+6. Server modes — share/source/both, default 127.0.0.1:8950, PM2 ecosystem.config.js example
+7. OIDC auth — env names only (MCM_OIDC_ISSUER, MCM_OIDC_CLIENT_ID, MCM_OIDC_CLIENT_SECRET)
+8. Data directory — defaults outside /x (/var/lib/mcm-share or MCM_SHARE_DATA_DIR)
+9. Install routes — both curl|bash routes verbatim
+10. Publish policy — daily push limit, max 5 packages, delete not resetting, 2-day slug reservation, overwrite-on-update, owner check
+11. License — AGPLv3, source availability, HMCL/PCL clean-room note
+12. Providers — mock/modrinth/curseforge/all (preserved + extended)
+
+### Key decisions
+1. **No emojis** — original README had none, so the rewrite uses plain text throughout.
+2. **Implementation status noted inline** — features from tasks 8-23 (not yet complete) are documented with "(Implementation in progress.)" notes where applicable, but the full intended interface is documented per task spec.
+3. **PM2 example uses JavaScript ecosystem.config.js** — standard PM2 config format with env vars for OIDC names (no secret values).
+4. **Secret grep verified clean** — `grep -niE "password|secret|token|turnstile" README.md` returns only: (a) ENV variable names, (b) schema field name descriptions (what the parser rejects), (c) the explicit "no Turnstile required" policy statement. No actual secret values anywhere.
+5. **Repo-wide secret scan clean** — scanned all .md/.rs/.toml/.json files for common secret patterns (sk-, xox, ghp_, AIza, BEGIN PRIVATE KEY). Zero matches.
+
+### CLI grammar verified against src/cli.rs
+Every command, subcommand, flag, and alias in the README was cross-checked against `src/cli.rs` (253 lines). All match exactly:
+- `install [target] [-y]`, `upgrade`, `full-upgrade [-y]`
+- `source {add|remove|info|list}`
+- `pkg {info|install|download|dl|make|share|list}` (dl = download alias)
+- `game {default|install|remove|info|rename|config|list}`
+- `do [file] [-y]`, `run [--dry-run]`, `config`
+- `mods {add|use|search|info|install|list|status|remove|uninstall|autoremove|show|profile-list}` (mod = alias)
+
+### Files touched
+- REWROTE: `README.md`
+- NEW: `.omo/evidence/task-24-mcm-minecraft-manager-expansion.txt`
+- No source files (.rs), test files, or config files modified.

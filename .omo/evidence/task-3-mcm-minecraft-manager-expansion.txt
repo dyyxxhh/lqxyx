@@ -1,0 +1,47 @@
+# Task 3: AGPL and dependency/license compliance gates
+## Timestamp: 2026-06-25T11:48:00Z
+
+## Files Created
+- LICENSE — full AGPLv3 text from gnu.org (official FSF text)
+- deny.toml — cargo-deny license audit configuration
+- docs/AGPL-COMPLIANCE.md — AGPLv3 hosted-service compliance documentation
+- docs/CLEAN-ROOM-POLICY.md — HMCL/PCL clean-room policy
+
+## Files Modified
+- Cargo.toml — added `license = "AGPL-3.0-or-later"`
+
+## Verification: cargo deny check licenses
+Result: PASS (licenses ok)
+Warnings: 4 unmatched license allowances (expected — BSD-2-Clause, CC0-1.0, OpenSSL, Unicode-DFS-2016 are allowed but not currently in dependency tree)
+
+## Verification: No HMCL/PCL source markers copied
+Command: `grep -rl "HMCL\|PCL\|Plain Craft Launcher\|Hello Minecraft" /mnt/Storage1_xe6x96xb0xe5x8axa0xe5x8dxb7/nas/lucky/mcm/src/`
+Result: NO_HMCL_PCL_SOURCE_MARKERS (clean)
+
+## Verification: New docs contain no copied source markers
+Command: `grep -c "Plain Craft Launcher" docs/CLEAN-ROOM-POLICY.md`
+Result: 1 (in table — this is a citation, not copied code)
+
+## cargo-deny version
+cargo-deny 0.19.9 (installed via `cargo install cargo-deny`)
+
+## Adversarial QA Results
+
+### stale_state
+PASS — deny.toml references current Cargo.toml dependency set. Licenses that appear in the tree (ICU Unicode-3.0, CDLA-Permissive-2.0, AGPL-3.0-or-later) were all added. Unmatched warnings are from allowed licenses not currently in the tree, which is expected.
+
+### misleading_success_output
+PASS — cargo-deny "licenses ok" is a real config-only check against the resolved dependency graph. The advisory DB was not fetched (no `advisories` check was run), but the license check is self-contained and does not require the DB. This is documented — only `check licenses` was run, not `check all`.
+
+### dirty_worktree
+PENDING — will be verified after commit.
+
+## Manual License Audit (equivalent if cargo-deny unavailable)
+All dependency licenses:
+- MIT: clap, directories, hex, serde, serde_json, sha2, zip, assert_cmd, predicates, tempfile, etc.
+- Apache-2.0: reqwest, tower-http, etc.
+- ISC: (common transitive)
+- Zlib: (common transitive)
+- Unicode-3.0: ICU crates (icu_collections, icu_locale_core, icu_normalizer, etc.)
+- CDLA-Permissive-2.0: webpki-roots
+- AGPL-3.0-or-later: mcm (self)

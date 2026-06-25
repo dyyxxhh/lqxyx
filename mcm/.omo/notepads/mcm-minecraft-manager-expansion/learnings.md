@@ -1,0 +1,119 @@
+# Learnings - mcm-minecraft-manager-expansion
+
+## Project State (initial)
+- Single-file Rust CLI: `src/lib.rs` is 2530 lines (oversized, must split in Task 2)
+- `src/main.rs` is 8 lines (just calls lib)
+- Tests: `tests/mvp.rs` (312 lines), `tests/help.rs` (38 lines)
+- Dependencies: clap 4.5 (derive+env), reqwest 0.12 (blocking+rustls), serde, serde_json, sha2, zip 0.6, toml, time, anyhow, hex, directories
+- Dev deps: assert_cmd, predicates, tempfile
+- Mock provider is deterministic, no network needed for tests
+- `--config-dir` / `MCM_CONFIG_DIR` and `--state-dir` / `MCM_STATE_DIR` isolate state for tests
+
+## Plan Constraints (apply to ALL tasks)
+- Old top-level CLI spelling compatibility is NOT required after refactor
+- Files >250 pure LOC need split or explicit SIZE_OK justification (data/generated only)
+- No HMCL/PCL code/assets/strings copied — conceptual UX reference only
+- No Turnstile for publish/update/delete; no admin token
+- Server storage default MUST be outside `/x`
+- Fresh install has ZERO custom sources (no preloaded author source)
+- Manual QA required, not just unit tests; evidence under `.omo/evidence/task-N-*.{txt,png}`
+- Commit message style: `type(scope): description` (see plan commit strategy)
+
+## Per-Task Notes
+(appended by workers as tasks complete)
+
+## [2026-06-25 11:25:38 UTC] Task: 1 — Baseline characterization tests
+
+**Status:** COMPLETE. All tests green (mvp 13, help 2, characterization 44, lib 14). Evidence at `.omo/evidence/task-1-mcm-minecraft-manager-expansion.txt`.
+
+### What was pinned (current-behavior quirks Task 2 must preserve)
+
+These are the exact current behaviors locked by `tests/characterization.rs`. The refactor in Task 2 may rename commands but must keep these semantics:
+
+1. **`profile add` auto-activates the new profile.** `ProfileCommand::Add` sets `config.active_profile = Some(name)` (src/lib.rs:379). Adding a second profile switches the active pointer to it. This is a quirk, not documented in README, but pinned.
+
+2. **`profile list` prints in BTreeMap (alphabetical) key order**, with `* ` marker for active and `  ` (two spaces) for inactive. Output format: `{marker} {name}`.
+
+3. **`profile show` prints `side:` using Debug format (`{:?}`)** → `side: Both` / `side: Client` / `side: Server`. NOT lowercase serde form. The `side` field serializes as lowercase in TOML (`#[serde(rename_all = "lowercase")]`) but displays as Debug.
+
+4. **`profile list` with no profiles is silent success** (empty stdout, exit 0). NOT an error.
+
+5. **`profile use <unknown>` errors:** `Error: unknown profile {name}` (exit 1, stderr).
+
+6. **`profile show <unknown>` errors:** `Error: unknown profile {name}` (exit 1, stderr).
+
+7. **No-active-profile error message is exactly:** `Error: no active profile; run profile add or profile use` (exit 1, stderr). Affects `list`, `status`, `search`, cloud `info`, `install`, `remove`, `autoremove`.
+
+8. **`search` with no match is silent success** (empty stdout, exit 0). Does NOT error.
+
+9. **`search` matches by `logical_id.contains(query)` OR `title.to_lowercase().contains(query.to_lowercase())`** (case-insensitive on title, case-sensitive on logical_id). Mock provider.
+
+10. **Search groups duplicate candidates by logical_id** via `group_projects` (BTreeMap merge). Candidates printed as `{provider}/{project_id}` joined by `, `. Example: `candidates: mock/rootmod, modrinth/rootmod`.
+
+11. **`info <query>` dispatch:** if `path.exists() || query.ends_with(".jar")` → local jar branch; else cloud. So `info nonexistent.jar` takes the local branch and fails with `Error: read {path}`. A mod named `foo.jar` would be misinterpreted as a local jar if such a file existed.
+
+12. **Cloud `info` output format:**
+    ```
+    {logical_id} - {title}
+    {description}
+    candidates: {summary}
+    selected: {file_id} {version}
+    required deps: {comma-list}      # only if non-empty
+    optional deps: {comma-list}      # only if non-empty
+    warning: {Debug dep_kind} dependency {id} not installed   # for Embedded/Incompatible/Unknown
+    ```
+    Dep kind in warnings uses `{:?}` → `Embedded`, `Incompatible`, `Unknown` (capitalized).
+
+13. **`install` plan output order is BTreeMap key order** (alphabetical by logical_id), NOT insertion order. So `depmod` (Auto) prints before `rootmod` (Manual). Format: `install {logical_id} {version} {reason:?}` where reason is `Auto`/`Manual`.
+
+14. **Install warning order** follows the dependency iteration order of the artifact's `deps` Vec: for rootmod that's optional → embedded → incompatible → unknown. Warnings print AFTER all install lines.
+
+15. **`install --dry-run` prints `dry run` as the FIRST plan line** (before install lines), then the plan, then warnings. Writes no jars and no lock file.
+
+16. **`install` with missing download URL errors:** `missing download URL` (via anyhow context). No partial jar written, no lock file created. The error is raised in the staging loop BEFORE any file is written to the mods dir.
+
+17. **`install --file` parses `#` comments (inline too), blank lines, trims whitespace.** One mod ID per line. `read_mod_list` splits on `#` first, then trims.
+
+18. **`install <query>` where query is not a known mod ID:** first does `search`, and if search returns empty → `Error: mod {query} not found by search`. If search returns results, picks the FIRST result (`results.remove(0)`) and prints `selected {logical_id} from search result {query}`.
+
+19. **`list` output format:** `{logical_id} {version} {reason:?} {provider}/{file_id}` — BTreeMap order. `reason` is Debug (`Manual`/`Auto`). Empty list → silent success.
+
+20. **`status` output:** `ok: {logical_id}` / `missing: {logical_id} ({filename})` / `changed: {logical_id} ({filename})` / `untracked: {name}`. Owned-jar checks first (BTreeMap order), then untracked scan of `*.jar` files in mods_dir. Untracked = any `.jar` not in owned set. `status` never deletes/claims untracked jars.
+
+21. **`remove`/`uninstall` are aliases** (same `app.remove` call). Refuses auto deps: `Error: {id} is automatic; use autoremove when no roots require it`. Refuses without `--yes`: `Error: confirmation required; pass --yes to apply`. Unknown: `Error: {id} is not installed`. Removes ONLY the owned jar file; auto deps remain.
+
+22. **`autoremove` with nothing removable:** prints `nothing to autoremove`, exit 0 (no `--yes` needed in this case). With removable mods but no `--yes`: `Error: confirmation required; pass --yes to apply`.
+
+23. **`autoremove` reachability:** BFS from manual roots' `required_deps`, transitively. Auto deps not in this set are removed. Keeps required dep while a manual root still needs it.
+
+24. **Provider dispatch:**
+    - `--provider mock` → `MockProvider`, fully offline, deterministic.
+    - `--provider curseforge` → requires `CURSEFORGE_API_KEY` env; without it: `Error: CurseForge provider requires CURSEFORGE_API_KEY` (raised at `CurseForgeProvider::new`, before any network). Pinned for both `search` and `info`.
+    - `--provider modrinth` → `ModrinthProvider::new()` (no key needed); hits real network, NON-DETERMINISTIC — NOT pinned in characterization tests.
+    - `--provider all` (default) → `CompositeProvider::default()`: Modrinth + CurseForge (if key set). Without key, prints `warning: CurseForge disabled: {error}` to stderr and proceeds with Modrinth only. The warning is deterministic but the subsequent Modrinth search is non-deterministic, so `all` is NOT pinned end-to-end.
+
+25. **Local jar `info` metadata priority:** `fabric.mod.json` → `META-INF/mods.toml` → `mcmod.info` → `metadata: unavailable`. First match wins; returns early.
+    - fabric.mod.json: prints `metadata: fabric.mod.json`, then `id:` and `version:` via `print_json_field` (serde_json parse, `as_str()`).
+    - mods.toml: prints `metadata: mods.toml`, then lines starting with `modId` or `version` (trimmed).
+    - mcmod.info: prints `metadata: mcmod.info`, then `id:`, `version:`, `name:` (mapped from modid/version/name of first array element).
+    - none/unavailable: prints `metadata: unavailable`.
+    - Always prints `local jar: {path}`, `sha256: {hex}`, `size: {bytes}` before metadata. Never prints `provider:` for local jars.
+
+26. **`mock_jar_bytes` is deterministic:** `format!("mock mcm jar\nid={id}\nversion={version}\n")`. So installed jar SHA-256 hashes are stable and pinnable. The `installed_at` timestamp in the lock file is NOT deterministic — do not assert on it.
+
+### Test isolation style (preserved)
+- `--config-dir <tmp>/c --state-dir <tmp>/s --provider mock` via `assert_cmd::Command`.
+- `tempfile::TempDir` for root; `mods` subdir created by test.
+- New `tests/characterization.rs` mirrors `tests/mvp.rs` `TestHome` helper exactly. No new dependencies added.
+- Local jar tests build minimal valid ZIP archives byte-for-byte via a hand-rolled stored-zip builder (the `zip` crate is a private dep of mcm, not a dev-dependency, so integration tests cannot use it directly; a stored-zip is straightforward and deterministic).
+
+### Provider-selection coverage gap (intentional)
+- `--provider modrinth` and `--provider all` hit real network and are non-deterministic. Per task instructions ("do NOT hit real network"), these are NOT pinned end-to-end. Only the curseforge-key dispatch gate and mock offline behavior are pinned. Task 2's refactor must preserve the curseforge-key error message and the mock provider's deterministic data.
+
+### Files touched
+- NEW: `tests/characterization.rs` (44 tests, ~640 lines)
+- UNCHANGED: `src/lib.rs`, `src/main.rs`, `Cargo.toml`, `tests/mvp.rs`, `tests/help.rs`
+- Evidence: `.omo/evidence/task-1-mcm-minecraft-manager-expansion.txt`
+
+### Git note
+The entire `mcm/` directory is currently UNTRACKED in the parent `/nas/lucky` repo (no `mcm/.git`). The commit will be the first to track `mcm/` test files. Only test files + evidence + notepad are staged.

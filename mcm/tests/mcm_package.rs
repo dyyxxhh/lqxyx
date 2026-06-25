@@ -469,25 +469,26 @@ fn pkg_info_shows_local_present_when_local_field_set() {
 }
 
 // ---------------------------------------------------------------------------
-// Other pkg subcommands remain stubbed
+// Other pkg subcommands are implemented in task 10 (see tests/pkg_cmd.rs).
+// These sanity-check that they are no longer stubbed.
 // ---------------------------------------------------------------------------
 
 #[test]
-fn pkg_install_remains_stubbed() {
+fn pkg_install_is_no_longer_stubbed() {
     let home = TestHome::new();
     home.cmd()
-        .args(["pkg", "install", "x.mcm", "--yes"])
+        .args(["pkg", "install", "nonexistent.mcm", "--yes"])
         .assert()
         .failure()
-        .stderr(predicate::str::contains("not implemented yet"));
+        .stderr(predicate::str::contains("not implemented yet").not());
 }
 
 #[test]
-fn pkg_list_remains_stubbed() {
+fn pkg_list_is_no_longer_stubbed() {
     let home = TestHome::new();
     home.cmd()
         .args(["pkg", "list"])
         .assert()
-        .failure()
-        .stderr(predicate::str::contains("not implemented yet"));
+        .success()
+        .stdout(predicate::str::is_empty());
 }

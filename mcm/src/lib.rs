@@ -18,6 +18,8 @@
 //! - `profile_cmd` — `mods add`/`use`/`show`/`profile-list` implementations on `App`
 //! - `game_cmd` — `game default/list/info/rename/config/remove` implementations on `App`
 //! - `source_cmd` — `source add/remove/info/list` implementations on `App`
+//! - `pkg_cmd` — `pkg install/download/make/share/list` + top-level `install` / `do` on `App`
+//! - `pkg_install` — package apply logic (mod jars + assets + script execution)
 //! - `queries` — `search`/`info`/`list`/`status` command implementations on `App`
 //! - `lifecycle` — `install`/`remove`/`autoremove` command implementations on `App`
 //! - `util` — `atomic_write`, `sha256_hex`
@@ -34,6 +36,8 @@ mod lifecycle;
 mod lock;
 mod mc_target;
 mod mcm_package;
+mod pkg_cmd;
+mod pkg_install;
 mod profile_cmd;
 mod provider;
 mod queries;

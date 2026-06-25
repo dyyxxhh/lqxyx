@@ -146,46 +146,10 @@ impl App {
         Err(anyhow!("{name} is not implemented yet"))
     }
 
-    /// Top-level `install [target] [-y]`: low-power `.mcm` installer.
-    /// Validates the target is a `.mcm` path/URL; rejects raw mod names and
-    /// `mc...` smart targets. Actual install behavior is filled by task 10.
-    fn top_install(&self, target: Option<String>, _yes: bool) -> Result<()> {
-        if let Some(target) = target {
-            if target.starts_with("mc") && crate::mc_target::parse_mc_target(&target).is_ok() {
-                return Err(anyhow!(
-                    "top-level install does not accept Minecraft smart targets; \
-                     use `game install` instead"
-                ));
-            }
-            if !target.ends_with(".mcm") && !target.starts_with("http") {
-                return Err(anyhow!(
-                    "top-level install accepts only a `.mcm` file path or URL; \
-                     raw mod names are not supported (use `mods install`)"
-                ));
-            }
-            Self::not_implemented("install <.mcm>")
-        } else {
-            Self::not_implemented("install (auto-select .mcm)")
-        }
-    }
-
-    fn pkg(&self, command: crate::cli::PkgCommand) -> Result<()> {
-        match command {
-            crate::cli::PkgCommand::Info { path } => self.pkg_info(&path),
-            crate::cli::PkgCommand::Install { .. } => Self::not_implemented("pkg install"),
-            crate::cli::PkgCommand::Download { .. } | crate::cli::PkgCommand::Dl { .. } => {
-                Self::not_implemented("pkg download")
-            }
-            crate::cli::PkgCommand::Make { .. } => Self::not_implemented("pkg make"),
-            crate::cli::PkgCommand::Share { .. } => Self::not_implemented("pkg share"),
-            crate::cli::PkgCommand::List => Self::not_implemented("pkg list"),
-        }
-    }
-
     /// `pkg info <path>`: read a `.mcm` file, parse it, and print a normalized
     /// summary. Read-only — installs nothing. Heavy lifting lives in
     /// `mcm_package::parse_mcm_package`.
-    fn pkg_info(&self, path: &std::path::Path) -> Result<()> {
+    pub(crate) fn pkg_info(&self, path: &std::path::Path) -> Result<()> {
         let text = fs::read_to_string(path).with_context(|| format!("read {}", path.display()))?;
         let pkg = crate::mcm_package::parse_mcm_package(&text)?;
         println!("name: {}", pkg.name);
@@ -221,10 +185,6 @@ impl App {
             println!("local: present (excluded from public export)");
         }
         Ok(())
-    }
-
-    fn do_file(&self, _file: Option<PathBuf>, _yes: bool) -> Result<()> {
-        Self::not_implemented("do")
     }
 
     /// Dispatch the mod-manager command group (`mods` / `mod`).

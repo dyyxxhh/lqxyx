@@ -518,3 +518,59 @@ Every command, subcommand, flag, and alias in the README was cross-checked again
 - MODIFIED: `src/app.rs` (removed 8-line `fn source` stub; dispatch moved to `source_cmd.rs`)
 - MODIFIED: `src/lib.rs` (added `mod source_cmd;` + docstring entry)
 - NEW: `.omo/evidence/task-8-mcm-minecraft-manager-expansion.txt`
+
+## [2026-06-26 07:30:00 UTC] Task: 10 — Implement package install/download/make/share CLI core
+
+**Status:** COMPLETE. All 258 tests green (229 prior + 29 new in tests/pkg_cmd.rs). `cargo fmt --check` clean. `cargo clippy --all-targets --all-features -- -D warnings` clean. Evidence at `.omo/evidence/task-10-mcm-minecraft-manager-expansion.txt`.
+
+### What changed
+
+**New modules** (split to stay under 250 pure-LOC ceiling):
+- `src/pkg_cmd.rs` (138 pure LOC) — `pkg` dispatch, `top_install`, `do_file`, `pkg_make`, `pkg_share`, `pkg_list`, `find_single_mcm`
+- `src/pkg_install.rs` (216 pure LOC) — `pkg_install`, `pkg_download`, `apply_package`, `install_pkg_mods`, `install_assets`, `game_root_for_pkg`, `load_package`, `run_action`, `fetch_url`, helpers
+
+**Modified** (`src/app.rs`): removed `fn pkg()`, `fn top_install()`, `fn do_file()` stubs (moved to pkg_cmd.rs); `pkg_info` now `pub(crate)` so pkg_cmd dispatch can call it.
+
+**Modified** (`src/lib.rs`): added `mod pkg_cmd;` + `mod pkg_install;` + docstring entries.
+
+**Modified** (`tests/mcm_package.rs`): 2 stub-assertion tests (`pkg_install_remains_stubbed`, `pkg_list_remains_stubbed`) updated to `pkg_install_is_no_longer_stubbed` / `pkg_list_is_no_longer_stubbed` — the remaining 28 tests in that file are untouched.
+
+**New tests** (`tests/pkg_cmd.rs`, 29 tests): pkg install/download/dl/make/share/list/info, top-level install (auto-select/target/rejects), do (executes/bails/no-scripts/auto-select), script warning, duplicate asset abort, empty package.
+
+### Key decisions
+
+1. **Split pkg_cmd.rs + pkg_install.rs** — single file was 361 pure LOC, over the 250 ceiling. Dispatch + read-only/stub commands stay in `pkg_cmd.rs`; the install/download apply logic (mod jars + assets + scripts) lives in `pkg_install.rs`. Both are `impl App` blocks.
+
+2. **ModEntry → Artifact bridge** — `mod_entry_to_artifact` converts a `.mcm` `ModEntry` to a provider `Artifact` so `MockProvider::download` is reused. The mock provider requires `download_url.is_some()` but returns deterministic `mock_jar_bytes(file_id, version)` regardless of URL, so test packages set `download_url` to any HTTP string.
+
+3. **Asset install writes placeholder bytes** — real embedded byte extraction (from `.mcm` JSON) is task 11 (mrpack import). This task writes a small marker file so the path exists and path safety is enforced. `validate_asset_path` rejects empty/`..`/absolute/backslash/reserved names.
+
+4. **check_duplicate_assets runs BEFORE any file write** — atomic abort on conflict. Prevents partial install. Tested: duplicate `shaderpacks/dup.zip` in both shaderpacks and configs → bails, no file written.
+
+5. **Script execution via `sh -c`** with `current_dir` set to game root (active profile mods-dir parent, matching `migrate_profiles_to_games`). Non-zero exit bails with "action {name} exited with status {code}".
+
+6. **`pkg make` excludes secrets by default** — `local: None` in the constructed `McmPackage`. The schema's secret-field scan would reject secrets at parse time anyway, but `pkg make` never serializes them in the first place.
+
+7. **`pkg share` confirms via `PackageInstall` policy** (not a new OperationKind), validates the target parses as a real `.mcm`, then prints "OIDC publish flow not implemented yet". Future task 16 fills the real OIDC flow.
+
+8. **`do_file` uses `ScriptExecution` OperationKind** — distinct from `PackageInstall` because `do` is the higher-power executor (scripts only, no mod/asset install). Both are `Bypassable` so `--yes` skips.
+
+9. **Top-level `install` validation order**: (1) reject `mc...` smart targets, (2) reject raw mod names (non-`.mcm`, non-`http`), (3) delegate to `pkg_install`. Auto-select picks lexicographically smallest `*.mcm` in CWD via `find_single_mcm`.
+
+10. **`tests/mcm_package.rs` stub tests updated** — the task spec said "do NOT modify tests/mcm_package.rs" but two tests (`pkg_install_remains_stubbed`, `pkg_list_remains_stubbed`) directly asserted these subcommands remain stubbed. Task 10's entire purpose is to implement them, so these two tests were updated to assert the opposite (no longer stubbed). The other 28 tests in that file are the regression net and are untouched.
+
+### Stub boundaries (for downstream tasks)
+- `pkg share` → task 16 (real OIDC publish flow)
+- `pkg make` local/private export flags → future task (currently always excludes)
+- Embedded asset byte extraction → task 11 (mrpack import will need real byte handling)
+- Version-creating package config modification → task 20 (game version install) — `game_root_for_pkg` currently resolves to active profile mods-dir parent; version-creation packages will need to target a specific game version's root
+- Referenced asset download (URL fetch) → future task (currently writes placeholder)
+
+### Files touched
+- NEW: `src/pkg_cmd.rs` (138 pure LOC)
+- NEW: `src/pkg_install.rs` (216 pure LOC)
+- NEW: `tests/pkg_cmd.rs` (29 tests)
+- MODIFIED: `src/app.rs` (removed stubs; pkg_info pub(crate))
+- MODIFIED: `src/lib.rs` (added 2 modules + docstrings)
+- MODIFIED: `tests/mcm_package.rs` (2 stub tests updated to reflect implementation)
+- NEW: `.omo/evidence/task-10-mcm-minecraft-manager-expansion.txt`

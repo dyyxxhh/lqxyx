@@ -1,15 +1,14 @@
-//! Baseline characterization tests for the current mcm CLI.
+//! Baseline characterization tests for the mcm CLI.
 //!
-//! These tests pin the EXACT observable behavior of the existing top-level
-//! command grammar (`profile`/`search`/`info`/`install`/`list`/`status`/
-//! `remove`/`uninstall`/`autoremove`) before the planned refactor into
-//! `game`/`mod(s)` command spelling. They assert current behavior — quirks
+//! These tests pin the EXACT observable behavior of the mod-manager command
+//! grammar (now under `mods`/`mod`: `add`/`use`/`search`/`info`/`install`/
+//! `list`/`status`/`remove`/`uninstall`/`autoremove`/`show`/`profile-list`)
+//! after the Task 4 command-grammar refactor. They assert behavior — quirks
 //! included — so a later refactor cannot silently regress it.
 //!
-//! Per the plan (`.omo/plans/mcm-minecraft-manager-expansion.md` Task 1):
-//! - Tests-only; no production code is changed by this file.
-//! - Old top-level spelling compatibility is NOT a long-term requirement;
-//!   these tests may be migrated to new spelling in Task 2.
+//! Per the plan (`.omo/plans/mcm-minecraft-manager-expansion.md`):
+//! - Old top-level spelling compatibility is NOT required; tests migrated to
+//!   new `mods` spelling in Task 4.
 //! - All cloud behavior uses `--provider mock`; no real network is hit.
 //!
 //! Test-isolation style mirrors `tests/mvp.rs`: `--config-dir` + `--state-dir`
@@ -61,7 +60,7 @@ impl TestHome {
     fn profile(&self) {
         self.cmd()
             .args([
-                "profile",
+                "mods",
                 "add",
                 "dev",
                 "--mods-dir",
@@ -87,7 +86,7 @@ fn profile_add_sets_new_profile_active_and_creates_mods_dir() {
     // `add` prints exactly this and exits 0.
     home.cmd()
         .args([
-            "profile",
+            "mods",
             "add",
             "dev",
             "--mods-dir",
@@ -103,7 +102,7 @@ fn profile_add_sets_new_profile_active_and_creates_mods_dir() {
 
     // Adding a profile makes it the active profile (current behavior quirk).
     home.cmd()
-        .args(["profile", "list"])
+        .args(["mods", "profile-list"])
         .assert()
         .success()
         .stdout(predicate::eq("* dev\n"));
@@ -118,17 +117,13 @@ fn profile_add_defaults_side_to_both_and_show_uses_debug_format() {
     home.profile();
 
     // `side` defaults to `both` and is printed with Debug formatting (`Both`).
-    home.cmd()
-        .args(["profile", "show"])
-        .assert()
-        .success()
-        .stdout(
-            predicate::str::contains("name: dev\n")
-                .and(predicate::str::contains("mods_dir: "))
-                .and(predicate::str::contains("mc_version: 1.20.1\n"))
-                .and(predicate::str::contains("loader: fabric\n"))
-                .and(predicate::str::contains("side: Both\n")),
-        );
+    home.cmd().args(["mods", "show"]).assert().success().stdout(
+        predicate::str::contains("name: dev\n")
+            .and(predicate::str::contains("mods_dir: "))
+            .and(predicate::str::contains("mc_version: 1.20.1\n"))
+            .and(predicate::str::contains("loader: fabric\n"))
+            .and(predicate::str::contains("side: Both\n")),
+    );
 }
 
 #[test]
@@ -138,7 +133,7 @@ fn profile_use_switches_active_and_list_marks_active_with_star() {
     // Add a second profile; `add` makes it active.
     home.cmd()
         .args([
-            "profile",
+            "mods",
             "add",
             "prod",
             "--mods-dir",
@@ -154,20 +149,20 @@ fn profile_use_switches_active_and_list_marks_active_with_star() {
 
     // BTreeMap ordering: `dev` before `prod` alphabetically; prod active.
     home.cmd()
-        .args(["profile", "list"])
+        .args(["mods", "profile-list"])
         .assert()
         .success()
         .stdout(predicate::eq("  dev\n* prod\n"));
 
     // Switch back to dev.
     home.cmd()
-        .args(["profile", "use", "dev"])
+        .args(["mods", "use", "dev"])
         .assert()
         .success()
         .stdout(predicate::eq("active profile dev\n"));
 
     home.cmd()
-        .args(["profile", "list"])
+        .args(["mods", "profile-list"])
         .assert()
         .success()
         .stdout(predicate::eq("* dev\n  prod\n"));
@@ -178,7 +173,7 @@ fn profile_use_unknown_profile_errors() {
     let home = TestHome::new();
     home.profile();
     home.cmd()
-        .args(["profile", "use", "nope"])
+        .args(["mods", "use", "nope"])
         .assert()
         .failure()
         .stderr(predicate::eq("Error: unknown profile nope\n"));
@@ -189,7 +184,7 @@ fn profile_show_named_unknown_errors() {
     let home = TestHome::new();
     home.profile();
     home.cmd()
-        .args(["profile", "show", "nope"])
+        .args(["mods", "show", "nope"])
         .assert()
         .failure()
         .stderr(predicate::eq("Error: unknown profile nope\n"));
@@ -200,7 +195,7 @@ fn profile_list_empty_is_silent_success() {
     let home = TestHome::new();
     // No profiles: `list` prints nothing and exits 0.
     home.cmd()
-        .args(["profile", "list"])
+        .args(["mods", "profile-list"])
         .assert()
         .success()
         .stdout(predicate::str::is_empty());
@@ -214,7 +209,7 @@ fn profile_list_empty_is_silent_success() {
 fn list_without_active_profile_errors_with_actionable_message() {
     let home = TestHome::new();
     home.cmd()
-        .arg("list")
+        .args(["mods", "list"])
         .assert()
         .failure()
         .stderr(predicate::eq(
@@ -226,7 +221,7 @@ fn list_without_active_profile_errors_with_actionable_message() {
 fn status_without_active_profile_errors() {
     let home = TestHome::new();
     home.cmd()
-        .arg("status")
+        .args(["mods", "status"])
         .assert()
         .failure()
         .stderr(predicate::eq(
@@ -238,7 +233,7 @@ fn status_without_active_profile_errors() {
 fn search_without_active_profile_errors() {
     let home = TestHome::new();
     home.cmd()
-        .args(["search", "root"])
+        .args(["mods", "search", "root"])
         .assert()
         .failure()
         .stderr(predicate::eq(
@@ -249,10 +244,10 @@ fn search_without_active_profile_errors() {
 #[test]
 fn info_cloud_without_active_profile_errors() {
     let home = TestHome::new();
-    // `info rootmod` does not end with `.jar` and path does not exist, so it
+    // `mods info rootmod` does not end with `.jar` and path does not exist, so it
     // takes the cloud branch and requires an active profile.
     home.cmd()
-        .args(["info", "rootmod"])
+        .args(["mods", "info", "rootmod"])
         .assert()
         .failure()
         .stderr(predicate::eq(
@@ -271,7 +266,7 @@ fn search_groups_duplicate_candidates_by_logical_id() {
     // rootmod has two candidates (mock/rootmod and modrinth/rootmod) that are
     // merged under one logical id. Beta/alpha artifacts are filtered out.
     home.cmd()
-        .args(["search", "root"])
+        .args(["mods", "search", "root"])
         .assert()
         .success()
         .stdout(predicate::eq(
@@ -284,7 +279,7 @@ fn search_no_match_is_silent_success() {
     let home = TestHome::new();
     home.profile();
     home.cmd()
-        .args(["search", "zzznomatch"])
+        .args(["mods", "search", "zzznomatch"])
         .assert()
         .success()
         .stdout(predicate::str::is_empty());
@@ -296,7 +291,7 @@ fn search_matches_title_substring_case_insensitively() {
     home.profile();
     // "standalone" matches the title "Standalone" via case-insensitive contains.
     home.cmd()
-        .args(["search", "stand"])
+        .args(["mods", "search", "stand"])
         .assert()
         .success()
         .stdout(predicate::eq(
@@ -312,11 +307,11 @@ fn search_matches_title_substring_case_insensitively() {
 fn cloud_info_prints_selected_artifact_and_all_dependency_kinds() {
     let home = TestHome::new();
     home.profile();
-    // `info` prints the selected stable artifact and surfaces required/optional
+    // `mods info` prints the selected stable artifact and surfaces required/optional
     // deps plus warnings for embedded/incompatible/unknown kinds (Debug format
     // for the dep kind in warnings).
     home.cmd()
-        .args(["info", "rootmod"])
+        .args(["mods", "info", "rootmod"])
         .assert()
         .success()
         .stdout(predicate::eq(
@@ -329,7 +324,7 @@ fn cloud_info_for_standalone_has_no_dep_lines() {
     let home = TestHome::new();
     home.profile();
     home.cmd()
-        .args(["info", "standalone"])
+        .args(["mods", "info", "standalone"])
         .assert()
         .success()
         .stdout(predicate::eq(
@@ -341,10 +336,10 @@ fn cloud_info_for_standalone_has_no_dep_lines() {
 fn cloud_info_for_brokenmod_succeeds_without_download_url() {
     let home = TestHome::new();
     home.profile();
-    // `info` only reads project metadata; the missing download URL does not
+    // `mods info` only reads project metadata; the missing download URL does not
     // affect info (it would fail at install time).
     home.cmd()
-        .args(["info", "brokenmod"])
+        .args(["mods", "info", "brokenmod"])
         .assert()
         .success()
         .stdout(predicate::eq(
@@ -361,7 +356,7 @@ fn install_without_query_or_file_errors() {
     let home = TestHome::new();
     home.profile();
     home.cmd()
-        .arg("install")
+        .args(["mods", "install"])
         .assert()
         .failure()
         .stderr(predicate::eq(
@@ -374,10 +369,12 @@ fn install_search_query_not_found_errors() {
     let home = TestHome::new();
     home.profile();
     home.cmd()
-        .args(["install", "zzznotfound", "--yes"])
+        .args(["mods", "install", "zzznotfound", "--yes"])
         .assert()
         .failure()
-        .stderr(predicate::eq("Error: mod zzznotfound not found by search\n"));
+        .stderr(predicate::eq(
+            "Error: mod zzznotfound not found by search\n",
+        ));
 }
 
 #[test]
@@ -386,7 +383,13 @@ fn install_file_missing_errors_on_read() {
     home.profile();
     let missing = home.root.path().join("nope.txt");
     home.cmd()
-        .args(["install", "--file", missing.to_str().unwrap(), "--yes"])
+        .args([
+            "mods",
+            "install",
+            "--file",
+            missing.to_str().unwrap(),
+            "--yes",
+        ])
         .assert()
         .failure()
         .stderr(predicate::str::contains("read ").and(predicate::str::contains("nope.txt")));
@@ -400,7 +403,7 @@ fn install_rootmod_emits_all_four_warning_kinds_in_order() {
     // Warnings are emitted in the dependency iteration order of rootmod's
     // artifact: optional, embedded, incompatible, unknown.
     home.cmd()
-        .args(["install", "rootmod", "--yes"])
+        .args(["mods", "install", "rootmod", "--yes"])
         .assert()
         .success()
         .stdout(predicate::eq(
@@ -422,7 +425,7 @@ fn install_dry_run_prints_plan_without_writing_jars() {
     let home = TestHome::new();
     home.profile();
     home.cmd()
-        .args(["install", "rootmod", "--dry-run"])
+        .args(["mods", "install", "rootmod", "--dry-run"])
         .assert()
         .success()
         .stdout(predicate::eq(
@@ -439,7 +442,7 @@ fn install_missing_download_url_errors_and_leaves_no_partial_jar() {
     let home = TestHome::new();
     home.profile();
     home.cmd()
-        .args(["install", "brokenmod", "--yes"])
+        .args(["mods", "install", "brokenmod", "--yes"])
         .assert()
         .failure()
         .stderr(predicate::str::contains("missing download URL"));
@@ -458,12 +461,14 @@ fn install_file_parses_comments_and_blank_lines_into_one_plan() {
     fs::write(&list, "# install roots\nrootmod\nstandalone\n\n").expect("write list");
 
     home.cmd()
-        .args(["install", "--file", list.to_str().unwrap(), "--yes"])
+        .args(["mods", "install", "--file", list.to_str().unwrap(), "--yes"])
         .assert()
         .success()
         .stdout(
             predicate::str::contains("selected rootmod from search result rootmod")
-                .and(predicate::str::contains("selected standalone from search result standalone"))
+                .and(predicate::str::contains(
+                    "selected standalone from search result standalone",
+                ))
                 .and(predicate::str::contains("install rootmod 1.0.0 Manual"))
                 .and(predicate::str::contains("install standalone 1.0.0 Manual")),
         );
@@ -481,14 +486,14 @@ fn list_prints_installed_mods_alphabetically_with_reason_and_identity() {
     let home = TestHome::new();
     home.profile();
     home.cmd()
-        .args(["install", "rootmod", "--yes"])
+        .args(["mods", "install", "rootmod", "--yes"])
         .assert()
         .success();
 
     // Format: `{logical_id} {version} {reason:?} {provider}/{file_id}`
     // BTreeMap order: depmod before rootmod. reason is Debug-cased (Auto/Manual).
     home.cmd()
-        .arg("list")
+        .args(["mods", "list"])
         .assert()
         .success()
         .stdout(predicate::eq(
@@ -501,7 +506,7 @@ fn list_empty_is_silent_success() {
     let home = TestHome::new();
     home.profile();
     home.cmd()
-        .arg("list")
+        .args(["mods", "list"])
         .assert()
         .success()
         .stdout(predicate::str::is_empty());
@@ -516,12 +521,12 @@ fn status_reports_ok_for_intact_owned_jars() {
     let home = TestHome::new();
     home.profile();
     home.cmd()
-        .args(["install", "rootmod", "--yes"])
+        .args(["mods", "install", "rootmod", "--yes"])
         .assert()
         .success();
 
     home.cmd()
-        .arg("status")
+        .args(["mods", "status"])
         .assert()
         .success()
         .stdout(predicate::eq("ok: depmod\nok: rootmod\n"));
@@ -532,7 +537,7 @@ fn status_reports_missing_and_changed_and_untracked_without_claiming_untracked()
     let home = TestHome::new();
     home.profile();
     home.cmd()
-        .args(["install", "rootmod", "--yes"])
+        .args(["mods", "install", "rootmod", "--yes"])
         .assert()
         .success();
     // Mutate owned jars.
@@ -542,18 +547,20 @@ fn status_reports_missing_and_changed_and_untracked_without_claiming_untracked()
     fs::write(home.mods.join("untracked.jar"), b"keep me").expect("untracked jar");
 
     home.cmd()
-        .arg("status")
+        .args(["mods", "status"])
         .assert()
         .success()
         .stdout(
             predicate::str::contains("changed: rootmod (rootmod-1.0.0.jar)")
-                .and(predicate::str::contains("missing: depmod (depmod-1.0.0.jar)"))
+                .and(predicate::str::contains(
+                    "missing: depmod (depmod-1.0.0.jar)",
+                ))
                 .and(predicate::str::contains("untracked: untracked.jar")),
         );
 
     // autoremove must not claim/delete the untracked jar.
     home.cmd()
-        .args(["autoremove", "--yes"])
+        .args(["mods", "autoremove", "--yes"])
         .assert()
         .success();
     assert!(home.mods.join("untracked.jar").exists());
@@ -568,15 +575,17 @@ fn remove_requires_yes_flag() {
     let home = TestHome::new();
     home.profile();
     home.cmd()
-        .args(["install", "rootmod", "--yes"])
+        .args(["mods", "install", "rootmod", "--yes"])
         .assert()
         .success();
 
     home.cmd()
-        .args(["remove", "rootmod"])
+        .args(["mods", "remove", "rootmod"])
         .assert()
         .failure()
-        .stderr(predicate::eq("Error: confirmation required; pass --yes to apply\n"));
+        .stderr(predicate::eq(
+            "Error: confirmation required; pass --yes to apply\n",
+        ));
 }
 
 #[test]
@@ -584,12 +593,12 @@ fn remove_auto_dependency_is_rejected_with_autoremove_hint() {
     let home = TestHome::new();
     home.profile();
     home.cmd()
-        .args(["install", "rootmod", "--yes"])
+        .args(["mods", "install", "rootmod", "--yes"])
         .assert()
         .success();
 
     home.cmd()
-        .args(["remove", "depmod", "--yes"])
+        .args(["mods", "remove", "depmod", "--yes"])
         .assert()
         .failure()
         .stderr(predicate::eq(
@@ -602,7 +611,7 @@ fn remove_unknown_mod_errors() {
     let home = TestHome::new();
     home.profile();
     home.cmd()
-        .args(["remove", "nothing", "--yes"])
+        .args(["mods", "remove", "nothing", "--yes"])
         .assert()
         .failure()
         .stderr(predicate::eq("Error: nothing is not installed\n"));
@@ -613,13 +622,13 @@ fn uninstall_is_alias_for_remove() {
     let home = TestHome::new();
     home.profile();
     home.cmd()
-        .args(["install", "rootmod", "--yes"])
+        .args(["mods", "install", "rootmod", "--yes"])
         .assert()
         .success();
 
     // `uninstall` behaves identically to `remove`.
     home.cmd()
-        .args(["uninstall", "rootmod", "--yes"])
+        .args(["mods", "uninstall", "rootmod", "--yes"])
         .assert()
         .success()
         .stdout(predicate::eq("removed rootmod\n"));
@@ -634,12 +643,12 @@ fn remove_manual_root_keeps_auto_required_dep_until_autoremove() {
     let home = TestHome::new();
     home.profile();
     home.cmd()
-        .args(["install", "rootmod", "--yes"])
+        .args(["mods", "install", "rootmod", "--yes"])
         .assert()
         .success();
 
     home.cmd()
-        .args(["remove", "rootmod", "--yes"])
+        .args(["mods", "remove", "rootmod", "--yes"])
         .assert()
         .success()
         .stdout(predicate::eq("removed rootmod\n"));
@@ -648,7 +657,7 @@ fn remove_manual_root_keeps_auto_required_dep_until_autoremove() {
     assert!(home.mods.join("depmod-1.0.0.jar").exists());
 
     home.cmd()
-        .args(["autoremove", "--yes"])
+        .args(["mods", "autoremove", "--yes"])
         .assert()
         .success()
         .stdout(predicate::eq("removed depmod\n"));
@@ -665,20 +674,22 @@ fn autoremove_requires_yes_when_removable() {
     let home = TestHome::new();
     home.profile();
     home.cmd()
-        .args(["install", "rootmod", "--yes"])
+        .args(["mods", "install", "rootmod", "--yes"])
         .assert()
         .success();
     home.cmd()
-        .args(["remove", "rootmod", "--yes"])
+        .args(["mods", "remove", "rootmod", "--yes"])
         .assert()
         .success();
 
     // depmod is now unreachable but autoremove without --yes refuses.
     home.cmd()
-        .arg("autoremove")
+        .args(["mods", "autoremove"])
         .assert()
         .failure()
-        .stderr(predicate::eq("Error: confirmation required; pass --yes to apply\n"));
+        .stderr(predicate::eq(
+            "Error: confirmation required; pass --yes to apply\n",
+        ));
 }
 
 #[test]
@@ -687,12 +698,12 @@ fn autoremove_nothing_to_do_is_silent_success() {
     home.profile();
     // Install standalone (no deps); nothing is removable.
     home.cmd()
-        .args(["install", "standalone", "--yes"])
+        .args(["mods", "install", "standalone", "--yes"])
         .assert()
         .success();
 
     home.cmd()
-        .args(["autoremove", "--yes"])
+        .args(["mods", "autoremove", "--yes"])
         .assert()
         .success()
         .stdout(predicate::eq("nothing to autoremove\n"));
@@ -703,13 +714,13 @@ fn autoremove_keeps_required_dep_while_manual_root_still_needs_it() {
     let home = TestHome::new();
     home.profile();
     home.cmd()
-        .args(["install", "rootmod", "--yes"])
+        .args(["mods", "install", "rootmod", "--yes"])
         .assert()
         .success();
 
     // rootmod (manual) still requires depmod; autoremove must keep depmod.
     home.cmd()
-        .args(["autoremove", "--yes"])
+        .args(["mods", "autoremove", "--yes"])
         .assert()
         .success()
         .stdout(predicate::eq("nothing to autoremove\n"));
@@ -728,7 +739,7 @@ fn provider_mock_works_offline_for_search() {
     home.profile();
     // Explicitly mock; no network is contacted.
     home.cmd()
-        .args(["search", "root"])
+        .args(["mods", "search", "root"])
         .assert()
         .success()
         .stdout(predicate::str::contains("rootmod"));
@@ -746,13 +757,16 @@ fn provider_curseforge_requires_api_key_env() {
         home.state.to_str().unwrap(),
         "--provider",
         "curseforge",
+        "mods",
         "search",
         "rootmod",
     ])
     .env_remove("CURSEFORGE_API_KEY")
     .assert()
     .failure()
-    .stderr(predicate::eq("Error: CurseForge provider requires CURSEFORGE_API_KEY\n"));
+    .stderr(predicate::eq(
+        "Error: CurseForge provider requires CURSEFORGE_API_KEY\n",
+    ));
 }
 
 #[test]
@@ -767,13 +781,16 @@ fn provider_curseforge_info_also_requires_api_key() {
         home.state.to_str().unwrap(),
         "--provider",
         "curseforge",
+        "mods",
         "info",
         "rootmod",
     ])
     .env_remove("CURSEFORGE_API_KEY")
     .assert()
     .failure()
-    .stderr(predicate::eq("Error: CurseForge provider requires CURSEFORGE_API_KEY\n"));
+    .stderr(predicate::eq(
+        "Error: CurseForge provider requires CURSEFORGE_API_KEY\n",
+    ));
 }
 
 // ---------------------------------------------------------------------------
@@ -878,7 +895,7 @@ fn local_jar_info_reads_fabric_mod_json_id_and_version() {
     fs::write(&jar, &bytes).expect("write jar");
 
     home.cmd()
-        .args(["info", jar.to_str().unwrap()])
+        .args(["mods", "info", jar.to_str().unwrap()])
         .assert()
         .success()
         .stdout(
@@ -906,7 +923,7 @@ fn local_jar_info_reads_mods_toml_modid_and_version_lines() {
     fs::write(&jar, &bytes).expect("write jar");
 
     home.cmd()
-        .args(["info", jar.to_str().unwrap()])
+        .args(["mods", "info", jar.to_str().unwrap()])
         .assert()
         .success()
         .stdout(
@@ -927,7 +944,7 @@ fn local_jar_info_reads_mcmod_info_array_fields() {
     fs::write(&jar, &bytes).expect("write jar");
 
     home.cmd()
-        .args(["info", jar.to_str().unwrap()])
+        .args(["mods", "info", jar.to_str().unwrap()])
         .assert()
         .success()
         .stdout(
@@ -948,7 +965,7 @@ fn local_jar_info_falls_back_to_hash_when_metadata_unavailable() {
     // The exact SHA-256 of the file content is printed (pinned).
     let expected_hash = sha256_hex(content);
     home.cmd()
-        .args(["info", jar.to_str().unwrap()])
+        .args(["mods", "info", jar.to_str().unwrap()])
         .assert()
         .success()
         .stdout(
@@ -968,7 +985,7 @@ fn local_jar_info_zip_without_known_metadata_reports_unavailable() {
     fs::write(&jar, &bytes).expect("write jar");
 
     home.cmd()
-        .args(["info", jar.to_str().unwrap()])
+        .args(["mods", "info", jar.to_str().unwrap()])
         .assert()
         .success()
         .stdout(
@@ -982,10 +999,10 @@ fn local_jar_info_zip_without_known_metadata_reports_unavailable() {
 fn local_jar_info_nonexistent_jar_path_errors_on_read() {
     let home = TestHome::new();
     let missing = home.root.path().join("ghost.jar");
-    // Ends with `.jar`, so `info` takes the local-jar branch even though the
+    // Ends with `.jar`, so `mods info` takes the local-jar branch even though the
     // path does not exist; `local_jar_info` then fails reading the file.
     home.cmd()
-        .args(["info", missing.to_str().unwrap()])
+        .args(["mods", "info", missing.to_str().unwrap()])
         .assert()
         .failure()
         .stderr(predicate::str::contains("read ").and(predicate::str::contains("ghost.jar")));
@@ -1065,7 +1082,9 @@ fn sha256_hex(bytes: &[u8]) -> String {
         h[6] = h[6].wrapping_add(g);
         h[7] = h[7].wrapping_add(hh);
     }
-    h.iter().flat_map(|w| w.to_be_bytes()).collect::<Vec<_>>()
+    h.iter()
+        .flat_map(|w| w.to_be_bytes())
+        .collect::<Vec<_>>()
         .iter()
         .map(|b| format!("{b:02x}"))
         .collect()

@@ -173,3 +173,74 @@ Total: 14 lib tests (unchanged count).
 - `dirty worktree`: after commit, only expected files staged (src/ + evidence + learnings). `tests/characterization.rs` reverted to original (no fmt changes leaked in).
 - `misleading success output`: refactor compiles AND all 44 characterization tests pass — behavior unchanged.
 - `stale_state`: no leftover `mod` declarations in lib.rs for removed modules; lib.rs contains exactly the current module list.
+
+## [2026-06-25 13:21:10 UTC] Task: 4 — Define canonical CLI grammar and help skeleton
+
+**Status:** COMPLETE. All 104 tests green (23 lib + 44 char + 7 help + 17 mc_target + 13 mvp). `cargo fmt --check` clean. `cargo clippy --all-targets --all-features -- -D warnings` clean. Evidence at `.omo/evidence/task-4-mcm-minecraft-manager-expansion.txt`.
+
+### What changed
+
+**New command grammar (top-level):**
+- `install [target] [-y]` — low-power `.mcm` installer; rejects `mc...` smart targets and raw mod names
+- `upgrade` — stub (not implemented yet)
+- `full-upgrade [-y]` — stub
+- `source {add|remove|info|list}` — stubs
+- `pkg {info|install|download|dl|make|share|list}` — stubs; `dl` is alias for `download`
+- `game {default|install|remove|info|rename|config|list}` — stubs; `install` validates target via `parse_mc_target` before stub
+- `do [file] [-y]` — stub
+- `run [--dry-run]` — stub
+- `config` — stub
+- `mods {add|use|search|info|install|list|status|remove|uninstall|autoremove|show|profile-list}` — full behavior (old mod-manager commands moved here)
+- `mod` is alias for `mods` (via `#[command(alias = "mod")]`)
+
+**Old top-level commands REMOVED:** `profile`, `search`, `info`, `install <modid>`, `list`, `status`, `remove`, `uninstall`, `autoremove`. No `ProfileCommand` enum remains.
+
+**`game install` target parser** (`src/mc_target.rs`, new file):
+- `parse_mc_target(target: &str) -> Result<McTarget, String>`
+- `McTarget::Vanilla { mc_version: Option<String> }` — `mc` (latest) or `mc1.21.1` (specific)
+- `McTarget::WithLoader { mc_version, loader, loader_version }` — `mc-neoforge`, `mc1.21.1-neoforge`, `mc1.21.1-neoforge-21.1.172`
+- `Loader` enum: `Fabric`, `Forge`, `NeoForge`, `Quilt` (case-insensitive parsing)
+- Rejects `@latest` suffix; rejects non-`mc` prefix; rejects unknown loaders
+- 9 unit tests in `src/mc_target.rs` + 17 integration tests in `tests/mc_target.rs`
+
+### Files touched
+- NEW: `src/mc_target.rs` (155 pure LOC) — `McTarget`, `Loader`, `parse_mc_target` + 9 unit tests
+- REWRITTEN: `src/cli.rs` (141 pure LOC) — new `Command` enum + `SourceCommand`/`PkgCommand`/`GameCommand`/`ModsCommand` subcommand enums
+- REWRITTEN: `src/app.rs` (206 pure LOC) — new `run()` dispatch + `top_install`/`source`/`pkg`/`game`/`do_file`/`mods_command` methods; new commands stub with "not implemented yet"
+- REWRITTEN: `src/profile_cmd.rs` (68 pure LOC) — split old `profile()` into `profile_add`/`profile_use`/`profile_list`/`profile_show`
+- UPDATED: `src/lib.rs` (19 pure LOC) — added `mc_target` module + re-exports (`parse_mc_target`, `Loader`, `McTarget`, subcommand enums)
+- REWRITTEN: `tests/help.rs` (7 tests) — new top-level command assertions + `mod` alias + `pkg dl` alias + `game install` smart targets + top-level `install` help
+- REWRITTEN: `tests/mvp.rs` (13 tests) — all commands prefixed with `mods`
+- REWRITTEN: `tests/characterization.rs` (44 tests) — all commands prefixed with `mods`; module docstring updated
+- NEW: `tests/mc_target.rs` (17 tests) — parser unit tests + CLI surface rejection tests
+
+### Command spelling migration (old → new)
+| Old top-level | New |
+|---|---|
+| `profile add` | `mods add` |
+| `profile use` | `mods use` |
+| `profile list` | `mods profile-list` |
+| `profile show` | `mods show` |
+| `search` | `mods search` |
+| `info` | `mods info` |
+| `install <modid>` | `mods install <modid>` |
+| `list` | `mods list` |
+| `status` | `mods status` |
+| `remove` | `mods remove` |
+| `uninstall` | `mods uninstall` |
+| `autoremove` | `mods autoremove` |
+
+### Adversarial QA results
+- `misleading_success_output`: parser tested exhaustively — 17 tests cover all grammar forms (mc, mc1.21.1, mc-neoforge, mc1.21.1-neoforge, mc1.21.1-neoforge-21.1.172, fabric/forge/quilt equivalents, @latest rejection, non-mc prefix rejection, unknown loader rejection, case-insensitivity). CLI surface tests verify `install mc-neoforge`, `install sodium`, `install sample.mcm --extra`, and `game install ... @latest` all fail with actionable errors.
+- `stale_state`: grep confirms no `Command::Profile/Search/Info/Install/Remove/Uninstall/Autoremove/List/Status` variants remain in `src/`. No `ProfileCommand` enum in `cli.rs`. Old top-level commands fully removed.
+- `flaky tests`: all 104 tests deterministic (mock provider, temp dirs, no network). 3 consecutive `cargo test` runs all green.
+
+### Stub boundaries (for downstream tasks 5-23)
+- `upgrade`/`full-upgrade` → task 20 (game version install)
+- `source add/remove/info/list` → task 8
+- `pkg info/install/download/make/share/list` → tasks 6, 10, 11
+- `game default/install/remove/info/rename/config/list` → tasks 5, 20
+- `do [file]` → task 10
+- `run` → task 22
+- `config` → task 5
+- `install [target]` (top-level) → task 10

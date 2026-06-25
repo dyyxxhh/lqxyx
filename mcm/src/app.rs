@@ -2,10 +2,10 @@ use std::env;
 use std::fs;
 use std::path::PathBuf;
 
-use anyhow::{Context, Result};
+use anyhow::{anyhow, Context, Result};
 use directories::ProjectDirs;
 
-use crate::cli::{Cli, Command, ProviderChoice};
+use crate::cli::{Cli, Command, ModsCommand, ProviderChoice};
 use crate::config::Config;
 use crate::lock::LockState;
 use crate::provider::{
@@ -114,20 +114,124 @@ impl App {
 pub(crate) fn run(cli: Cli) -> Result<()> {
     let app = App::new(&cli)?;
     match cli.command {
-        Some(Command::Profile { command }) => app.profile(command),
-        Some(Command::Search { query }) => app.search(&query),
-        Some(Command::Install {
-            query,
-            file,
-            dry_run,
-            yes,
-        }) => app.install(query, file, dry_run, yes),
-        Some(Command::Remove { logical_id, yes })
-        | Some(Command::Uninstall { logical_id, yes }) => app.remove(&logical_id, yes),
-        Some(Command::Info { query }) => app.info(&query),
-        Some(Command::Autoremove { yes }) => app.autoremove(yes),
-        Some(Command::List) => app.list(),
-        Some(Command::Status) => app.status(),
+        // Low-power `.mcm` installer (stub: downstream task 10 fills behavior).
+        Some(Command::Install { target, yes }) => app.top_install(target, yes),
+
+        // New command families — stubbed with "not implemented yet".
+        Some(Command::Upgrade) => Err(anyhow!("upgrade is not implemented yet")),
+        Some(Command::FullUpgrade { yes: _ }) => {
+            Err(anyhow!("full-upgrade is not implemented yet"))
+        }
+        Some(Command::Source { command }) => app.source(command),
+        Some(Command::Pkg { command }) => app.pkg(command),
+        Some(Command::Game { command }) => app.game(command),
+        Some(Command::Do { file, yes }) => app.do_file(file, yes),
+        Some(Command::Run { dry_run: _ }) => Err(anyhow!("run is not implemented yet")),
+        Some(Command::Config) => Err(anyhow!("config is not implemented yet")),
+
+        // Mod-manager group (`mods` / `mod` alias).
+        Some(Command::Mods { command }) => app.mods_command(command),
+
         None => Ok(()),
+    }
+}
+
+impl App {
+    fn not_implemented(name: &str) -> Result<()> {
+        Err(anyhow!("{name} is not implemented yet"))
+    }
+
+    /// Top-level `install [target] [-y]`: low-power `.mcm` installer.
+    /// Validates the target is a `.mcm` path/URL; rejects raw mod names and
+    /// `mc...` smart targets. Actual install behavior is filled by task 10.
+    fn top_install(&self, target: Option<String>, _yes: bool) -> Result<()> {
+        if let Some(target) = target {
+            if target.starts_with("mc") && crate::mc_target::parse_mc_target(&target).is_ok() {
+                return Err(anyhow!(
+                    "top-level install does not accept Minecraft smart targets; \
+                     use `game install` instead"
+                ));
+            }
+            if !target.ends_with(".mcm") && !target.starts_with("http") {
+                return Err(anyhow!(
+                    "top-level install accepts only a `.mcm` file path or URL; \
+                     raw mod names are not supported (use `mods install`)"
+                ));
+            }
+            Self::not_implemented("install <.mcm>")
+        } else {
+            Self::not_implemented("install (auto-select .mcm)")
+        }
+    }
+
+    fn source(&self, command: crate::cli::SourceCommand) -> Result<()> {
+        match command {
+            crate::cli::SourceCommand::Add { .. } => Self::not_implemented("source add"),
+            crate::cli::SourceCommand::Remove { .. } => Self::not_implemented("source remove"),
+            crate::cli::SourceCommand::Info { .. } => Self::not_implemented("source info"),
+            crate::cli::SourceCommand::List => Self::not_implemented("source list"),
+        }
+    }
+
+    fn pkg(&self, command: crate::cli::PkgCommand) -> Result<()> {
+        match command {
+            crate::cli::PkgCommand::Info { .. } => Self::not_implemented("pkg info"),
+            crate::cli::PkgCommand::Install { .. } => Self::not_implemented("pkg install"),
+            crate::cli::PkgCommand::Download { .. } | crate::cli::PkgCommand::Dl { .. } => {
+                Self::not_implemented("pkg download")
+            }
+            crate::cli::PkgCommand::Make { .. } => Self::not_implemented("pkg make"),
+            crate::cli::PkgCommand::Share { .. } => Self::not_implemented("pkg share"),
+            crate::cli::PkgCommand::List => Self::not_implemented("pkg list"),
+        }
+    }
+
+    fn game(&self, command: crate::cli::GameCommand) -> Result<()> {
+        match command {
+            crate::cli::GameCommand::Default { .. } => Self::not_implemented("game default"),
+            crate::cli::GameCommand::Install { target, .. } => {
+                // Validate the smart target grammar even though install is stubbed.
+                crate::mc_target::parse_mc_target(&target).map_err(anyhow::Error::msg)?;
+                Self::not_implemented("game install")
+            }
+            crate::cli::GameCommand::Remove { .. } => Self::not_implemented("game remove"),
+            crate::cli::GameCommand::Info { .. } => Self::not_implemented("game info"),
+            crate::cli::GameCommand::Rename { .. } => Self::not_implemented("game rename"),
+            crate::cli::GameCommand::Config { .. } => Self::not_implemented("game config"),
+            crate::cli::GameCommand::List => Self::not_implemented("game list"),
+        }
+    }
+
+    fn do_file(&self, _file: Option<PathBuf>, _yes: bool) -> Result<()> {
+        Self::not_implemented("do")
+    }
+
+    /// Dispatch the mod-manager command group (`mods` / `mod`).
+    fn mods_command(&self, command: ModsCommand) -> Result<()> {
+        match command {
+            ModsCommand::Add {
+                name,
+                mods_dir,
+                mc_version,
+                loader,
+                side,
+            } => self.profile_add(name, mods_dir, mc_version, loader, side),
+            ModsCommand::Use { name } => self.profile_use(&name),
+            ModsCommand::ProfileList => self.profile_list(),
+            ModsCommand::Show { name } => self.profile_show(name),
+            ModsCommand::Search { query } => self.search(&query),
+            ModsCommand::Info { query } => self.info(&query),
+            ModsCommand::Install {
+                query,
+                file,
+                dry_run,
+                yes,
+            } => self.install(query, file, dry_run, yes),
+            ModsCommand::List => self.list(),
+            ModsCommand::Status => self.status(),
+            ModsCommand::Remove { logical_id, yes }
+            | ModsCommand::Uninstall { logical_id, yes } => self.remove(&logical_id, yes),
+            ModsCommand::Autoremove { yes } => self.autoremove(yes),
+        }
     }
 }

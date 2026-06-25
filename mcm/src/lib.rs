@@ -1,7 +1,7 @@
-//! mcm — apt-like Minecraft mod manager CLI.
+//! mcm — apt-like Minecraft mod manager and game instance CLI.
 //!
 //! Module map:
-//! - `cli` — Clap derive structs (`Cli`, `Command`, `ProfileCommand`, `ProviderChoice`)
+//! - `cli` — Clap derive structs (`Cli`, `Command`, `ModsCommand`, `ProviderChoice`, ...)
 //! - `config` — `Side`, `Config`, `Profile`, `ProfileSnapshot` (TOML persistence types)
 //! - `lock` — `LockState`, `InstalledMod`, `InstallReason` + reachability/removal helpers
 //! - `provider` — `Provider` trait, shared types (`Project`/`Artifact`/...), `CompositeProvider`
@@ -9,8 +9,9 @@
 //! - `safety` — filename sanitization, download-URL allowlist, install confirmation
 //! - `jar_info` — local jar metadata reader (fabric.mod.json / mods.toml / mcmod.info)
 //! - `install` — install planning (`build_plan`, `select_artifact`, `read_mod_list`)
+//! - `mc_target` — `game install` smart target parser (`mc`, `mc1.21.1-neoforge-21.1.172`, ...)
 //! - `app` — `App` struct, config/lock IO, provider dispatch, `run()` entry point
-//! - `profile_cmd` — `profile` command implementation on `App`
+//! - `profile_cmd` — `mods add`/`use`/`show`/`profile-list` implementations on `App`
 //! - `queries` — `search`/`info`/`list`/`status` command implementations on `App`
 //! - `lifecycle` — `install`/`remove`/`autoremove` command implementations on `App`
 //! - `util` — `atomic_write`, `sha256_hex`
@@ -22,14 +23,16 @@ mod install;
 mod jar_info;
 mod lifecycle;
 mod lock;
+mod mc_target;
 mod profile_cmd;
 mod provider;
 mod queries;
 mod safety;
 mod util;
 
-pub use cli::{Cli, Command, ProfileCommand, ProviderChoice};
+pub use cli::{Cli, Command, GameCommand, ModsCommand, PkgCommand, ProviderChoice, SourceCommand};
 pub use config::Side;
+pub use mc_target::{parse_mc_target, Loader, McTarget};
 
 pub fn run(cli: Cli) -> anyhow::Result<()> {
     app::run(cli)

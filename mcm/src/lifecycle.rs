@@ -5,6 +5,7 @@ use anyhow::{bail, Context, Result};
 use time::OffsetDateTime;
 
 use crate::config::ProfileSnapshot;
+use crate::confirmation::{emit_mc_critical_warning, OperationKind};
 use crate::install::{build_plan, print_plan, read_mod_list, search_install_roots};
 use crate::lock::{reachable_required_deps, remove_owned_file, InstallReason, InstalledMod};
 use crate::safety::{confirm_install, sanitize_filename, validate_download_url};
@@ -123,6 +124,7 @@ impl crate::app::App {
         if !yes {
             bail!("confirmation required; pass --yes to apply");
         }
+        emit_mc_critical_warning(OperationKind::Autoremove);
         for id in removable {
             if let Some(item) = lock.installed.remove(&id) {
                 remove_owned_file(&profile, &item)?;

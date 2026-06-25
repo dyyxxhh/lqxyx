@@ -340,3 +340,85 @@ Total: 14 lib tests (unchanged count).
 - MODIFIED: `src/lib.rs` (21→23 pure LOC)
 - MODIFIED: `src/app.rs` (192→227 pure LOC)
 - NEW: `.omo/evidence/task-6-mcm-minecraft-manager-expansion.txt`
+
+## [2026-06-26 00:30:00 UTC] Task: 7 — Centralize trusted-source confirmation policy
+
+**Status:** COMPLETE. All 192 tests green (32 lib + 44 char + 21 confirmation + 28 game_config + 7 help + 17 mc_target + 30 mcm_package + 13 mvp). `cargo fmt --check` clean. `cargo clippy --all-targets --all-features -- -D warnings` clean. Evidence at `.omo/evidence/task-7-mcm-minecraft-manager-expansion.txt`.
+
+### What changed
+
+**New module** (`src/confirmation.rs`, 170 pure non-test LOC):
+- `ConfirmationPolicy` enum: `Harmless` / `Bypassable` / `NonBypassable`
+- `OperationKind` enum: `Install`, `Download`, `Delete`, `VersionRemoval`, `PackageInstall`, `RuntimeInstall`, `SourceAction`, `ScriptExecution`, `RootSystemChange`, `WorldOverwrite`, `WorldDelete`, `Autoremove`, `LaunchOnInstall`, `GameRemove`
+- `classify(op) -> ConfirmationPolicy`: `RootSystemChange` → `NonBypassable`; all others → `Bypassable`
+- `is_mc_critical(op) -> bool`: true for `Autoremove`, `WorldOverwrite`, `WorldDelete`
+- `emit_mc_critical_warning(op)`: prints warning to stderr for MC-critical ops
+- `require_confirmation(op, yes) -> Result<()>`: centralized gate — `--yes` bypasses; TTY prompts (typed for MC-critical, `[y/N]` for others); non-TTY bails
+- `confirm_typed(prompt) -> Result<bool>`: reads stdin, requires "yes" (case-insensitive)
+- `root_escalation_helper(action, interactive) -> Result<()>`: suggests `sudo`/`pkexec` command
+- `AUTOREMOVE_WARNING` constant: contains "MC-critical", "break worlds/saves", "modded structures"
+- `prompt_yes_no(prompt) -> Result<bool>`: shared `y/Y/yes/YES/Yes` reader (pub(crate) for safety.rs)
+
+**Modified** (`src/safety.rs`):
+- `confirm_install()` now delegates to `confirmation::prompt_yes_no("Proceed with install? [y/N]")` via `classify(OperationKind::Install)` — preserves exact prompt text for mvp test backward compat
+- Removed unused `io::{self, Write}` imports (flush no longer needed here)
+
+**Modified** (`src/lifecycle.rs`):
+- `autoremove()` now calls `emit_mc_critical_warning(OperationKind::Autoremove)` to stderr AFTER the `--yes` gate passes but BEFORE destructive removal — preserves exact stdout `"removed depmod\n"` and exact stderr `"confirmation required; pass --yes to apply\n"` for characterization tests
+- `install()` and `remove()` unchanged — already compatible with the policy via `confirm_install()` wrapper and existing `if !yes { bail!(exact_msg) }` pattern
+
+**Modified** (`src/game_cmd.rs`): `game_remove()` unchanged — already uses `if !yes { bail!("confirmation required; pass --yes to remove game {name}") }` pattern compatible with the policy. The `game_config.rs:393` test checks `predicate::str::contains("confirmation required")`.
+
+**Modified** (`src/lib.rs`): added `mod confirmation;` + docstring entry.
+
+**New tests** (`tests/confirmation.rs`, 21 tests):
+- Bypassable with `--yes`: install/remove/autoremove proceed without prompt (3 tests)
+- Bypassable without `--yes` in non-TTY: remove/autoremove/game-remove bail (3 tests)
+- Autoremove MC-critical warning: emitted to stderr with `--yes` (1 test); NOT emitted when nothing to do (1 test); NOT emitted when bailing without `--yes` (1 test)
+- Read-only actions never prompt: list/status/search/info/dry-run/game-list/game-info/pkg-info (8 tests)
+- Install interactive prompt: accepts "y", "yes", rejects "n" (3 tests)
+- game remove with `--yes` proceeds (1 test)
+
+### Key decisions
+
+1. **MC-critical warning to stderr, not stdout** — characterization tests assert `predicate::eq("removed depmod\n")` on stdout (line 663). Emitting the warning to stdout would break this. Emitting to stderr preserves all existing assertions because no test checks that `autoremove --yes` has empty stderr.
+
+2. **Warning emitted AFTER `--yes` gate, not before** — `autoremove_requires_yes_when_removable` (characterization test line 672) asserts `predicate::eq("Error: confirmation required; pass --yes to apply\n")` on stderr. If the warning were emitted before the bail, stderr would contain the warning text and break the `predicate::eq` check. The warning is only meaningful when the operation actually proceeds.
+
+3. **`confirm_install()` kept as thin wrapper** — the mvp test `install_interactive_prompt_accepts_yes_from_stdin` (line 178) pipes `"y\n"` and asserts `predicate::str::contains("Proceed with install? [y/N]")`. The wrapper delegates to `prompt_yes_no` with the exact prompt string, preserving backward compatibility.
+
+4. **Non-TTY install without `--yes` reads stdin then bails** — when stdin is `/dev/null` (EOF), `read_line` returns 0, `prompt_yes_no` returns `false`, and `install()` bails with `"installation cancelled"`. This preserves the existing behavior: the mvp test pipes `"y\n"` (success), characterization tests always pass `--yes` (skip), and real non-TTY without `--yes` bails.
+
+5. **`RootSystemChange` is `NonBypassable`** — even with `--yes`, root/system changes require typed "yes" confirmation in a TTY. In non-TTY, they bail. This is the only `NonBypassable` operation; all others are `Bypassable`. No existing operations are classified as `NonBypassable` yet (future tasks will use it).
+
+6. **`#[allow(dead_code)]` on future-task functions** — `require_confirmation`, `confirm_typed`, `root_escalation_helper`, `simple_prompt`, `typed_prompt` are pub(crate) API for tasks 8-22. They have unit tests but no production callers yet. The `#[allow(dead_code)]` suppresses warnings without weakening the type system.
+
+7. **No new dependencies** — uses `std::io::IsTerminal` (stable since Rust 1.70; project is on 1.96).
+
+### Backward-compatibility verification
+- All 44 characterization tests pass unchanged (exact stdout/stderr assertions preserved).
+- All 13 mvp tests pass unchanged (including `install_interactive_prompt_accepts_yes_from_stdin` with `"y\n"` stdin pipe).
+- All 28 game_config tests pass unchanged (including `game_remove_without_yes_errors` with `predicate::str::contains("confirmation required")`).
+- Real-surface QA confirmed:
+  - `mods install rootmod --yes` → proceeds, exit 0
+  - `mods list` → read-only, no prompt, exit 0
+  - `mods autoremove` (non-interactive) → bails with exact message, exit 1
+  - `mods autoremove --yes` → MC-critical warning on stderr, proceeds, exit 0
+  - `mods install rootmod` (stdin=/dev/null) → prints plan, prompts, bails with "installation cancelled", exit 1
+  - `pkg info <file>` → read-only, no prompt, exit 0
+
+### Files touched
+- NEW: `src/confirmation.rs` (270 total LOC, 170 pure non-test)
+- NEW: `tests/confirmation.rs` (21 tests)
+- MODIFIED: `src/safety.rs` (confirm_install delegates to confirmation::prompt_yes_no)
+- MODIFIED: `src/lifecycle.rs` (autoremove emits MC-critical warning to stderr when proceeding)
+- MODIFIED: `src/lib.rs` (added mod confirmation + docstring)
+- UNCHANGED: `src/game_cmd.rs` (game_remove already compatible — no change needed)
+- UNCHANGED: `src/app.rs` (no change needed — game remove already routed through game_cmd)
+- NEW: `.omo/evidence/task-7-mcm-minecraft-manager-expansion.txt`
+
+### Stub boundaries (for downstream tasks)
+- `require_confirmation` is ready for tasks 8 (source CLI), 10 (package install), 21 (runtime install) to call with the appropriate `OperationKind`.
+- `root_escalation_helper` is ready for task 20 (game install) to call when root privileges are needed.
+- `confirm_typed` is ready for MC-critical interactive prompts in future tasks.
+- `NonBypassable` policy is defined but no existing operation uses it yet (future root/system changes will).

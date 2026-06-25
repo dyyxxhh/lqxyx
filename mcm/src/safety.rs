@@ -1,7 +1,9 @@
-use std::io::{self, Read, Write};
+use std::io::Read;
 use std::net::IpAddr;
 
 use anyhow::{bail, Context, Result};
+
+use crate::confirmation::{classify, prompt_yes_no, ConfirmationPolicy, OperationKind};
 
 pub(crate) const DOWNLOAD_HOST_ALLOWLIST: &[&str] = &["cdn.modrinth.com", "edge.forgecdn.net"];
 
@@ -84,12 +86,17 @@ fn is_blocked_ip(ip: IpAddr) -> bool {
     }
 }
 
+/// Interactive install confirmation. Routes through the centralized
+/// confirmation policy: `Install` is `Bypassable` and uses a `[y/N]` prompt
+/// in interactive mode. Kept as a thin wrapper so existing callers
+/// (`lifecycle::install`) preserve the exact `Proceed with install? [y/N]`
+/// prompt text that characterization tests assert on.
 pub(crate) fn confirm_install() -> Result<bool> {
-    print!("Proceed with install? [y/N] ");
-    io::stdout().flush()?;
-    let mut input = String::new();
-    io::stdin().read_line(&mut input)?;
-    Ok(matches!(input.trim(), "y" | "Y" | "yes" | "YES" | "Yes"))
+    match classify(OperationKind::Install) {
+        ConfirmationPolicy::Harmless => Ok(true),
+        ConfirmationPolicy::Bypassable => prompt_yes_no("Proceed with install? [y/N]"),
+        ConfirmationPolicy::NonBypassable => Ok(false),
+    }
 }
 
 // Used by jar_info to read jar entries; kept here so `safety` owns all

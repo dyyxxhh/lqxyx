@@ -8,6 +8,7 @@
 //! - `provider` — `Provider` trait, shared types (`Project`/`Artifact`/...), `CompositeProvider`
 //!   + submodules: `mock`, `modrinth`, `curseforge`, `curseforge_dto`
 //! - `safety` — filename sanitization, download-URL allowlist, install confirmation
+//! - `confirmation` — centralized trusted-source confirmation policy (Harmless/Bypassable/NonBypassable)
 //! - `jar_info` — local jar metadata reader (fabric.mod.json / mods.toml / mcmod.info)
 //! - `install` — install planning (`build_plan`, `select_artifact`, `read_mod_list`)
 //! - `mc_target` — `game install` smart target parser (`mc`, `mc1.21.1-neoforge-21.1.172`, ...)
@@ -22,6 +23,7 @@
 mod app;
 mod cli;
 mod config;
+mod confirmation;
 mod game_cmd;
 mod game_model;
 mod install;

@@ -9,11 +9,14 @@ pub(crate) mod curseforge;
 pub(crate) mod curseforge_dto;
 pub(crate) mod mock;
 pub(crate) mod modrinth;
+pub(crate) mod source;
 
 pub(crate) use composite::CompositeProvider;
 pub(crate) use curseforge::CurseForgeProvider;
 pub(crate) use mock::MockProvider;
 pub(crate) use modrinth::ModrinthProvider;
+#[allow(unused_imports)]
+pub(crate) use source::SourceProvider;
 
 pub(crate) trait Provider {
     fn search(&self, query: &str, profile: &Profile) -> Result<Vec<Project>>;

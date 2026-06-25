@@ -13,6 +13,7 @@
 //! - `install` — install planning (`build_plan`, `select_artifact`, `read_mod_list`)
 //! - `mc_target` — `game install` smart target parser (`mc`, `mc1.21.1-neoforge-21.1.172`, ...)
 //! - `mcm_package` — schema-versioned `.mcm` package types + boundary parser
+//! - `source_index` — schema-versioned custom source index types + boundary parser
 //! - `app` — `App` struct, config/lock IO, provider dispatch, `run()` entry point
 //! - `profile_cmd` — `mods add`/`use`/`show`/`profile-list` implementations on `App`
 //! - `game_cmd` — `game default/list/info/rename/config/remove` implementations on `App`
@@ -38,12 +39,14 @@ mod provider;
 mod queries;
 mod safety;
 mod source_cmd;
+mod source_index;
 mod util;
 
 pub use cli::{Cli, Command, GameCommand, ModsCommand, PkgCommand, ProviderChoice, SourceCommand};
 pub use config::Side;
 pub use mc_target::{parse_mc_target, Loader, McTarget};
 pub use mcm_package::{parse_mcm_package, McmPackage};
+pub use source_index::{parse_source_index, SourceIndex};
 
 pub fn run(cli: Cli) -> anyhow::Result<()> {
     app::run(cli)

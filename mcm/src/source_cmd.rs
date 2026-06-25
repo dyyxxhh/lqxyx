@@ -59,6 +59,27 @@ impl App {
         println!("url: {}", record.url);
         println!("status: trusted (manual import)");
         println!("added_at: {}", record.added_at);
+        // If the URL is HTTP(S), attempt to fetch and parse the live index
+        // to display capabilities + package count. On any fetch/parse
+        // failure, fall back to the stored record (already printed above)
+        // and emit a note — config is never mutated by `source info`.
+        if url.starts_with("http") {
+            match fetch_index_for_info(url) {
+                Ok(index) => {
+                    println!("source_id: {}", index.source_id);
+                    if !index.capabilities.is_empty() {
+                        println!("capabilities: {}", index.capabilities.join(", "));
+                    }
+                    println!("packages: {}", index.packages.len());
+                    if let Some(actions) = &index.actions {
+                        println!("actions: {} (declared, not auto-executed)", actions.len());
+                    }
+                }
+                Err(error) => {
+                    println!("index: unavailable ({error})");
+                }
+            }
+        }
         Ok(())
     }
 
@@ -69,4 +90,27 @@ impl App {
         }
         Ok(())
     }
+}
+
+/// Fetch and parse a source index for display in `source info`.
+///
+/// Uses a fresh blocking reqwest client (no redirect following) so a
+/// malformed remote cannot silently redirect to a different host. Errors
+/// are surfaced to the caller as a string so `source info` can print a
+/// note without crashing.
+fn fetch_index_for_info(url: &str) -> Result<crate::source_index::SourceIndex> {
+    let client = reqwest::blocking::Client::builder()
+        .redirect(reqwest::redirect::Policy::none())
+        .build()
+        .context("build HTTP client")?;
+    let body = client
+        .get(url)
+        .header("User-Agent", "mcm/0.1.0 (Minecraft mod manager)")
+        .send()
+        .with_context(|| format!("fetch source index {url}"))?
+        .error_for_status()
+        .with_context(|| format!("source index {url} returned error status"))?
+        .text()
+        .context("read source index body")?;
+    crate::source_index::parse_source_index(&body)
 }

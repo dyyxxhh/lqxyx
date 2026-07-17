@@ -15,12 +15,13 @@ vi.mock('phaser', () => {
   };
 });
 
-import { GAME_HEIGHT } from '../../game/scaffoldState';
 import { loadProgressState, loadStashState } from '../../tombraid/state/tombRaidState';
 import { TombRaidHubScene } from '../../tombraid/TombRaidHubScene';
 import { TombRaidScene } from '../../tombraid/TombRaidScene';
 
 interface CapturedRect {
+  readonly x: number;
+  readonly y: number;
   readonly width: number;
   readonly height: number;
   readonly fire: (event: string) => void;
@@ -39,6 +40,7 @@ function createCapturingAdd() {
     obj.setStrokeStyle = () => obj;
     obj.setShadow = () => obj;
     obj.setFillStyle = () => obj;
+    obj.disableInteractive = () => obj;
     obj.on = (event: string, cb: () => void) => {
       (handlers[event] ??= []).push(cb);
       return obj;
@@ -57,6 +59,8 @@ function createCapturingAdd() {
       obj.width = width;
       obj.height = height;
       rects.push({
+        x,
+        y,
         width,
         height,
         fire: (event: string) => (obj.fire as (e: string) => void)(event),
@@ -66,6 +70,12 @@ function createCapturingAdd() {
     text: (_x: number, _y: number, text: string) => {
       texts.push(text);
       return attachHandlers();
+    },
+    container: (_x: number, _y: number) => {
+      const obj = attachHandlers();
+      obj.add = () => obj;
+      obj.removeAll = () => obj;
+      return obj;
     },
   };
 
@@ -91,7 +101,7 @@ describe('TombRaidHubScene.create', () => {
     (window as unknown as Record<string, unknown>).__YING_ZHONG_JIU_TOMB_RAID_HUB_ACTIVE__ = undefined;
   });
 
-  it('发放起手包、设置 hub 全局、注册 SHUTDOWN、添加返回主菜单按钮回到 GameScene', () => {
+  it('发放起手包、设置 hub 全局、注册 SHUTDOWN、HubUI 返回按钮回到 GameScene', () => {
     const captor = createCapturingAdd();
     const startMock = vi.fn();
     const eventsOnce = vi.fn();
@@ -99,10 +109,12 @@ describe('TombRaidHubScene.create', () => {
       add: CapturingAdd;
       scene: { start: (key: string) => void };
       events: { once: (event: string, cb: () => void) => void };
+      cameras: { main: { setBackgroundColor: (color: unknown) => void } };
     };
     scene.add = captor.add;
     scene.scene = { start: startMock };
     scene.events = { once: eventsOnce };
+    scene.cameras = { main: { setBackgroundColor: vi.fn() } };
 
     scene.create();
 
@@ -115,12 +127,13 @@ describe('TombRaidHubScene.create', () => {
     );
     expect(readHubActive()).toBe(true);
     expect(eventsOnce).toHaveBeenCalled();
-    expect(captor.texts).toContain('摸金模式 · 枢纽');
-    expect(captor.texts).toContain('返回主菜单');
+    expect(captor.texts).toContain('仓库');
+    expect(captor.texts).toContain('进入墓穴');
+    expect(captor.texts).toContain('返回');
 
-    const back = captor.rects.find((r) => r.width === 240 && r.height === 56);
+    const back = captor.rects.find((r) => r.width === 120 && r.height === 40);
     expect(back).toBeDefined();
-    back!.fire('pointerdown');
+    back!.fire('pointerup');
     expect(startMock).toHaveBeenCalledWith('GameScene');
   });
 
@@ -131,10 +144,12 @@ describe('TombRaidHubScene.create', () => {
       add: CapturingAdd;
       scene: { start: (key: string) => void };
       events: { once: (event: string, cb: () => void) => void };
+      cameras: { main: { setBackgroundColor: (color: unknown) => void } };
     };
     scene.add = captor.add;
     scene.scene = { start: vi.fn() };
     scene.events = { once: eventsOnce };
+    scene.cameras = { main: { setBackgroundColor: vi.fn() } };
 
     scene.create();
     expect(readHubActive()).toBe(true);
@@ -145,20 +160,21 @@ describe('TombRaidHubScene.create', () => {
     expect(readHubActive()).toBe(false);
   });
 
-  it('返回主菜单按钮位于 GAME_HEIGHT/2 + 120', () => {
+  it('HubUI 返回按钮位于左下角固定位置 (80, 690) 尺寸 120×40', () => {
     const captor = createCapturingAdd();
     const scene = Object.create(TombRaidHubScene.prototype) as TombRaidHubScene & {
       add: CapturingAdd;
       scene: { start: (key: string) => void };
       events: { once: (event: string, cb: () => void) => void };
+      cameras: { main: { setBackgroundColor: (color: unknown) => void } };
     };
     scene.add = captor.add;
     scene.scene = { start: vi.fn() };
     scene.events = { once: vi.fn() };
+    scene.cameras = { main: { setBackgroundColor: vi.fn() } };
     scene.create();
-    const back = captor.rects.find((r) => r.width === 240 && r.height === 56);
+    const back = captor.rects.find((r) => r.width === 120 && r.height === 40 && r.x === 80 && r.y === 690);
     expect(back).toBeDefined();
-    expect(GAME_HEIGHT / 2 + 120).toBe(480);
   });
 });
 

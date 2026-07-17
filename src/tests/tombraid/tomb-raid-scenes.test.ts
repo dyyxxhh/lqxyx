@@ -36,10 +36,16 @@ function createCapturingAdd() {
     const obj: Record<string, unknown> = {};
     obj.setOrigin = () => obj;
     obj.setDepth = () => obj;
+    obj.setScrollFactor = () => obj;
     obj.setInteractive = () => obj;
     obj.setStrokeStyle = () => obj;
     obj.setShadow = () => obj;
     obj.setFillStyle = () => obj;
+    obj.setVisible = () => obj;
+    obj.setPosition = () => obj;
+    obj.setRadius = () => obj;
+    obj.setBlendMode = () => obj;
+    obj.setStyle = () => obj;
     obj.disableInteractive = () => obj;
     obj.on = (event: string, cb: () => void) => {
       (handlers[event] ??= []).push(cb);
@@ -71,6 +77,8 @@ function createCapturingAdd() {
       texts.push(text);
       return attachHandlers();
     },
+    circle: (_x: number, _y: number, _r: number) => attachHandlers(),
+    arc: (_x: number, _y: number, _r: number) => attachHandlers(),
     container: (_x: number, _y: number) => {
       const obj = attachHandlers();
       obj.add = () => obj;
@@ -192,9 +200,31 @@ describe('TombRaidScene 场景键与骨架', () => {
     const scene = Object.create(TombRaidScene.prototype) as TombRaidScene & {
       add: CapturingAdd;
       scene: { start: (key: string) => void };
+      cameras: { main: { setBackgroundColor: (c: unknown) => void; setBounds: (x: number, y: number, w: number, h: number) => void; scrollX: number; scrollY: number; width: number; height: number } };
+      sys: { game: { device: { input: { touch: boolean } } } };
+      input: { keyboard: { on: (e: string, cb: () => void) => void; addKey: (k: string) => { isDown: boolean } } | null };
+      events: { emit: (e: string, ...args: unknown[]) => void };
+      time: { delayedCall: (ms: number, cb: () => void) => { remove: () => void } };
     };
     scene.add = captor.add;
     scene.scene = { start: startMock };
+    // Plan 6 接线所需的 scene-level mocks（cameras/sys/input/events/time）
+    scene.cameras = {
+      main: {
+        setBackgroundColor: vi.fn(),
+        setBounds: vi.fn(),
+        scrollX: 0,
+        scrollY: 0,
+        width: 1280,
+        height: 720,
+      },
+    };
+    scene.sys = { game: { device: { input: { touch: false } } } };
+    scene.input = {
+      keyboard: { on: vi.fn(), addKey: vi.fn(() => ({ isDown: false })) },
+    };
+    scene.events = { emit: vi.fn() };
+    scene.time = { delayedCall: vi.fn((_ms, cb) => { cb(); return { remove: vi.fn() }; }) };
 
     scene.create();
 

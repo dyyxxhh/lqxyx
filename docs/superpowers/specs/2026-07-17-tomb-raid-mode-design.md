@@ -85,12 +85,16 @@ export interface TombRaidMapManifest {
 
 ### §3.1 玩家
 - `PLAYER_MAX_HP = 100`
-- `PLAYER_BASE_SPEED = 200`
-- 攻击键：J（普攻）/ K（大招）/ H（交互）
+- `PLAYER_BASE_SPEED = 200`（走）
+- `PLAYER_RUN_SPEED = 320`（跑，按 Shift）
+- `STAMINA_MAX = 100`，跑耗 33.3/s（3s 耗完），走/静止回 20/s（5s 回满）
+- **疲劳锁**：体力耗尽后强制走 1s 不能跑（疲劳惩罚），1s 后开始正常回体
+- 攻击键：J（普攻）/ K（大招）/ H（交互）/ Shift（跑）
 - 初始武器占位 ID：`'weapon.ruler'`（plan 4 替换为真实武器系统）
 - 空手弱拳：`WEAK_PUNCH_DAMAGE = 5`
+- 移动方向：8 方向（同剧情模式 InputManager），斜向取上下优先（CharacterRegistry.resolveDirection）
 
-### §3.2 伤害类型
+### §3.2 伤害类型与命中判定
 ```ts
 export type DamageType = 'physical' | 'burn' | 'slow' | 'stun' | 'fear' | 'root';
 export type DamageCategory = 'melee' | 'aoe' | 'dot';
@@ -100,6 +104,14 @@ export interface DamageInstance {
   debuff?: Debuff;
 }
 ```
+
+**命中判定（grill 确认 2026-07-17）**：
+- **近战（meleeFan）**：扇形几何与敌人 AABB 相交判定，**仅命中扇形内最近 1 敌**（单体近战原则）
+  - 例外：拳套 `10×3伤` = 单敌 3 段×10（爆发型，同一最近敌受 3 段）
+- **远程（rangedPiercing）**：直线弹道，朝玩家 8 方向之一射出（同移动方向，静止时用上次方向），`pierce=N` 穿 N 敌后消失，遇墙停止
+- **攻击方向**：普攻/大招方向 = 玩家移动方向（8 方向），无鼠标依赖
+- **大招转向**：释放中可转向（持续型大招如 rulerStorm/bloodWheel/bladeArray/chainCrush 适用）
+  - 例外：fistDash 冲刺方向释放瞬间锁定，冲刺中不可转（0.3s 短冲刺，预判要求高）
 
 ### §3.3 模块布局
 - `combat/CombatManager.ts` — 战斗管理器（伤害结算/碰撞/AoE）
@@ -161,6 +173,9 @@ export interface WeaponBasicAttack {
   lifestealPercent?: number;
   fearPercent?: number;
   fearDuration?: number;
+  fanHalfAngleDeg?: number;   // meleeFan 半角
+  fanRadius?: number;         // meleeFan 半径
+  multiHit?: number;          // 单敌多段（拳套 3）
 }
 export interface Weapon {
   id: string;
@@ -173,6 +188,20 @@ export interface Weapon {
   ultimate: WeaponUltimate;
 }
 ```
+
+### §4.6 meleeFan 档位与武器分配（grill 确认 2026-07-17）
+
+按玩法风格分 3 档，武器按档位分配几何参数。`fanHalfAngleDeg` 为扇形**半角**（与 §5.11.2 视野锥 `visionHalfAngleDeg` 同义，总宽 = 2 × 半角）：
+
+| 档位 | 半角 (fanHalfAngleDeg) | 总宽 | 半径 (fanRadius) | 适用武器 | 风格说明 |
+|------|------|------|------|----------|----------|
+| 快攻型 | 30° | 60° | 90px | 断尺、拳套 | 窄短，需贴脸，高频 |
+| 均衡型 | 45° | 90° | 120px | 尺子、万魂幡 | 标准，覆盖适中 |
+| 重型 | 60° | 120° | 180px | 锁链、血镰 | 广扫，大范围 |
+
+**rangedPiercing 武器**（断尺为近战；粉笔/灵刃为远程）：朝玩家 8 方向射出，pierce 按武器定义，遇墙停止。
+
+**大招转向规则**：释放中可转向（持续型），fistDash 例外（锁定方向）。
 
 ---
 

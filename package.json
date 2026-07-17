@@ -14,7 +14,8 @@
     "verify": "node scripts/verify.mjs"
   },
   "dependencies": {
-    "phaser": "4.1.0"
+    "phaser": "4.1.0",
+    "pngjs": "^7.0.0"
   },
   "devDependencies": {
     "@playwright/test": "1.60.0",

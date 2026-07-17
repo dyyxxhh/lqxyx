@@ -39,7 +39,23 @@
 - **TypeScript strict**：`noUncheckedIndexedAccess`（数组访问返回 `T | undefined`，用 `!` 或守卫）/ `exactOptionalPropertyTypes`（可选属性不能赋 `undefined`）/ `noUnusedLocals`+`noUnusedParameters`
 - **TDD 强制**：每个任务 5 步（RED → GREEN → SURFACE）
 - **数值严格遵循 spec §3/§5**
-- **资产 key 遵循 spec**：`sprite.danYuxuan.headPart` / `sprite.qinHaorui.headPart` / `furniture.classroomDeskChairs` / `prop.phone` / `sprite.danYuxuan.lyingBloody` / `sprite.yangYunRed.down.idle` / `sprite.yangYunBlue.down.idle`
+- **资产 key 遵循 spec**：`sprite.danYuxuan.headPart` / `sprite.qinHaoruiRulerCompass.headPart` / `furniture.classroomDeskChairs` / `prop.phone` / `sprite.danYuxuan.lyingBloody` / `sprite.yangYunRed.down.idle` / `sprite.yangYunBlue.down.idle`
+
+## 设计变更（grill 2026-07-17，权威性高于 plan 内既有代码）
+
+> 本 plan 早于 spec §3.1/§3.2/§5.11 的 grill 补全而写，下列 Task 的既有代码片段需按更新后的 spec 重写。spec 为权威，plan 内冲突代码作废。
+
+1. **玩家移动（spec §3.1）**：新增 `PLAYER_RUN_SPEED = 320`（Shift 跑）+ `STAMINA_MAX = 100`（跑耗 33.3/s、走/静止回 20/s）+ **疲劳锁 1s**（体力耗尽后强制走）。Task 1 的 `DamageType.ts` 常量段需补这三个常量；Task 2 `PlayerCombat.ts` 需加 `stamina` / `isFatigued` / `tryRun` 状态机。攻击键新增 Shift（跑）。
+2. **攻击命中判定（spec §3.2）**：近战 meleeFan **仅命中扇形内最近 1 敌**（单体近战原则，拳套 `10×3` = 单敌 3 段爆发）；远程 rangedPiercing 朝玩家 8 方向射出（同移动方向，静止时用上次方向），遇墙停止；攻击方向 = 移动方向 8 方向；大招释放中可转向，fistDash 例外（锁定向）。
+3. **怪物感知/巡逻/脱战（spec §5.11）**：Task 5-14 所有怪物的 `update()` 原「全图感知永久追击」逻辑**全部作废**，按 spec §5.11 重写为：
+   - 三态机 `idle → alert → chase → search`（参数随怪种，见 spec §5.11.6 参数表）
+   - 视野锥 120°（半角 60°）+ 噪声二通道；3 射线不穿墙，门不阻视野
+   - **静止 360° 规则**：静物类（血手/桌椅/电话/粉笔尘云）+ 漂浮眼球自身静止时视野 360°，半径 ×0.7；移动时恢复 120° 锥
+   - 巡逻：静物定点待机；头颅/眼球类出生点周边 80px 游走（PATROL_SPEED=50, PATROL_SEGMENT_MS=1500）
+   - 远房降级 4Hz update（spec §5.11.7）；但宇轩身体召唤计时器 + 头颅复活计时器始终 1Hz 真实时间，不受降级影响（spec §5.9）
+   - 三态可见反馈：？/！/… 头顶图标（spec §5.11.8）
+4. **Enemy 基类新增 `perception: EnemyPerceptionParams` + `aiState: EnemyAIState`**（spec §5.11.10），CombatManager / AIUpdateSystem 读取此参数驱动三态机。Task 3 `Enemy.ts` 基类需加这两字段及默认值。
+5. **杨云红边中立巡逻保留**（spec §5.10/§5.11.9）：`aggroState: 'neutral' | 'hostile'` + `enrage()` 不变，350px 激怒视野永久敌对，激怒后启用 §5.10 攻击模式不走三态机。Task 14 `YangYunRedEnemy` 既有 `PATROL_SPEED`/`PATROL_SEGMENT_MS` 保留。
 
 ## Run Commands
 
@@ -184,10 +200,15 @@ describe('DebuffTracker state machine', () => {
 // spec §3.2 / §3.4
 
 // ---------------------------------------------------------------------------
-// 玩家常量 (spec §3.1)
+// 玩家常量 (spec §3.1，grill 2026-07-17 补全跑/体力)
 // ---------------------------------------------------------------------------
 export const PLAYER_MAX_HP = 100;
-export const PLAYER_BASE_SPEED = 200;
+export const PLAYER_BASE_SPEED = 200;        // 走
+export const PLAYER_RUN_SPEED = 320;         // 跑（Shift）
+export const STAMINA_MAX = 100;              // 体力上限
+export const STAMINA_DRAIN_PER_SEC = 33.3;   // 跑耗（3s 耗完）
+export const STAMINA_REGEN_PER_SEC = 20;     // 走/静止回（5s 回满）
+export const STAMINA_FATIGUE_LOCK_MS = 1000; // 体力耗尽后强制走 1s
 export const WEAK_PUNCH_DAMAGE = 5;
 export const PLACEHOLDER_WEAPON_ID = 'weapon.ruler';
 export const PLAYER_CONTACT_DAMAGE_COOLDOWN_MS = 1000;

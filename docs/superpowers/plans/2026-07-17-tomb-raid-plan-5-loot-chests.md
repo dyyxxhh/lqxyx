@@ -2276,6 +2276,21 @@ npx vitest run src/tests/tombraid/loot/chest-decrypt.test.ts
 
 - [ ] 创建 `src/tombraid/loot/ChestDecrypt.ts`：
 
+**渲染参数（spec §7.3 grill 确认 2026-07-17，夸张视觉档，权威性高于下方既有代码常量）**：
+
+| 元素 | 参数 | 常量名建议 |
+|------|------|-----------|
+| 旋转码环 | r80，1 圈/s，像素字符 8 个均匀分布 | `CODE_RING_RADIUS = 80` / `CODE_RING_ROTATE_SPEED = 2*Math.PI` / `CODE_RING_CHAR_COUNT = 8` |
+| 进度弧 | r100，0°→360° 随 progress 填充，金色描边 | `PROGRESS_ARC_RADIUS = 100` |
+| 粒子 | 16 个，环绕宝箱随机角度，r120-150 漂浮，1s 寿命循环 | `PARTICLE_COUNT = 16` / `PARTICLE_MIN_R = 120` / `PARTICLE_MAX_R = 150` / `PARTICLE_LIFETIME_MS = 1000` |
+| 屏震幅度 | `progress × 6px`（progress=1 时最大 6px） | `SHAKE_MAX_PX = 6` |
+| 锁扣崩开震幅 | ×3（即 18px 瞬时震） | `LOCK_BREAK_SHAKE_MULTIPLIER = 3` |
+| 最后一扣全屏白闪 | 1 帧（~16ms），alpha=1.0 后立即归零 | `FINAL_LOCK_FLASH_MS = 16` |
+| 开盖金光柱 | r150 高 150，从宝箱中心向上，持续 800ms 渐隐 | `LIGHT_PILLAR_RADIUS = 150` / `LIGHT_PILLAR_HEIGHT = 150` / `LIGHT_PILLAR_DURATION_MS = 800` |
+| 战利品卡 | 64×64，按稀有度描边色（蓝#4a90e2 / 紫#a155d1 / 绿#4caf50 / 金#ffc107 / 白#ffffff），从宝箱飞出 200px 距离悬停 1.5s 可拾取 | `LOOT_CARD_SIZE = 64` / `LOOT_CARD_FLY_DISTANCE = 200` / `LOOT_CARD_HOVER_MS = 1500` / `LOOT_RARITY_BORDER_COLORS` |
+
+既有代码段中若 `setDisplaySize(96, 144)` 或其他常量与上表冲突，以上表为准。下方代码块保留作骨架参考，执行 agent 需按上表常量重写渲染部分。
+
 ```ts
 import type Phaser from 'phaser';
 

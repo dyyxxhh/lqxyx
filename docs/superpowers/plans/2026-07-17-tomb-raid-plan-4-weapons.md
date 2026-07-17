@@ -47,8 +47,33 @@
 - **核心武器逻辑纯 TS**：WeaponRegistry/WeaponCooldowns/WeaponCombatAdapter/CombatManager 新 API 不 import Phaser；仅 WeaponEffect 用 `import type { Graphics }`（编译期擦除）
 - **TypeScript strict**：`noUncheckedIndexedAccess` / `exactOptionalPropertyTypes`（可选属性用条件展开 `...(cond ? { debuff } : {})`）/ `noUnusedLocals` + `noUnusedParameters`
 - **TDD 强制**：每个任务 5 步（RED → GREEN → SURFACE）
-- **数值严格遵循 spec §4**；spec 未给的大招伤害/范围在设计值清单中标注
+- **数值严格遵循 spec §4**（含 grill 2026-07-17 补全的 §4.6 meleeFan 档位 / §4.7 大招具体参数）；spec 未给的大招伤害/范围在设计值清单中标注
 - **素材 key**：尺子复用 `prop.ruler`；其余 7 把程序绘制（textureKey = null）
+
+## 设计变更（grill 2026-07-17，权威性高于 plan 内既有代码）
+
+> 本 plan 早于 spec §4.6/§4.7 的 grill 补全而写。Task 3 `WeaponRegistry.ts` 的 `MeleeFanBasic` / `WeaponUltimate` 各变体字段需按下列 spec 参数对齐。spec 为权威，plan 内冲突数值作废。
+
+1. **meleeFan 3 档参数（spec §4.6）**：`MeleeFanBasic.halfAngle`（弧度）与 `range`（px）按武器所属档位设定：
+   | 档位 | halfAngle（弧度） | range（px） | 适用武器 |
+   |------|------------------|------------|----------|
+   | 快攻型 | π/6（30°） | 90 | 断尺、拳套 |
+   | 均衡型 | π/4（45°） | 120 | 尺子、万魂幡 |
+   | 重型 | π/3（60°） | 180 | 锁链、血镰 |
+   Task 3 既有 8 把武器定义的 `halfAngle`/`range` 需按此表校正。
+2. **meleeFan 命中判定（spec §3.2）**：扇形仅命中**最近 1 敌**（单体近战）；拳套 `hitsPerAttack: 3` = 同一最近敌受 3 段（爆发）。Task 7 `WeaponCombatAdapter.performAttack` 的 meleeFan 分支需按此实现（原 plan 若写多目标 AoE 命中需改）。
+3. **rangedPiercing 朝向（spec §3.2）**：朝玩家 8 方向射出（同移动方向，静止时用上次方向），遇墙停止。Task 7 rangedPiercing 分支需读取玩家 8 方向朝向。
+4. **大招具体参数（spec §4.7）**：Task 8 各大招执行器参数按 spec §4.7 表对齐：
+   - rulerStorm: r150, 3s, dps15（总45），持续型可移动可转向
+   - bladeArray: 8 方向，每刃长180/宽20/18伤/pierce2/速400，遇墙消失
+   - fistDash: 0.3s 冲刺距离250（速833），路径首敌40+末端40（总80），**无敌**+**锁定向不可转**
+   - chainCrush: 拉扯≤200px（首敌拉到身边），root 2s + burn 10/s×3s
+   - bloodWheel: r130, 3s, dps50（总150），lifesteal 10%，持续型可移动可转向
+   - soulCapture: **屏幕可视范围**（1280×720 视口）内随机 1 只非精英即死，**排除但宇轩身体**（HP=1），不穿墙检测生效
+   - scatterShards（断尺）: 6×4 碎片，每片 4 伤（总24）
+   - chalkBombAoe（粉笔）: AoE 25 伤，r150，瞬发
+5. **大招转向规则（spec §3.2）**：释放中可转向（持续型 rulerStorm/bloodWheel/bladeArray/chainCrush），fistDash 例外（冲刺方向释放瞬间锁定，0.3s 内不可转）。
+6. **soulCapture 字段调整**：原 `captureRadius: 600` 改为 `captureMode: 'screenViewport'`（屏幕可视范围判定）+ `excludeHpLe: 1`（排除 HP≤1 的身体）。测试断言需同步更新。
 
 ## Run Commands
 

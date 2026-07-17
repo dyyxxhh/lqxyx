@@ -20,6 +20,7 @@ export class PlayerCombat {
   weaponId: string = PLACEHOLDER_WEAPON_ID; // plan 4 替换为真实武器系统
   private debuffs = new DebuffTracker();
   private _isDead = false;
+  private invincibleMs = 0; // plan 4: 无敌态（拳套霸体冲拳）
 
   // stamina 状态机 (grill 2026-07-17)
   stamina: number = STAMINA_MAX;
@@ -84,6 +85,7 @@ export class PlayerCombat {
   }
 
   takeDamage(instance: DamageInstance): void {
+    if (this.invincibleMs > 0) return; // plan 4: 无敌态守卫
     if (this._isDead || instance.amount <= 0) return;
     this.hp = Math.max(0, this.hp - instance.amount);
     if (this.onDamaged !== null) this.onDamaged(instance);
@@ -116,6 +118,9 @@ export class PlayerCombat {
 
   tick(deltaMs: number): void {
     if (this._isDead) return;
+    if (this.invincibleMs > 0) {
+      this.invincibleMs = Math.max(0, this.invincibleMs - deltaMs);
+    }
     const { burnDamage } = this.debuffs.tick(deltaMs);
     if (burnDamage > 0) {
       this.hp = Math.max(0, this.hp - burnDamage);
@@ -139,5 +144,14 @@ export class PlayerCombat {
 
   get activeDebuffs(): readonly Debuff[] {
     return this.debuffs.list();
+  }
+
+  // plan 4: 无敌态（拳套霸体冲拳）
+  setInvincible(ms: number): void {
+    this.invincibleMs = Math.max(this.invincibleMs, ms);
+  }
+
+  isInvincible(): boolean {
+    return this.invincibleMs > 0;
   }
 }

@@ -4,6 +4,7 @@
 import {
   PLAYER_CONTACT_DAMAGE_COOLDOWN_MS,
   WEAK_PUNCH_DAMAGE,
+  type DamageCategory,
   type DamageInstance,
   type Debuff,
 } from './DamageType';
@@ -13,6 +14,7 @@ import {
   type EnemyKind,
   type EnemyUpdateContext,
   type Projectile,
+  type ProceduralKind,
   type ZoneEffect,
   createCombatRng,
   createEnemy,
@@ -33,6 +35,45 @@ export interface CombatCallbacks {
   onKnockback?: (vx: number, vy: number, durationMs: number) => void; // 冲撞击退
 }
 
+// ---------------------------------------------------------------------------
+// plan 4: 玩家侧投射物 & 区域（武器系统）
+// ---------------------------------------------------------------------------
+
+/** 玩家投射物（武器普攻/大招生成，伤害敌人） */
+export interface PlayerProjectile {
+  id: string;
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  speed: number;
+  damage: number;
+  category: DamageCategory;
+  debuff?: Debuff;
+  pierceRemaining: number;   // 剩余可穿透数；0 = 命中 1 个后消失；Infinity = 无限穿透
+  remainingMs: number;
+  radius: number;
+  proceduralKind: ProceduralKind;  // WeaponProjectileKind 之一
+}
+
+/** 玩家区域（武器大招生成，跟随玩家或固定位置） */
+export interface PlayerZone {
+  id: string;
+  shape: 'circle';
+  x: number;
+  y: number;
+  radius: number;
+  burstDamage: number;        // 生成时对范围内敌人一次性伤害
+  damagePerSecond: number;    // 持续 DoT
+  category: DamageCategory;
+  debuff?: Debuff;
+  remainingMs: number;
+  applyDebuffOnce: boolean;
+  debuffApplied: boolean;
+  followPlayer: boolean;      // true = 每帧跟随玩家位置（血轮/尺子风暴/拳套冲拳/万锁绞杀）
+  proceduralKind: ProceduralKind;  // WeaponZoneKind 之一
+}
+
 const MAX_DAN_YUXUAN_BODIES = 2;
 const PLAYER_ATTACK_RANGE = 64;
 const PLAYER_ATTACK_HALF_ANGLE = Math.PI / 4; // 45° 半角 → 90° 扇形
@@ -45,6 +86,9 @@ export class CombatManager {
   readonly enemies: Enemy[] = [];
   readonly projectiles: Projectile[] = [];
   readonly zones: ZoneEffect[] = [];
+  // plan 4: 玩家侧（武器系统）投射物 & 区域
+  readonly playerProjectiles: PlayerProjectile[] = [];
+  readonly playerZones: PlayerZone[] = [];
   private playerPosition: Vec2 = { x: 0, y: 0 };
   private readonly isWalkable: IsWalkableFn;
   private readonly rng: CombatRng;
@@ -53,6 +97,8 @@ export class CombatManager {
   private timeMs = 0;
   private projectileCounter = 0;
   private zoneCounter = 0;
+  // plan 4: 投射物命中追踪（每枚投射物仅命中同一敌人一次）
+  private readonly projectileHitTracker = new Map<string, Set<string>>();
 
   constructor(
     player: PlayerCombat,
@@ -94,6 +140,267 @@ export class CombatManager {
 
   spawnZone(z: ZoneEffect): void {
     this.zones.push(z);
+  }
+
+  // ===========================================================================
+  // plan 4: 玩家侧伤害 API（加法式，不修改既有 playerAttack/spawnProjectile/spawnZone）
+  // ===========================================================================
+
+  spawnPlayerProjectile(p: PlayerProjectile): void {
+    this.playerProjectiles.push(p);
+    this.projectileHitTracker.set(p.id, new Set());
+  }
+
+  spawnPlayerZone(z: PlayerZone): void {
+    z.debuffApplied = false;
+    this.playerZones.push(z);
+  }
+
+  getTimeMs(): number {
+    return this.timeMs;
+  }
+
+  /** 对扇形范围内敌人造成伤害 + 可选 debuff。返回实际总扣血（用于吸血）。 */
+  damageEnemiesInFan(
+    originX: number, originY: number,
+    dirX: number, dirY: number,
+    range: number, halfAngle: number,
+    instance: DamageInstance,
+  ): number {
+    if (this.player.isDead) return 0;
+    let totalDealt = 0;
+    const len = Math.sqrt(dirX * dirX + dirY * dirY);
+    if (len === 0) return 0;
+    const ux = dirX / len;
+    const uy = dirY / len;
+    for (const enemy of this.enemies) {
+      if (enemy.dead) continue;
+      const dx = enemy.x - originX;
+      const dy = enemy.y - originY;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      if (dist > range + enemy.contactRadius) continue;
+      if (dist === 0) {
+        totalDealt += this.applyDamageInstanceToEnemy(enemy, instance);
+        continue;
+      }
+      const dot = (dx / dist) * ux + (dy / dist) * uy;
+      const angle = Math.acos(Math.min(1, Math.max(-1, dot)));
+      if (Math.abs(normalizeAngle(angle)) <= halfAngle) {
+        totalDealt += this.applyDamageInstanceToEnemy(enemy, instance);
+      }
+    }
+    this.handleDeadEnemies();
+    return totalDealt;
+  }
+
+  /** 对扇形范围内最近的单个敌人造成伤害（grill: meleeFan 单体近战原则）。返回实际扣血。 */
+  damageClosestEnemyInFan(
+    originX: number, originY: number,
+    dirX: number, dirY: number,
+    range: number, halfAngle: number,
+    instance: DamageInstance,
+  ): number {
+    if (this.player.isDead) return 0;
+    const len = Math.sqrt(dirX * dirX + dirY * dirY);
+    if (len === 0) return 0;
+    const ux = dirX / len;
+    const uy = dirY / len;
+    let closest: Enemy | null = null;
+    let closestDist = Infinity;
+    for (const enemy of this.enemies) {
+      if (enemy.dead) continue;
+      const dx = enemy.x - originX;
+      const dy = enemy.y - originY;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      if (dist > range + enemy.contactRadius) continue;
+      if (dist === 0) {
+        if (dist < closestDist) {
+          closest = enemy;
+          closestDist = dist;
+        }
+        continue;
+      }
+      const dot = (dx / dist) * ux + (dy / dist) * uy;
+      const angle = Math.acos(Math.min(1, Math.max(-1, dot)));
+      if (Math.abs(normalizeAngle(angle)) <= halfAngle && dist < closestDist) {
+        closest = enemy;
+        closestDist = dist;
+      }
+    }
+    if (closest === null) return 0;
+    const dealt = this.applyDamageInstanceToEnemy(closest, instance);
+    this.handleDeadEnemies();
+    return dealt;
+  }
+
+  /** 对圆形范围内敌人造成伤害 + 可选 debuff。返回实际总扣血。 */
+  damageEnemiesInCircle(
+    cx: number, cy: number, radius: number,
+    instance: DamageInstance,
+  ): number {
+    if (this.player.isDead) return 0;
+    let totalDealt = 0;
+    for (const enemy of this.enemies) {
+      if (enemy.dead) continue;
+      const dist = Math.hypot(enemy.x - cx, enemy.y - cy);
+      if (dist <= radius + enemy.contactRadius) {
+        totalDealt += this.applyDamageInstanceToEnemy(enemy, instance);
+      }
+    }
+    this.handleDeadEnemies();
+    return totalDealt;
+  }
+
+  /** 将范围内敌人向中心拉近 pullDistance（不超过中心）。 */
+  pullEnemiesToward(cx: number, cy: number, radius: number, pullDistance: number): void {
+    for (const enemy of this.enemies) {
+      if (enemy.dead) continue;
+      const dx = cx - enemy.x;
+      const dy = cy - enemy.y;
+      const dist = Math.hypot(dx, dy);
+      if (dist > radius + enemy.contactRadius || dist === 0) continue;
+      const step = Math.min(pullDistance, dist);
+      enemy.x += (dx / dist) * step;
+      enemy.y += (dy / dist) * step;
+    }
+  }
+
+  /** 秒杀范围内一个随机非排除种类敌人。返回被杀敌人或 null。
+   *  grill §4.7: excludeHpLe 排除 HP ≤ 该值的敌人（万魂幡拘魂排除召唤核心 HP=1）。 */
+  killRandomEnemyInRadiusExcluding(
+    cx: number, cy: number, radius: number,
+    excludeKinds: readonly EnemyKind[],
+    excludeHpLe?: number,
+  ): Enemy | null {
+    const eligible = this.enemies.filter(
+      (e) => !e.dead
+        && !excludeKinds.includes(e.kind)
+        && Math.hypot(e.x - cx, e.y - cy) <= radius + e.contactRadius
+        && (excludeHpLe === undefined || e.hp > excludeHpLe),
+    );
+    if (eligible.length === 0) return null;
+    const idx = Math.floor(this.rng.next() * eligible.length);
+    const target = eligible[idx]!;
+    target.hp = 0;
+    target.dead = true;
+    this.handleDeadEnemies();
+    return target;
+  }
+
+  /** 对单个敌人应用伤害实例（amount + debuff）。amount<=0 时仍应用 debuff。返回实际扣血。 */
+  private applyDamageInstanceToEnemy(enemy: Enemy, instance: DamageInstance): number {
+    if (enemy.dead) return 0;
+    let dealt = 0;
+    if (instance.amount > 0) {
+      const before = enemy.hp;
+      enemy.applyDamage(instance);
+      dealt = before - enemy.hp;
+    }
+    if (instance.debuff !== undefined) {
+      enemy.applyDebuff(instance.debuff);
+    }
+    return dealt;
+  }
+
+  /** 子步进推进玩家投射物（避免高速穿透隧道）。 */
+  private updatePlayerProjectiles(deltaMs: number): void {
+    const maxStep = 8; // px per sub-step
+    for (const p of this.playerProjectiles) {
+      if (p.speed <= 0) {
+        p.remainingMs -= deltaMs;
+        continue;
+      }
+      const totalDist = p.speed * (deltaMs / 1000);
+      const steps = Math.max(1, Math.ceil(totalDist / maxStep));
+      const stepDist = totalDist / steps;
+      const stepDt = deltaMs / steps;
+      const ux = p.vx / p.speed;
+      const uy = p.vy / p.speed;
+      for (let s = 0; s < steps; s++) {
+        p.x += ux * stepDist;
+        p.y += uy * stepDist;
+        p.remainingMs -= stepDt;
+        let hitSet = this.projectileHitTracker.get(p.id);
+        if (hitSet === undefined) {
+          hitSet = new Set();
+          this.projectileHitTracker.set(p.id, hitSet);
+        }
+        for (const enemy of this.enemies) {
+          if (enemy.dead) continue;
+          if (p.pierceRemaining < 0) break;
+          if (hitSet.has(enemy.id)) continue;
+          const dist = Math.hypot(enemy.x - p.x, enemy.y - p.y);
+          if (dist <= p.radius + enemy.contactRadius) {
+            this.applyDamageInstanceToEnemy(enemy, {
+              amount: p.damage,
+              category: p.category,
+              ...(p.debuff !== undefined ? { debuff: p.debuff } : {}),
+            });
+            hitSet.add(enemy.id);
+            if (p.pierceRemaining === Infinity) continue;
+            p.pierceRemaining -= 1;
+          }
+        }
+        if (p.pierceRemaining < 0 || p.remainingMs <= 0) break;
+      }
+    }
+    for (let i = this.playerProjectiles.length - 1; i >= 0; i--) {
+      const p = this.playerProjectiles[i]!;
+      if (p.remainingMs <= 0 || p.pierceRemaining < 0) {
+        this.projectileHitTracker.delete(p.id);
+        this.playerProjectiles.splice(i, 1);
+      }
+    }
+  }
+
+  /** 推进玩家区域（跟随玩家 / burst / DoT / debuff）。 */
+  private updatePlayerZones(deltaMs: number): void {
+    const pos = this.playerPosition;
+    const seconds = deltaMs / 1000;
+    for (const z of this.playerZones) {
+      if (z.followPlayer) {
+        z.x = pos.x;
+        z.y = pos.y;
+      }
+      // burst 一次性
+      if (!z.debuffApplied && (z.burstDamage > 0 || (z.applyDebuffOnce && z.debuff !== undefined))) {
+        this.damageEnemiesInCircle(z.x, z.y, z.radius, {
+          amount: z.burstDamage,
+          category: z.category,
+          ...(z.debuff !== undefined && z.applyDebuffOnce ? { debuff: z.debuff } : {}),
+        });
+        z.debuffApplied = true;
+      }
+      // DoT
+      if (z.damagePerSecond > 0) {
+        this.damageEnemiesInCircle(z.x, z.y, z.radius, {
+          amount: z.damagePerSecond * seconds,
+          category: z.category,
+          ...(z.debuff !== undefined && !z.applyDebuffOnce ? { debuff: z.debuff } : {}),
+        });
+      }
+      z.remainingMs -= deltaMs;
+    }
+    for (let i = this.playerZones.length - 1; i >= 0; i--) {
+      if (this.playerZones[i]!.remainingMs <= 0) {
+        this.playerZones.splice(i, 1);
+      }
+    }
+  }
+
+  /** feared 敌人逃离源（覆盖 AI movement）。 */
+  private moveEnemyFleeing(enemy: Enemy, deltaMs: number, fleeFrom: { x: number; y: number }): void {
+    const dx = enemy.x - fleeFrom.x;
+    const dy = enemy.y - fleeFrom.y;
+    const dist = Math.hypot(dx, dy);
+    if (dist === 0) {
+      // 与源重合，随机方向逃离
+      enemy.x += enemy.speed * (deltaMs / 1000);
+      return;
+    }
+    const step = enemy.speed * (deltaMs / 1000);
+    enemy.x += (dx / dist) * step;
+    enemy.y += (dy / dist) * step;
   }
 
   // -- 身体上限 (spec §5.9 最多 2 个) --
@@ -175,13 +482,21 @@ export class CombatManager {
     this.player.tick(deltaMs);
     if (this.player.isDead) return;
 
-    // 2. 敌人 AI 更新
+    // 2. 敌人 AI 更新（plan 4: 状态门控 — stun/root 跳过 AI，fear 逃离覆盖）
     const ctx = this.makeContext();
     for (const enemy of this.enemies) {
       if (enemy.dead) continue;
       if (enemy.invulnMs > 0) enemy.invulnMs = Math.max(0, enemy.invulnMs - deltaMs);
       if (enemy.contactCooldownMs > 0) {
         enemy.contactCooldownMs = Math.max(0, enemy.contactCooldownMs - deltaMs);
+      }
+      enemy.tickStatus(deltaMs);
+      if (enemy.dead) continue;
+      if (enemy.isStunned() || enemy.isRooted()) continue;
+      const fleeFrom = enemy.getFleeFrom();
+      if (fleeFrom !== null) {
+        this.moveEnemyFleeing(enemy, deltaMs, fleeFrom);
+        continue;
       }
       enemy.update(deltaMs, ctx);
     }
@@ -191,6 +506,10 @@ export class CombatManager {
 
     // 4. 区域推进
     this.updateZones(deltaMs);
+
+    // 4b. plan 4: 玩家侧投射物 & 区域推进
+    this.updatePlayerProjectiles(deltaMs);
+    this.updatePlayerZones(deltaMs);
 
     // 5. 接触伤害
     this.applyContactDamage(deltaMs);
@@ -429,4 +748,12 @@ export class CombatManager {
   nextZoneId(): string {
     return `zone-${this.zoneCounter++}`;
   }
+}
+
+/** 归一化角度到 [-π, π]。 */
+function normalizeAngle(angle: number): number {
+  let a = angle;
+  while (a > Math.PI) a -= 2 * Math.PI;
+  while (a < -Math.PI) a += 2 * Math.PI;
+  return a;
 }

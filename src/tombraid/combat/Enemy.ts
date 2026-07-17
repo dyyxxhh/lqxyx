@@ -36,7 +36,17 @@ export type ProceduralKind =
   | 'screamWave'        // 秦浩睿尖叫波
   | 'floorCrackWave'    // 杨云红边地裂波
   | 'laserBeam'         // 漂浮眼球激光
-  | 'chairObstacle';    // 桌椅落地椅子障碍
+  | 'chairObstacle'     // 桌椅落地椅子障碍
+  // plan 4 武器特效（玩家侧投射物 & 区域）
+  | 'rulerShard'        // 断尺尺屑（投射物）
+  | 'chalkThrow'        // 粉笔投掷（投射物）
+  | 'bladeCrescent'     // 灵刃月牙剑气（投射物）
+  | 'chalkBomb'         // 粉笔爆弹（区域）
+  | 'rulerStorm'        // 尺子风暴（区域）
+  | 'fistDash'          // 拳套冲拳（区域）
+  | 'chainCrush'        // 锁链万锁绞杀（区域）
+  | 'bloodWheel'        // 血镰血轮（区域）
+  | 'soulCapture';      // 万魂幡拘魂（区域）
 
 /** 缄默者种类（11 种） */
 export type EnemyKind =
@@ -249,6 +259,84 @@ export abstract class Enemy implements EnemyViewMetadata {
     if (this.dead || this.invulnMs > 0 || instance.amount <= 0) return;
     this.hp = Math.max(0, this.hp - instance.amount);
     if (this.hp <= 0) this.dead = true;
+  }
+
+  // ===========================================================================
+  // plan 4: 武器 debuff 状态追踪（burn/stun/root/fear）— 加法式，plan 3 敌人无状态时 no-op
+  // ===========================================================================
+  private statusBurn: { dps: number; remainingMs: number } | null = null;
+  private statusStunMs = 0;
+  private statusRootMs = 0;
+  private statusFear: { remainingMs: number; sourceX: number; sourceY: number } | null = null;
+
+  /** 应用武器 debuff（burn DoT / stun / root / fear）。不修改既有 applyDamage 行为。 */
+  applyDebuff(debuff: Debuff): void {
+    if (this.dead) return;
+    switch (debuff.type) {
+      case 'burn':
+        this.statusBurn = { dps: debuff.dps, remainingMs: debuff.remainingMs };
+        break;
+      case 'stun':
+        this.statusStunMs = Math.max(this.statusStunMs, debuff.remainingMs);
+        break;
+      case 'root':
+        this.statusRootMs = Math.max(this.statusRootMs, debuff.remainingMs);
+        break;
+      case 'fear':
+        this.statusFear = {
+          remainingMs: debuff.remainingMs,
+          sourceX: debuff.sourceX,
+          sourceY: debuff.sourceY,
+        };
+        break;
+      case 'slow':
+        // plan 4 敌人不使用 slow 移动门控（武器不含 enemy slow）；记录但无效果
+        break;
+    }
+  }
+
+  /** 推进状态计时器，结算 burn DoT。由 CombatManager 敌人 loop 在 enemy.update 前调用。 */
+  tickStatus(deltaMs: number): void {
+    if (this.dead) return;
+    if (this.statusBurn !== null) {
+      const seconds = deltaMs / 1000;
+      const dmg = this.statusBurn.dps * seconds;
+      if (dmg > 0 && this.invulnMs <= 0) {
+        this.hp = Math.max(0, this.hp - dmg);
+        if (this.hp <= 0) this.dead = true;
+      }
+      this.statusBurn.remainingMs -= deltaMs;
+      if (this.statusBurn.remainingMs <= 0) this.statusBurn = null;
+    }
+    if (this.statusStunMs > 0) {
+      this.statusStunMs = Math.max(0, this.statusStunMs - deltaMs);
+    }
+    if (this.statusRootMs > 0) {
+      this.statusRootMs = Math.max(0, this.statusRootMs - deltaMs);
+    }
+    if (this.statusFear !== null) {
+      this.statusFear.remainingMs -= deltaMs;
+      if (this.statusFear.remainingMs <= 0) this.statusFear = null;
+    }
+  }
+
+  isStunned(): boolean {
+    return this.statusStunMs > 0;
+  }
+
+  isRooted(): boolean {
+    return this.statusRootMs > 0;
+  }
+
+  getFleeFrom(): { x: number; y: number } | null {
+    return this.statusFear === null ? null : { x: this.statusFear.sourceX, y: this.statusFear.sourceY };
+  }
+
+  clearStatus(): void {
+    this.statusBurn = null;
+    this.statusStunMs = 0;
+    this.statusRootMs = 0;
+    this.statusFear = null;
   }
 
   distanceTo(x: number, y: number): number {

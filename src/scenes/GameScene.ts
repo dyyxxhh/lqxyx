@@ -26,9 +26,10 @@ export class GameScene extends Phaser.Scene {
   private saveCodeStatusText: Phaser.GameObjects.Text | null = null;
   private readonly UI_BASE_DEPTH = 980;
   private readonly UI_TEXT_DEPTH = 981;
-  private readonly CONTINUE_Y = GAME_HEIGHT / 2 + 108;
-  private readonly SETTINGS_TITLE_Y = GAME_HEIGHT / 2 + 172;
-  private readonly SETTINGS_BUTTON_Y = GAME_HEIGHT / 2 + 218;
+  private readonly TOMB_RAID_BUTTON_Y = GAME_HEIGHT / 2 + 80;
+  private readonly CONTINUE_Y = GAME_HEIGHT / 2 + 152;
+  private readonly SETTINGS_TITLE_Y = GAME_HEIGHT / 2 + 216;
+  private readonly SETTINGS_BUTTON_Y = GAME_HEIGHT / 2 + 262;
 
   public constructor() {
     super('GameScene');
@@ -102,6 +103,30 @@ export class GameScene extends Phaser.Scene {
     )
       .setOrigin(0.5)
       .setDepth(this.UI_TEXT_DEPTH);
+
+    // ── Tomb raid entry button ─────────────────────────────────
+    const tombRaidButton = this.add
+      .rectangle(GAME_WIDTH / 2, this.TOMB_RAID_BUTTON_Y, 300, 56, UI_THEME.colors.surfaceRaised, UI_THEME.alpha.panelStrong)
+      .setOrigin(0.5)
+      .setDepth(this.UI_BASE_DEPTH)
+      .setInteractive({ useHandCursor: true });
+    applyPixelStrokeStyle(tombRaidButton, UI_THEME.stroke.thin, UI_THEME.colors.borderBlue, 0.95);
+    applyPixelTextStyle(this.add
+      .text(GAME_WIDTH / 2, this.TOMB_RAID_BUTTON_Y, '摸金模式', {
+        align: 'center',
+        color: UI_THEME.colors.textGold,
+        fontFamily: UI_THEME.font.ui,
+        fontSize: '24px',
+        fontStyle: 'bold',
+      })
+    )
+      .setOrigin(0.5)
+      .setDepth(this.UI_TEXT_DEPTH);
+    tombRaidButton.on('pointerover', () => tombRaidButton.setFillStyle(UI_THEME.colors.accentHover, UI_THEME.alpha.panelStrong));
+    tombRaidButton.on('pointerout', () => tombRaidButton.setFillStyle(UI_THEME.colors.surfaceRaised, UI_THEME.alpha.panelStrong));
+    tombRaidButton.on('pointerdown', () => {
+      this.scene.start('TombRaidHubScene');
+    });
 
     applyPixelTextStyle(this.add
       .text(GAME_WIDTH / 2, this.SETTINGS_BUTTON_Y + 84, '第一幕 · 影中咎', {

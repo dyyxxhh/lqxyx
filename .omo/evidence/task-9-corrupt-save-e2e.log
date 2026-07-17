@@ -1,6 +1,0 @@
-
-Running 1 test using 1 worker
-
-  ✓  1 [desktop-chromium] › tests/e2e/save-state.spec.ts:17:1 › recovers from corrupt checkpoint localStorage without crashing (2.8s)
-
-  1 passed (4.3s)

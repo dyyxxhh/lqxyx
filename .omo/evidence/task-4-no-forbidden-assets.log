@@ -1,1 +1,0 @@
-No forbidden folder path or production dependency found in src/public/tests/dist; intentional rejection strings only remain in src/data/assets.test.ts.

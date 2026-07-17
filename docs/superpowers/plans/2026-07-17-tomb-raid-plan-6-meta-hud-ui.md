@@ -2995,6 +2995,8 @@ import {
 import { grantStarterPackIfNeeded } from '../tombraid/state/tombRaidState';
 import { ALL_LOOT, getLootItem } from '../tombraid/loot/LootItem';
 import { Inventory } from '../tombraid/loot/Inventory';
+import type { CombatManager } from '../tombraid/combat/CombatManager';
+import type { WeaponCombatAdapter } from '../tombraid/weapons/WeaponCombatAdapter';
 
 function createMockScene() {
   const objects: any[] = [];
@@ -3144,6 +3146,28 @@ describe('Plan 6 integration smoke: HUD + settlement end-to-end (mock scene)', (
       stashSanity: 750,
     })).not.toThrow();
   });
+
+  it('unarmed loadout routes attack to CombatManager.playerAttack, not WeaponCombatAdapter.performAttack', () => {
+    const env = createMockScene();
+    const scene = new TombRaidScene();
+    Object.assign(scene, env.scene);
+    scene.create();
+
+    // 注入 mock 战斗依赖（Plan 3 CombatManager + Plan 4 WeaponCombatAdapter）
+    const playerAttack = vi.fn();
+    const performAttack = vi.fn();
+    scene.setCombatDeps(
+      { playerAttack } as unknown as CombatManager,
+      { performAttack } as unknown as WeaponCombatAdapter,
+    );
+    scene.setCurrentLoadout({ weaponId: 'unarmed', consumables: [] });
+
+    scene.performPlayerAttack({ x: 1, y: 0 }, 0);
+
+    // 空手 → Plan 3 弱拳 fallback；不调用 Plan 4 adapter
+    expect(playerAttack).toHaveBeenCalledWith({ x: 1, y: 0 });
+    expect(performAttack).not.toHaveBeenCalled();
+  });
 });
 ```
 
@@ -3166,6 +3190,10 @@ import { RedEdgeFogOverlay } from './ui/RedEdgeFogOverlay';
 import { SettlementScreen, type SettlementOutcome } from './ui/SettlementScreen';
 import { MobileControls } from './ui/MobileControls';
 import type { Inventory } from './loot/Inventory';
+import type { CombatManager } from './combat/CombatManager';             // Plan 3：空手弱拳 fallback
+import type { WeaponCombatAdapter } from './weapons/WeaponCombatAdapter'; // Plan 4：装备武器普攻
+import type { Vec2 } from './combat/Enemy';                              // 共享方向类型
+import { UNARMED_ID, type Loadout } from './meta/LoadoutManager';        // unarmed 路由常量 + loadout 类型
 
 export class TombRaidScene extends Phaser.Scene {
   private hud: TombRaidHUD | null = null;
@@ -3174,6 +3202,10 @@ export class TombRaidScene extends Phaser.Scene {
   private settlement: SettlementScreen | null = null;
   private mobile: MobileControls | null = null;
   private isMobile = false;
+  // ── 普攻路由依赖（由 setCombatDeps / setCurrentLoadout 注入）──
+  private combatManager: CombatManager | null = null;
+  private weaponAdapter: WeaponCombatAdapter | null = null;
+  private currentLoadout: Loadout | null = null;
 
   constructor() { super('TombRaid'); }
 
@@ -3221,6 +3253,34 @@ export class TombRaidScene extends Phaser.Scene {
       const pos = this.getPlayerWorldPosition();
       this.fogOverlay.update(pos.x, pos.y);
     }
+    // 注：普攻不在每帧自动触发；由攻击输入 handler（键鼠普攻键 / 摇杆 / 移动端
+    // MobileControls.onBasicAttack）在玩家按下普攻时调用 performPlayerAttack(direction, time)。
+  }
+
+  // ── 普攻路由（unarmed vs 武器）──
+  // 在 TombRaidScene.update 或攻击输入 handler 中调用：
+  //   - 'unarmed' → Plan 3 CombatManager.playerAttack()（5 伤弱拳 fallback，无 CD）
+  //     （Plan 4 的 WeaponId 联合类型不含 'unarmed'，故空手必须走 Plan 3 fallback）
+  //   - 其他武器 → Plan 4 WeaponCombatAdapter.performAttack(direction, timeMs)
+  //     （受武器 CD/大招约束）
+  performPlayerAttack(direction: Vec2, timeMs: number): void {
+    const weaponId = this.currentLoadout?.weaponId ?? UNARMED_ID;
+    if (weaponId === UNARMED_ID) {
+      this.combatManager?.playerAttack(direction);
+    } else {
+      this.weaponAdapter?.performAttack(direction, timeMs);
+    }
+  }
+
+  /** 注入战斗依赖（Plan 3 CombatManager + Plan 4 WeaponCombatAdapter），由上层 bootstrap 调用。 */
+  setCombatDeps(combatManager: CombatManager, weaponAdapter: WeaponCombatAdapter): void {
+    this.combatManager = combatManager;
+    this.weaponAdapter = weaponAdapter;
+  }
+
+  /** 设置当前对局 loadout，performPlayerAttack 据此路由 unarmed vs 武器。 */
+  setCurrentLoadout(loadout: Loadout): void {
+    this.currentLoadout = loadout;
   }
 
   // ── Plan 6 接线 API（供 CombatManager/MapRenderer 等上层调用）──
@@ -3288,6 +3348,10 @@ export class TombRaidScene extends Phaser.Scene {
 > - `runEvacuationSettlement` / `runDeathSettlement` 由 Plan 3 的玩家死亡检测或玩家到达出口的交互逻辑调用。
 > - `MobileControls` 仅在 `sys.game.device.input.touch` 为 true 时创建，与桌面端功能对等（同一套 `events.emit` 下游）。
 > - `markBodyOnMinimap` 实现 plan 3 的 `CombatCallbacks.onMarkBodyOnMinimap → MinimapUpdate.bodyMarkers` 桥接。
+> - **普攻路由（unarmed vs 武器）**：`performPlayerAttack(direction, timeMs)` 在攻击输入 handler（键鼠普攻键 / 摇杆 / `MobileControls.onBasicAttack`）中调用，按 `currentLoadout.weaponId` 分发：
+>   - `'unarmed'` → Plan 3 `CombatManager.playerAttack(direction)`（5 伤弱拳 fallback，无 CD）。**此分支必须存在**：Plan 4 的 `WeaponId` 联合类型不含 `'unarmed'`，空手无法走 `WeaponCombatAdapter`。
+>   - 其他武器 → Plan 4 `WeaponCombatAdapter.performAttack(direction, timeMs)`（受武器 CD/大招约束）。
+>   - 依赖由 `setCombatDeps(combatManager, weaponAdapter)` + `setCurrentLoadout(loadout)` 注入；`currentLoadout` 为 `null` 时按 `UNARMED_ID` 兜底。
 
 ### Step 4: 运行测试，验证通过
 

@@ -11,14 +11,15 @@ import { createInitialMapDebugState, type MapDebugState } from '../map/mapState'
 
 export const GAME_WIDTH = 1280;
 export const GAME_HEIGHT = 720;
-export const GAME_SCENES = ['BootScene', 'PreloadScene', 'GameScene', 'PlayScene'] as const;
+export const GAME_SCENES = ['BootScene', 'PreloadScene', 'GameScene', 'PlayScene', 'TombRaidScene'] as const;
 
 export type GameSceneName = (typeof GAME_SCENES)[number];
 
 export interface SceneMenuDebugState {
   readonly visible: boolean;
-  readonly selectedAction: 'new-game' | 'continue' | null;
+  readonly selectedAction: 'new-game' | 'continue' | 'tomb-raid' | null;
   readonly hasContinue: boolean;
+  readonly hasTombRaidSave: boolean;
 }
 
 export interface SceneCanvasDebugState {
@@ -39,6 +40,18 @@ export interface SceneSizingDebugState {
   readonly aspectRatio: number;
 }
 
+export interface TombRaidDebugState {
+  readonly active: boolean;
+  readonly depth: number;
+  readonly health: number;
+  readonly maxHealth: number;
+  readonly sanity: number;
+  readonly maxSanity: number;
+  readonly inventoryCount: number;
+  readonly enemiesDefeated: number;
+  readonly status: 'in-progress' | 'completed' | 'failed' | 'idle';
+}
+
 export interface SceneDebugState {
   sceneOrder: GameSceneName[];
   currentScene: GameSceneName | null;
@@ -57,12 +70,27 @@ export interface SceneDebugState {
   ui: NarrativeUiDebugState;
   character: CharacterDebugState;
   map: MapDebugState;
+  tombRaid: TombRaidDebugState;
 }
 
 declare global {
   interface Window {
     __YING_ZHONG_JIU_SCENE_STATE__?: SceneDebugState;
   }
+}
+
+export function createInitialTombRaidDebugState(): TombRaidDebugState {
+  return {
+    active: false,
+    depth: 1,
+    health: 100,
+    maxHealth: 100,
+    sanity: 100,
+    maxSanity: 100,
+    inventoryCount: 0,
+    enemiesDefeated: 0,
+    status: 'idle',
+  };
 }
 
 export function createInitialSceneDebugState(): SceneDebugState {
@@ -73,8 +101,8 @@ export function createInitialSceneDebugState(): SceneDebugState {
     preloaded: false,
     gameReady: false,
     ready: false,
-    sceneCounts: { BootScene: 0, PreloadScene: 0, GameScene: 0, PlayScene: 0 },
-    menu: { visible: false, selectedAction: null, hasContinue: false },
+    sceneCounts: { BootScene: 0, PreloadScene: 0, GameScene: 0, PlayScene: 0, TombRaidScene: 0 },
+    menu: { visible: false, selectedAction: null, hasContinue: false, hasTombRaidSave: false },
     canvas: null,
     sizing: {
       mode: 'FIT',
@@ -90,6 +118,7 @@ export function createInitialSceneDebugState(): SceneDebugState {
     ui: createInitialNarrativeUiDebugState(),
     character: createInitialCharacterDebugState(),
     map: createInitialMapDebugState(),
+    tombRaid: createInitialTombRaidDebugState(),
   };
 }
 
@@ -140,7 +169,7 @@ export function markGameSceneReady(): SceneDebugState {
   state.gameReady = true;
   state.ready = true;
   const save = refreshSaveDebugState().save;
-  state.menu = { visible: true, selectedAction: 'new-game', hasContinue: save.hasValidSave };
+  state.menu = { visible: true, selectedAction: 'new-game', hasContinue: save.hasValidSave, hasTombRaidSave: state.menu.hasTombRaidSave };
   return state;
 }
 

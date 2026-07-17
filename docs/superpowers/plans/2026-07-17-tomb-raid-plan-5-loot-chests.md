@@ -8,7 +8,7 @@
 - `loot/LootItem.ts` — `LootRarity`/`LootType`/`LootEffect` 判别联合 + `LootItem` 接口 + 48 件 `ALL_LOOT` 定义 + `getLootItem(id)` 查询（武器条目从 plan 4 `getWeapon` 派生 `sanityValue`/`rarity`）
 - `loot/LootTable.ts` — `LootTable`/`LootTableEntry`/`LootRollMode` + 4 张掉率表（`SILENT_ONE_LOOT_TABLE`/`YANG_YUN_RED_LOOT_TABLE`/`NORMAL_CHEST_LOOT_TABLE`/`GILDED_CHEST_LOOT_TABLE`）+ `rollLootTable(table, rng)` 纯函数（single/independent/multiPick 三模式 + 白阶 70% 无字毕业证 + 保底 pity）
 - `loot/Inventory.ts` — 本局背包（遗物 `activeRelicIds` 不叠加 + 消耗品堆叠上限受 `tornSchoolbag` relic 影响 + `totalSanityValue`）
-- `loot/chestDecryptState.ts` — 宝箱破译纯状态机（`ChestDecryptState` + `ChestDecryptSnapshot` + 回调，hold/pause 无回退 + 4 锁扣 0.25/0.5/0.75/1.0）
+- `loot/chestDecryptState.ts` — 宝箱破译纯状态机（`ChestDecryptState` + `ChestDecryptSnapshot` + 回调，hold/松开回退(100%速率,锁扣保留) + 4 锁扣 0.25/0.5/0.75/1.0）
 - `loot/ChestDecrypt.ts` — Phaser 薄层（`import type Phaser`，构造注入 scene，程序绘制码环/进度弧/粒子 + 切贴图 `prop.phoneCabinetFront`→`prop.phoneCabinetAngled` + 战利品卡飞出）
 - `loot/lootAssetKeys.ts` — `lootSpriteKeyFor(itemId)` 解析（itemId → `loot.<中文名>` manifest key）+ manifest 交叉验证 helper
 - 不修改剧情模式代码；不修改 `GAME_SCENES`；依赖 plan 4 `WeaponRegistry.getWeapon`/`WeaponId`/`WeaponDef`；不实现效果应用（在 plan 3 战斗与未来 effects 系统）
@@ -54,7 +54,7 @@
 5. **白阶 70% 规则**：`rollLootTable` 内 `pickItem` 对 `rarity === 'white'` 的条目先 roll `rng()`，`< 0.7` → 强制返回 `treasure.blankDiploma`；`>= 0.7` → 从白阶池排除 `blankDiploma` 后随机。精确 P(blankDiploma | white) = 70%
 6. **遗物不叠加**：`Inventory.activeRelicIds: Set<string>` 跟踪 distinct relic id；`add` 同名遗物数量叠加但 `activeRelics()` 只返回一次；`remove` 至 0 时从 activeRelicIds 删除
 7. **消耗品堆叠上限**：`BASE_CONSUMABLE_STACK_LIMIT = 10`；`relic.tornSchoolbag` 激活时 `+5` → 15（通过构造注入 `isTornSchoolbagActive: () => boolean`）；超出上限部分计入 `overflow` 丢弃
-8. **宝箱破译**：`phase: 'idle' | 'decrypting' | 'opening' | 'completed'`；`holding` 布尔独立于 phase 控制 `advance` 是否推进；`release()` 仅置 `holding=false`，progress 不回退；4 锁扣 `brokenLocks = min(4, floor(progress*4))`，每锁扣触发 `onLockBroken(index)`；`progress >= 1` → `phase='opening'` + `onOpenStart`；`openElapsedMs >= 600` → `phase='completed'` + `onCompleted`
+8. **宝箱破译**：`phase: 'idle' | 'decrypting' | 'opening' | 'completed'`；`holding` 布尔独立于 phase 控制 `advance` 是否推进；`release()` 置 `holding=false`，progress 以与破译相同速率回退(decayRate=1/2500 per ms)，回退到上一个已崩开锁扣处停止(progress 回退到 `floor(progress*4)/4` 时不低于该值)；4 锁扣 `brokenLocks = min(4, floor(progress*4))`，每锁扣触发 `onLockBroken(index)`；`progress >= 1` → `phase='opening'` + `onOpenStart`；`openElapsedMs >= 600` → `phase='completed'` + `onCompleted`
 9. **破译速率**：`CHEST_DECRYPT_TOTAL_MS = 2500`，`rate = 1/2500 per ms`，总时长 ~2.5s
 10. **spec §6.5/§6.6 表头价值区间与表格不一致时以表格为权威**：spec §6.5 表头写「110~220」但表格最低 120（芹菜）；§6.6 表头写「320~580」但表格最低 400（圣水）。Plan 5 以表格数值为准，测试用表格推导的区间：蓝 [10,35] / 紫 [45,95] / 绿 [120,220] / 金 [400,580] / 白 [750,1500]
 
@@ -998,16 +998,16 @@ describe('LootTable definitions (spec §10)', () => {
     expect(YANG_YUN_RED_LOOT_TABLE.entries[3]?.allowedTypes).toEqual(['treasure']);
   });
 
-  it('NORMAL_CHEST uses multiPick 3-5 with green pity (spec §7.4)', () => {
-    expect(NORMAL_CHEST_LOOT_TABLE.rollMode).toBe('multiPick');
-    expect(NORMAL_CHEST_LOOT_TABLE.itemCount).toEqual({ min: 3, max: 5 });
-    expect(NORMAL_CHEST_LOOT_TABLE.pityRarity).toBe('green');
+  it('NORMAL_CHEST uses independent mode (spec §7.4)', () => {
+    expect(NORMAL_CHEST_LOOT_TABLE.rollMode).toBe('independent');
+    expect(NORMAL_CHEST_LOOT_TABLE.entries[0]?.weight).toBe(30); // blue 30%
+    expect(NORMAL_CHEST_LOOT_TABLE.entries[2]?.weight).toBe(100); // green 100%
   });
 
-  it('GILDED_CHEST uses multiPick 4-5 with gold pity (spec §7.4)', () => {
-    expect(GILDED_CHEST_LOOT_TABLE.rollMode).toBe('multiPick');
-    expect(GILDED_CHEST_LOOT_TABLE.itemCount).toEqual({ min: 4, max: 5 });
-    expect(GILDED_CHEST_LOOT_TABLE.pityRarity).toBe('gold');
+  it('GILDED_CHEST uses independent mode (spec §7.4)', () => {
+    expect(GILDED_CHEST_LOOT_TABLE.rollMode).toBe('independent');
+    expect(GILDED_CHEST_LOOT_TABLE.entries[3]?.weight).toBe(100); // gold 100%
+    expect(GILDED_CHEST_LOOT_TABLE.entries[4]?.weight).toBe(15); // white 15%
   });
 });
 
@@ -1255,31 +1255,13 @@ export const YANG_YUN_RED_LOOT_TABLE: LootTable = {
  */
 export const NORMAL_CHEST_LOOT_TABLE: LootTable = {
   id: 'normal-chest',
-  rollMode: 'multiPick',
-  itemCount: { min: 3, max: 5 },
-  pityRarity: 'green',
+  rollMode: 'independent',
   entries: [
-    { rarity: 'blue', weight: 60, allowedTypes: ['material'] },
-    {
-      rarity: 'purple',
-      weight: 25,
-      allowedTypes: ['consumable', 'relic', 'material', 'treasure'],
-    },
-    {
-      rarity: 'green',
-      weight: 10,
-      allowedTypes: ['consumable', 'relic', 'weapon', 'treasure'],
-    },
-    {
-      rarity: 'gold',
-      weight: 4,
-      allowedTypes: ['consumable', 'relic', 'weapon', 'treasure'],
-    },
-    {
-      rarity: 'white',
-      weight: 1,
-      allowedTypes: ['treasure', 'weapon', 'relic'],
-    },
+    { rarity: 'blue', weight: 30, allowedTypes: ['material'] },
+    { rarity: 'purple', weight: 30, allowedTypes: ['consumable', 'relic', 'material', 'treasure'] },
+    { rarity: 'green', weight: 100, allowedTypes: ['consumable', 'relic', 'weapon', 'treasure'] },
+    { rarity: 'gold', weight: 15, allowedTypes: ['consumable', 'relic', 'weapon', 'treasure'] },
+    { rarity: 'white', weight: 2, allowedTypes: ['treasure', 'weapon', 'relic'] },
   ],
 };
 
@@ -1288,31 +1270,13 @@ export const NORMAL_CHEST_LOOT_TABLE: LootTable = {
  */
 export const GILDED_CHEST_LOOT_TABLE: LootTable = {
   id: 'gilded-chest',
-  rollMode: 'multiPick',
-  itemCount: { min: 4, max: 5 },
-  pityRarity: 'gold',
+  rollMode: 'independent',
   entries: [
-    { rarity: 'blue', weight: 40, allowedTypes: ['material'] },
-    {
-      rarity: 'purple',
-      weight: 30,
-      allowedTypes: ['consumable', 'relic', 'material', 'treasure'],
-    },
-    {
-      rarity: 'green',
-      weight: 18,
-      allowedTypes: ['consumable', 'relic', 'weapon', 'treasure'],
-    },
-    {
-      rarity: 'gold',
-      weight: 9,
-      allowedTypes: ['consumable', 'relic', 'weapon', 'treasure'],
-    },
-    {
-      rarity: 'white',
-      weight: 3,
-      allowedTypes: ['treasure', 'weapon', 'relic'],
-    },
+    { rarity: 'blue', weight: 30, allowedTypes: ['material'] },
+    { rarity: 'purple', weight: 50, allowedTypes: ['consumable', 'relic', 'material', 'treasure'] },
+    { rarity: 'green', weight: 70, allowedTypes: ['consumable', 'relic', 'weapon', 'treasure'] },
+    { rarity: 'gold', weight: 100, allowedTypes: ['consumable', 'relic', 'weapon', 'treasure'] },
+    { rarity: 'white', weight: 15, allowedTypes: ['treasure', 'weapon', 'relic'] },
   ],
 };
 

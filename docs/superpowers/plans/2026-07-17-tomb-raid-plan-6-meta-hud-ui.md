@@ -13,7 +13,7 @@
 |---|---|---|
 | `src/tombraid/meta/UpgradeManager.ts` | 6 种永久升级：成本表、阶数校验、效果计算、localStorage 桥 | Task 1 |
 | `src/tombraid/meta/StashManager.ts` | 仓库：无限槽位、理智台账、并入本局 Inventory | Task 2 |
-| `src/tombraid/meta/ShopManager.ts` | 商城：卖 1:1、买 `Math.round(sanityValue×1.35)`、可买/可卖过滤 | Task 3 |
+| `src/tombraid/meta/ShopManager.ts` | 商城：卖 1:1、买 `Math.round(sanityValue×1.75)`、可买/可卖过滤 | Task 3 |
 | `src/tombraid/meta/LoadoutManager.ts` | 起配：1 武器 + 3 消耗品槽、武备扩展、空手 = `unarmed` | Task 4 |
 | `src/tombraid/ui/HubUI.ts` | 枢纽 5 面板（仓库/商城/起配/升级/进入墓穴），复用按钮工厂 + UI_THEME | Task 5 |
 | `src/tombraid/ui/TombRaidHUD.ts` | 对局 HUD：HP/武器/大招 CD 环 / 理智+基准线达标变金 / 消耗品槽 / 理智比率 | Task 6 |
@@ -78,11 +78,10 @@ export interface LootItem {
   readonly spriteKey?: string; readonly description: string; readonly effect: unknown;
 }
 export interface InventoryEntry { readonly itemId: string; readonly quantity: number; }
-export interface Inventory {
-  add(itemId: string, quantity: number): number;
-  remove(itemId: string, quantity: number): boolean;
-  has(itemId: string): boolean;
-  quantity(itemId: string): number;
+// 设计变更：StashManager/SettlementScreen 仅依赖本局 Inventory 的只读快照能力（entries/totalSanityValue/clear），
+// 抽出为 InventoryPort 端口接口（定义在 src/tombraid/meta/StashManager.ts），解耦对 Plan 5 完整 Inventory 的依赖。
+// 完整 Inventory（add/remove/has/quantity/activeRelics）仍由 Plan 5 src/tombraid/loot/Inventory.ts 提供，结构兼容此端口（超集）。
+export interface InventoryPort {
   entries(): readonly InventoryEntry[];
   totalSanityValue(): number;
   clear(): void;
@@ -490,18 +489,17 @@ import {
 } from '../tombraid/meta/StashManager';
 import { createDefaultStashState } from '../tombraid/state/tombRaidState';
 import type { TombRaidStashState } from '../tombraid/state/tombRaidState';
-import type { Inventory, InventoryEntry } from '../tombraid/loot/Inventory';
+import type { InventoryEntry } from '../tombraid/loot/Inventory';
+import type { InventoryPort } from '../tombraid/meta/StashManager';
 
 function stashWith(sanity: number, items: { itemId: string; quantity: number }[] = []): TombRaidStashState {
   return { schemaVersion: 1, sanity, items };
 }
 
-function makeInventory(entries: readonly InventoryEntry[], total: number): Inventory {
+function makeInventory(entries: readonly InventoryEntry[], total: number): InventoryPort {
   const map = new Map<string, number>();
   for (const e of entries) map.set(e.itemId, e.quantity);
   return {
-    add: () => 0, remove: () => true, has: (id) => (map.get(id) ?? 0) > 0,
-    quantity: (id) => map.get(id) ?? 0,
     entries: () => Array.from(map.entries()).map(([itemId, quantity]) => ({ itemId, quantity })),
     totalSanityValue: () => total,
     clear: () => { map.clear(); },
@@ -592,7 +590,16 @@ import type { TombRaidStashState, TombRaidStashItem, TombRaidLoadResult } from '
 import {
   STASH_KEY, createDefaultStashState, loadStashState, saveStashState,
 } from '../state/tombRaidState';
-import type { Inventory } from '../loot/Inventory';
+import type { InventoryEntry } from '../loot/Inventory';
+
+// 设计变更：InventoryPort 端口接口 — StashManager 仅消费本局 Inventory 的只读快照能力
+// （entries/totalSanityValue/clear），不依赖 Plan 5 完整 Inventory（add/remove/has/quantity/activeRelics）。
+// SettlementScreen 传入的完整 Inventory 结构兼容此端口（超集）。定义在此处并由本文件 export。
+export interface InventoryPort {
+  entries(): readonly InventoryEntry[];
+  totalSanityValue(): number;
+  clear(): void;
+}
 
 export function getStashItemQuantity(stash: TombRaidStashState, itemId: string): number {
   for (const item of stash.items) {
@@ -637,7 +644,7 @@ export interface DepositRunResult {
   readonly itemCount: number;
 }
 
-export function depositRunInventory(stash: TombRaidStashState, inventory: Inventory): DepositRunResult {
+export function depositRunInventory(stash: TombRaidStashState, inventory: InventoryPort): DepositRunResult {
   const entries = inventory.entries();
   let next = stash;
   let itemCount = 0;
@@ -684,7 +691,7 @@ git commit -m "feat(tomb-raid): add StashManager infinite-slot stash with sanity
 
 **文件**：`src/tombraid/meta/ShopManager.ts`、`src/tests/tomb-raid-shop-manager.test.ts`
 
-**spec §8.2**：卖价 = `sanityValue × 1`（1:1）；买价 = `Math.round(sanityValue × 1.35)`；可买 = 消耗品 + 武器；可卖 = 任意。
+**spec §8.2**：卖价 = `sanityValue × 1`（1:1）；买价 = `Math.round(sanityValue × 1.75)`；可买 = 消耗品 + 武器；可卖 = 任意。
 
 ### Step 1: 写失败测试（RED）
 
@@ -711,8 +718,8 @@ function stashWith(sanity: number, items: { itemId: string; quantity: number }[]
 }
 
 describe('ShopManager constants', () => {
-  it('pins buy multiplier 1.35 and sell multiplier 1.0', () => {
-    expect(SHOP_BUY_MULTIPLIER).toBe(1.35);
+  it('pins buy multiplier 1.75 and sell multiplier 1.0', () => {
+    expect(SHOP_BUY_MULTIPLIER).toBe(1.75);
     expect(SHOP_SELL_MULTIPLIER).toBe(1);
   });
 });
@@ -722,10 +729,10 @@ describe('ShopManager pricing (spec §8.2)', () => {
     expect(getSellPrice(loot('treasure.jadePendant', 'treasure', 220))).toBe(220);
   });
 
-  it('buy price = Math.round(sanityValue × 1.35)', () => {
-    // celery 120 → 162 ; ruler 130 → 175.5 → 176
-    expect(getBuyPrice(loot('consumable.celery', 'consumable', 120))).toBe(162);
-    expect(getBuyPrice(loot('weapon.ruler', 'weapon', 130))).toBe(176);
+  it('buy price = Math.round(sanityValue × 1.75)', () => {
+    // celery 120 → 210 ; ruler 130 → 227.5 → 228
+    expect(getBuyPrice(loot('consumable.celery', 'consumable', 120))).toBe(210);
+    expect(getBuyPrice(loot('weapon.ruler', 'weapon', 130))).toBe(228);
   });
 });
 
@@ -770,7 +777,7 @@ describe('ShopManager buy', () => {
     const result = buy(stash, loot('consumable.celery', 'consumable', 120), 2);
     expect(result.ok).toBe(true);
     if (result.ok) {
-      expect(result.stash.sanity).toBe(500 - 162 * 2);
+      expect(result.stash.sanity).toBe(500 - 210 * 2);
       expect(result.stash.items[0]?.itemId).toBe('consumable.celery');
       expect(result.stash.items[0]?.quantity).toBe(2);
     }
@@ -807,7 +814,7 @@ import type { TombRaidStashState } from '../state/tombRaidState';
 import type { LootItem } from '../loot/LootItem';
 import { addLoot, addSanity, getStashItemQuantity, removeFromStash } from './StashManager';
 
-export const SHOP_BUY_MULTIPLIER = 1.35;
+export const SHOP_BUY_MULTIPLIER = 1.75;
 export const SHOP_SELL_MULTIPLIER = 1;
 
 export function getSellPrice(item: LootItem): number {
@@ -875,7 +882,7 @@ npx vitest run src/tests/tomb-raid-shop-manager.test.ts
 
 ```bash
 git add src/tombraid/meta/ShopManager.ts src/tests/tomb-raid-shop-manager.test.ts
-git commit -m "feat(tomb-raid): add ShopManager sell 1:1 buy x1.35 Math.round"
+git commit -m "feat(tomb-raid): add ShopManager sell 1:1 buy x1.75 Math.round"
 ```
 
 ---
@@ -3391,6 +3398,7 @@ npm run build
 - **Plan 3（PlayerCombat/CombatCallbacks）**：`HudSnapshot` 字段（hp/maxHp/weaponId）来自 `PlayerCombat.hp/maxHp/weaponId`；`PlayerCombat.isDead()` 由 TombRaidScene 调用后触发 `runDeathSettlement`；`CombatCallbacks.onMarkBodyOnMinimap` → `TombRaidScene.markBodyOnMinimap` → 累积进 `MinimapUpdate.bodyMarkers`。
 - **Plan 4（WeaponCooldowns）**：`HudSnapshot.ultCooldownRemaining/ultCooldownTotal` 来自 `WeaponCooldowns.getUltimateCooldownRemaining(timeMs, weapon)` 与 `weapon.ultimate.cooldownMs`。
 - **Plan 5（Inventory/LootItem）**：`SettlementScreen.showEvacuation` 调用 `inventory.entries()` + `inventory.totalSanityValue()`；`StashManager.depositRunInventory` 同；`ShopManager` 用 `getLootItem(id)` + `ALL_LOOT`。
+- **设计变更（InventoryPort 端口）**：`StashManager.depositRunInventory` 参数由完整 `Inventory` 收窄为 `InventoryPort`（仅 entries/totalSanityValue/clear，定义并 export 于 `StashManager.ts`）。`SettlementScreen` 传入的完整 Inventory 结构兼容此端口（超集），无需改动。商城买价系数 ×1.35 → ×1.75（celery 120→210、ruler 130→228）。
 
 ### 跨任务符号一致 ✅
 
@@ -3404,7 +3412,7 @@ npm run build
 ### Spec 数值核对 ✅
 
 - 升级成本表（spec §8.4）：6 种 ×（5 阶 ×4% 或 3 阶 +1槽）全部 pin 在 `UPGRADE_COSTS` 测试中。
-- 商城买价 `Math.round(sanityValue × 1.35)`（celery 120→162、ruler 130→176），卖价 1:1（spec §8.2）。
+- 商城买价 `Math.round(sanityValue × 1.75)`（celery 120→210、ruler 130→228），卖价 1:1（spec §8.2）。
 - 起配 1 武器 + 3 消耗品，武备 +1/阶上限 6 槽，空手 = `unarmed` 弱拳 5 伤（spec §8.3）。
 - 撤离达标阈值 `totalSanityValue ≥ baselineSanity`，达标入仓库 + 更新 best，未达标拒绝，死亡全丢（spec §1.3）。
 - HUD 布局：左上 HP+武器+CD 环 / 上中 理智+基准线达标变金 / 右上 小地图 / 下中 消耗品槽 / 左下 理智比率（spec §9.1）。

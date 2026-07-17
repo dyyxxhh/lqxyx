@@ -975,6 +975,18 @@ class DummyEnemy extends Enemy {
 
 registerEnemyKind('butYuxuanHead', (opts) => new DummyEnemy(opts));
 
+// 设计变更：模拟中立杨云红边（duck-typed aggroState/enrage），供 CombatManager 激怒检测测试。
+// 不依赖 Task 14 的真实 YangYunRedEnemy，使 Task 4 即可独立验证激怒逻辑。
+class FakeNeutralElite extends Enemy {
+  readonly kind = 'yangYunRed' as const;
+  readonly textureKey = null;
+  readonly proceduralKind = null;
+  aggroState: 'neutral' | 'hostile' = 'neutral';
+  enragedCount = 0;
+  update(_deltaMs: number, _ctx: EnemyUpdateContext): void { /* noop */ }
+  enrage(): void { this.aggroState = 'hostile'; this.enragedCount++; }
+}
+
 function makeManager(callbacks: CombatCallbacks = {}, isWalkable: IsWalkableFn = () => true): CombatManager {
   const player = new PlayerCombat();
   return new CombatManager(player, callbacks, isWalkable);
@@ -1127,6 +1139,61 @@ describe('CombatManager 敌人死亡回调', () => {
     expect(onKill.mock.calls[0]![0].id).toBe('e1');
   });
 });
+
+// 设计变更：杨云红边中立→激怒机制（CombatManager 检测）
+describe('CombatManager 杨云红边激怒检测 (设计变更)', () => {
+  it('玩家攻击命中敌人时，350px 视野内中立杨云红边激怒', () => {
+    const mgr = makeManager();
+    const target = new DummyEnemy({ id: 't1', x: 50, y: 0, maxHp: 100, speed: 0, contactDamage: 0, contactRadius: 20 });
+    const elite = new FakeNeutralElite({ id: 'elite1', x: 200, y: 0, maxHp: 100, speed: 0, contactDamage: 0, contactRadius: 20 });
+    mgr.addEnemy(target);
+    mgr.addEnemy(elite);
+    mgr.setPlayerPosition(0, 0);
+    mgr.playerAttack({ x: 1, y: 0 }); // 命中 target(50,0)；elite(200,0) 距 target 150 ≤ 350
+    expect(elite.aggroState).toBe('hostile');
+    expect(elite.enragedCount).toBe(1);
+  });
+
+  it('350px 视野外的中立杨云红边不激怒', () => {
+    const mgr = makeManager();
+    const target = new DummyEnemy({ id: 't1', x: 50, y: 0, maxHp: 100, speed: 0, contactDamage: 0, contactRadius: 20 });
+    const elite = new FakeNeutralElite({ id: 'elite1', x: 500, y: 0, maxHp: 100, speed: 0, contactDamage: 0, contactRadius: 20 });
+    mgr.addEnemy(target);
+    mgr.addEnemy(elite);
+    mgr.setPlayerPosition(0, 0);
+    mgr.playerAttack({ x: 1, y: 0 }); // elite 距 target 450 > 350
+    expect(elite.aggroState).toBe('neutral');
+    expect(elite.enragedCount).toBe(0);
+  });
+
+  it('玩家直接攻击杨云红边本人 → 自身激怒', () => {
+    const mgr = makeManager();
+    const elite = new FakeNeutralElite({ id: 'elite1', x: 50, y: 0, maxHp: 100, speed: 0, contactDamage: 0, contactRadius: 20 });
+    mgr.addEnemy(elite);
+    mgr.setPlayerPosition(0, 0);
+    mgr.playerAttack({ x: 1, y: 0 }); // 直接命中 elite 本人（距离 0 ≤ 350）
+    expect(elite.aggroState).toBe('hostile');
+  });
+
+  it('未命中任何敌人时不激怒', () => {
+    const mgr = makeManager();
+    const elite = new FakeNeutralElite({ id: 'elite1', x: 500, y: 0, maxHp: 100, speed: 0, contactDamage: 0, contactRadius: 20 });
+    mgr.addEnemy(elite);
+    mgr.setPlayerPosition(0, 0);
+    mgr.playerAttack({ x: 1, y: 0 }); // elite 太远，攻击落空
+    expect(elite.aggroState).toBe('neutral');
+  });
+
+  it('中立杨云红边不造成接触伤害', () => {
+    const onDamaged = vi.fn();
+    const mgr = makeManager({ onPlayerDamaged: onDamaged });
+    const elite = new FakeNeutralElite({ id: 'elite1', x: 10, y: 0, maxHp: 100, speed: 0, contactDamage: 22, contactRadius: 30 });
+    mgr.addEnemy(elite);
+    mgr.setPlayerPosition(0, 0);
+    mgr.update(1000); // 中立下应跳过接触伤害
+    expect(onDamaged).not.toHaveBeenCalled();
+  });
+});
 ```
 
 ### Step 2: 验证测试失败
@@ -1176,6 +1243,9 @@ export interface CombatCallbacks {
 const MAX_DAN_YUXUAN_BODIES = 2;
 const PLAYER_ATTACK_RANGE = 64;
 const PLAYER_ATTACK_HALF_ANGLE = Math.PI / 4; // 45° 半角 → 90° 扇形
+// 设计变更：杨云红边中立→激怒。玩家攻击命中敌人时，350px 视野内的中立杨云红边永久激怒。
+// CombatManager 不 import 敌人子类（保持核心与插件解耦），故本地声明，数值与 YangYunRed.VISION_RANGE 一致。
+const ELITE_AGGRO_VISION_RANGE = 350;
 
 export class CombatManager {
   readonly player: PlayerCombat;
@@ -1258,6 +1328,7 @@ export class CombatManager {
       dirY /= len;
     }
     const instance: DamageInstance = { amount: WEAK_PUNCH_DAMAGE, category: 'melee' };
+    const hitEnemies: Enemy[] = [];
     for (const enemy of this.enemies) {
       if (enemy.dead) continue;
       const dx = enemy.x - this.playerPosition.x;
@@ -1266,15 +1337,40 @@ export class CombatManager {
       if (dist > PLAYER_ATTACK_RANGE + enemy.contactRadius) continue;
       if (dist === 0) {
         enemy.applyDamage(instance);
+        hitEnemies.push(enemy);
         continue;
       }
       const dot = (dx / dist) * dirX + (dy / dist) * dirY;
       const angle = Math.acos(Math.min(1, Math.max(-1, dot)));
       if (angle <= PLAYER_ATTACK_HALF_ANGLE) {
         enemy.applyDamage(instance);
+        hitEnemies.push(enemy);
       }
     }
+    // 设计变更：玩家攻击命中 → 检查视野内中立杨云红边激怒
+    this.applyEliteAggro(hitEnemies);
     this.handleDeadEnemies();
+  }
+
+  // 设计变更：杨云红边中立→激怒机制。
+  // 玩家攻击命中任何敌人时，所有处于中立状态、且距被命中敌人 ≤350px 视野内的杨云红边永久激怒。
+  // 命中杨云红边本人时（距离 0）其自身亦激怒。
+  // 通过 duck-typing 访问 aggroState/enrage（项目 E2E 可观察性模式，与 onBoundHeadDied 探测一致）。
+  private applyEliteAggro(hitEnemies: readonly Enemy[]): void {
+    if (hitEnemies.length === 0) return;
+    const rangeSq = ELITE_AGGRO_VISION_RANGE * ELITE_AGGRO_VISION_RANGE;
+    for (const target of hitEnemies) {
+      for (const e of this.enemies) {
+        if (e.dead || e.kind !== 'yangYunRed') continue;
+        const elite = e as unknown as { aggroState: 'neutral' | 'hostile'; enrage: () => void };
+        if (elite.aggroState !== 'neutral') continue;
+        const ddx = e.x - target.x;
+        const ddy = e.y - target.y;
+        if (ddx * ddx + ddy * ddy <= rangeSq) {
+          elite.enrage();
+        }
+      }
+    }
   }
 
   // -- 主循环 --
@@ -1461,6 +1557,11 @@ export class CombatManager {
     if (this.player.isDead) return;
     for (const enemy of this.enemies) {
       if (enemy.dead) continue;
+      // 设计变更：中立杨云红边不攻击玩家（含接触伤害）
+      if (enemy.kind === 'yangYunRed') {
+        const elite = enemy as unknown as { aggroState: 'neutral' | 'hostile' };
+        if (elite.aggroState === 'neutral') continue;
+      }
       const dist = enemy.distanceTo(this.playerPosition.x, this.playerPosition.y);
       if (dist > enemy.contactRadius + 16) continue;
       // 粉笔尘云：持续 DoT 接触（5/s），无冷却
@@ -3051,6 +3152,7 @@ describe('YangYunRedEnemy (spec §5.10 精英)', () => {
 
   it('冲撞：3s 间隔，蓄力1s，持续0.7s，速度320，伤害50', () => {
     const e = new YangYunRedEnemy('elite1', 0, 0);
+    e.enrage(); // 设计变更：需先激怒才进入攻击模式
     const zones: ZoneEffect[] = [];
     // 推进 3s 触发冲撞（蓄力阶段）
     e.update(3000, ctxStub({ x: 100, y: 0 }, zones));
@@ -3061,6 +3163,7 @@ describe('YangYunRedEnemy (spec §5.10 精英)', () => {
 
   it('机制 A：HP<70% 触发一次 2 个幻影', () => {
     const e = new YangYunRedEnemy('elite1', 0, 0);
+    e.enrage(); // 设计变更：需先激怒才进入攻击模式
     const spawned: Enemy[] = [];
     e.applyDamageForTest(100); // 320-100=220 → 220/320=68.75% < 70%
     e.update(100, ctxStub({ x: 1000, y: 1000 }, [], spawned));
@@ -3070,6 +3173,7 @@ describe('YangYunRedEnemy (spec §5.10 精英)', () => {
 
   it('机制 B：HP<70% 每 8s 触发地裂波 宽60 速200 伤28 slow0.5×1.5s', () => {
     const e = new YangYunRedEnemy('elite1', 0, 0);
+    e.enrage(); // 设计变更：需先激怒才进入攻击模式
     const zones: ZoneEffect[] = [];
     e.applyDamageForTest(100); // < 70%
     e.update(8000, ctxStub({ x: 100, y: 0 }, zones));
@@ -3084,6 +3188,7 @@ describe('YangYunRedEnemy (spec §5.10 精英)', () => {
 
   it('机制 C：HP<40% 进入二阶段，contactBurn=3/s×3s', () => {
     const e = new YangYunRedEnemy('elite1', 0, 0);
+    e.enrage(); // 设计变更：需先激怒才进入攻击模式
     e.applyDamageForTest(200); // 320-200=120 → 120/320=37.5% < 40%
     e.update(0, ctxStub());
     expect(e.phase).toBe(2);
@@ -3105,6 +3210,29 @@ describe('YangYunRedEnemy (spec §5.10 精英)', () => {
     expect(p.speed).toBe(80);
     expect(p.textureKey).toBe('sprite.yangYunBlue.down.idle');
     expect(p.tint).toEqual({ color: 0xff6666, alpha: 0.5 });
+  });
+
+  // 设计变更：中立→激怒机制
+  it('初始中立：aggroState=neutral，update 仅巡逻不释放任何攻击', () => {
+    const e = new YangYunRedEnemy('elite1', 0, 0);
+    expect(e.aggroState).toBe('neutral');
+    const zones: ZoneEffect[] = [];
+    const spawned: Enemy[] = [];
+    e.applyDamageForTest(100); // < 70%，但中立下不应触发光裂波/幻影
+    e.update(8000, ctxStub({ x: 100, y: 0 }, zones, spawned));
+    expect(zones.find((z) => z.proceduralKind === 'floorCrackWave')).toBeUndefined();
+    expect(spawned.length).toBe(0);
+  });
+
+  it('enrage() 永久切换为 hostile，之后启用攻击模式', () => {
+    const e = new YangYunRedEnemy('elite1', 0, 0);
+    expect(e.aggroState).toBe('neutral');
+    e.enrage();
+    expect(e.aggroState).toBe('hostile');
+    const spawned: Enemy[] = [];
+    e.applyDamageForTest(100); // < 70%
+    e.update(100, ctxStub({ x: 1000, y: 1000 }, [], spawned));
+    expect(spawned.length).toBe(2); // 激怒后才召唤幻影
   });
 });
 ```
@@ -3156,7 +3284,19 @@ const PHASE2_HP_THRESHOLD = 0.4;
 const PHASE2_BURN_DPS = 3;
 const PHASE2_BURN_MS = 3000;
 
+// ---------------------------------------------------------------------------
+// 设计变更：杨云红边中立→激怒机制（游戏内蓝边/红边均只称"杨云"，此处为内部 ID）
+// 初始中立：仅巡逻，不攻击玩家。玩家在其 350px 视野内攻击任何缄默者或杨云本人
+// → aggroState 永久变为 'hostile'，启用 spec §5.10 原有攻击模式
+// （冲撞/影分身/地裂波/二阶段）。激怒检测由 CombatManager.playerAttack 负责。
+// 原有数值（HP320/接触22/speed95/冲撞/影分身/地裂波/二阶段）不变，仅新增中立→敌对转换。
+// ---------------------------------------------------------------------------
+export const VISION_RANGE = 350;       // 激怒视野半径（px），权威值；CombatManager.ELITE_AGGRO_VISION_RANGE 镜像此值
+const PATROL_SPEED = 50;               // 中立巡逻移速（低于敌对 speed 95）
+const PATROL_SEGMENT_MS = 1500;        // 巡逻方向切换间隔
+
 export type ElitePhase = 1 | 2;
+export type AggroState = 'neutral' | 'hostile';
 
 export class YangYunRedEnemy extends Enemy {
   readonly kind = 'yangYunRed' as const;
@@ -3164,6 +3304,16 @@ export class YangYunRedEnemy extends Enemy {
   readonly proceduralKind = null;
   phase: ElitePhase = 1;
   override contactBurn: ContactBurn | null = null;
+  // 设计变更：初始中立，激怒后永久敌对（CombatManager 通过 duck-typing 读取/调用）
+  aggroState: AggroState = 'neutral';
+  private patrolTimer = 0;
+  private patrolDirX = 0;
+  private patrolDirY = 0;
+
+  /** 激怒：中立 → 敌对（永久）。由 CombatManager 在玩家攻击命中其视野内目标时调用 */
+  enrage(): void {
+    this.aggroState = 'hostile';
+  }
 
   private chargeTimer = CHARGE_INTERVAL_MS;
   private chargeState: 'idle' | 'windup' | 'charging' = 'idle';
@@ -3212,6 +3362,12 @@ export class YangYunRedEnemy extends Enemy {
   }
 
   update(deltaMs: number, ctx: EnemyUpdateContext): void {
+    // 设计变更：中立状态下仅巡逻，不攻击玩家
+    if (this.aggroState === 'neutral') {
+      this.updatePatrol(deltaMs, ctx);
+      return;
+    }
+    // 激怒后使用 spec §5.10 原有攻击模式
     this.tickPhaseTransition();
     const interval = this.phase === 2 ? PHASE2_CHARGE_INTERVAL_MS : CHARGE_INTERVAL_MS;
     const crackInterval = this.phase === 2 ? CRACK_INTERVAL_MS / 2 : CRACK_INTERVAL_MS;
@@ -3233,6 +3389,20 @@ export class YangYunRedEnemy extends Enemy {
       this.cloneTriggered = true;
       this.spawnPhantoms(ctx);
     }
+  }
+
+  /** 中立巡逻：每隔 PATROL_SEGMENT_MS 随机选取方向低速移动，不朝向玩家、不释放任何攻击 */
+  private updatePatrol(deltaMs: number, ctx: EnemyUpdateContext): void {
+    this.patrolTimer -= deltaMs;
+    if (this.patrolTimer <= 0) {
+      this.patrolTimer = PATROL_SEGMENT_MS;
+      const a = ctx.rng.next() * Math.PI * 2;
+      this.patrolDirX = Math.cos(a);
+      this.patrolDirY = Math.sin(a);
+    }
+    const seconds = deltaMs / 1000;
+    this.x += this.patrolDirX * PATROL_SPEED * seconds;
+    this.y += this.patrolDirY * PATROL_SPEED * seconds;
   }
 
   private updateCharge(deltaMs: number, ctx: EnemyUpdateContext, interval: number): void {
@@ -3865,6 +4035,7 @@ describe('集成：身体上限', () => {
 | §5.1⑧ 血瞳头颅 HP70/12/75/2.2s/3追踪弹140/18/强追踪/贴图+程序红眼 | Task 12 | ✅ |
 | §5.9 召唤核心 HP1/0/0/30s召唤/上限3/死亡清场/20s复活/30%标记/最多2 | Task 13 | ✅ |
 | §5.10 精英 HP320/22/95/冲撞/幻影/地裂波/二阶段/死亡掉钥匙+事件 | Task 14 | ✅ |
+| 设计变更：杨云红边中立→激怒（350px 视野内攻击即激怒，激怒后启用 §5.10 攻击模式） | Task 4 + 14 | ✅ |
 | 集中程序绘制 EnemyViewRenderer | Task 15 | ✅ |
 | 11 种 factory 全注册 + 端到端 | Task 16 | ✅ |
 
@@ -3886,6 +4057,8 @@ describe('集成：身体上限', () => {
 - ✅ `YangYunRedPhantomEnemy` 自消亡时设置 `dead = true`（CombatManager 可清理）
 - ✅ `YangYunRedEnemy.applyDamageForTest` 调用 `tickPhaseTransition` 以触发阶段转换
 - ✅ 精英死亡通过 `onEliteDefeated` 回调 + CombatManager `handleDeadEnemies` 中 `kind === 'yangYunRed'` 双重保障
+- ✅ 设计变更：`YangYunRedEnemy.aggroState: 'neutral' | 'hostile'`（初始 neutral）+ `enrage()`；CombatManager 经 duck-typing 访问（不 import 子类，保持核心/插件解耦）
+- ✅ 设计变更：`VISION_RANGE = 350`（YangYunRed）与 `ELITE_AGGRO_VISION_RANGE = 350`（CombatManager）数值一致；中立下 `update` 仅巡逻、`applyContactDamage` 跳过中立杨云红边
 
 ### 约束遵守
 

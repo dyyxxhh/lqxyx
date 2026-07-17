@@ -15,7 +15,7 @@ describe('preload asset plan', () => {
     const entries = getStaticAssetEntries();
 
     expect(entries).toHaveLength(assetManifest.length);
-    expect(entries).toHaveLength(53);
+    expect(entries).toHaveLength(134);
     expect(entries.map((entry) => entry.key)).toEqual(assetManifest.map((asset) => asset.key));
     expect(entries.every((entry) => entry.url.startsWith('/assets/final/'))).toBe(true);
     expect(entries.some((entry) => entry.sourcePath.includes('最终素材/'))).toBe(true);
@@ -44,17 +44,17 @@ describe('preload debug state', () => {
     const state = createInitialPreloadDebugState(getStaticAssetEntries());
 
     expect(state.status).toBe('queued');
-    expect(state.total).toBe(53);
+    expect(state.total).toBe(134);
     expect(state.canEnterGame).toBe(false);
 
     const halfway = markPreloadProgress(state, 0.5);
     expect(halfway.status).toBe('loading');
-    expect(halfway.loaded).toBe(27);
+    expect(halfway.loaded).toBe(67);
     expect(halfway.progress).toBe(0.5);
 
     const complete = markPreloadComplete(halfway);
     expect(complete.status).toBe('complete');
-    expect(complete.loaded).toBe(53);
+    expect(complete.loaded).toBe(134);
     expect(complete.progress).toBe(1);
     expect(complete.canEnterGame).toBe(true);
   });

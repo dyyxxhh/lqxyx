@@ -234,7 +234,7 @@ export class GameScene extends Phaser.Scene {
 
   private startNewGame(): void {
     clearSaveState();
-    getSceneDebugState().menu = { visible: true, selectedAction: 'new-game', hasContinue: false, hasTombRaidSave: getSceneDebugState().menu.hasTombRaidSave };
+    getSceneDebugState().menu = { visible: true, selectedAction: 'new-game', hasContinue: false };
 
     this.scene.start('PlayScene');
   }

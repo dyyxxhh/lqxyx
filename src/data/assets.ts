@@ -569,7 +569,7 @@ export const assetManifest = [
     mimeType: "image/png",
     width: 512,
     height: 512,
-    usage: "Tomb Raid mode memory fragment/weapon/consumable icon.",
+    usage: "Forgotten Sanity mode memory fragment/weapon/consumable icon.",
     productionStatus: "FINAL_ASSET",
   },
   {
@@ -579,7 +579,7 @@ export const assetManifest = [
     mimeType: "image/png",
     width: 512,
     height: 512,
-    usage: "Tomb Raid mode memory fragment/weapon/consumable icon.",
+    usage: "Forgotten Sanity mode memory fragment/weapon/consumable icon.",
     productionStatus: "FINAL_ASSET",
   },
   {
@@ -589,7 +589,7 @@ export const assetManifest = [
     mimeType: "image/png",
     width: 512,
     height: 512,
-    usage: "Tomb Raid mode memory fragment/weapon/consumable icon.",
+    usage: "Forgotten Sanity mode memory fragment/weapon/consumable icon.",
     productionStatus: "FINAL_ASSET",
   },
   {
@@ -599,7 +599,7 @@ export const assetManifest = [
     mimeType: "image/png",
     width: 512,
     height: 512,
-    usage: "Tomb Raid mode memory fragment/weapon/consumable icon.",
+    usage: "Forgotten Sanity mode memory fragment/weapon/consumable icon.",
     productionStatus: "FINAL_ASSET",
   },
   {
@@ -609,7 +609,7 @@ export const assetManifest = [
     mimeType: "image/png",
     width: 512,
     height: 512,
-    usage: "Tomb Raid mode memory fragment/weapon/consumable icon.",
+    usage: "Forgotten Sanity mode memory fragment/weapon/consumable icon.",
     productionStatus: "FINAL_ASSET",
   },
   {
@@ -619,7 +619,7 @@ export const assetManifest = [
     mimeType: "image/png",
     width: 512,
     height: 512,
-    usage: "Tomb Raid mode memory fragment/weapon/consumable icon.",
+    usage: "Forgotten Sanity mode memory fragment/weapon/consumable icon.",
     productionStatus: "FINAL_ASSET",
   },
   {
@@ -629,7 +629,7 @@ export const assetManifest = [
     mimeType: "image/png",
     width: 512,
     height: 512,
-    usage: "Tomb Raid mode memory fragment/weapon/consumable icon.",
+    usage: "Forgotten Sanity mode memory fragment/weapon/consumable icon.",
     productionStatus: "FINAL_ASSET",
   },
   {
@@ -639,7 +639,7 @@ export const assetManifest = [
     mimeType: "image/png",
     width: 512,
     height: 512,
-    usage: "Tomb Raid mode memory fragment/weapon/consumable icon.",
+    usage: "Forgotten Sanity mode memory fragment/weapon/consumable icon.",
     productionStatus: "FINAL_ASSET",
   },
   {
@@ -649,7 +649,7 @@ export const assetManifest = [
     mimeType: "image/png",
     width: 512,
     height: 512,
-    usage: "Tomb Raid mode memory fragment/weapon/consumable icon.",
+    usage: "Forgotten Sanity mode memory fragment/weapon/consumable icon.",
     productionStatus: "FINAL_ASSET",
   },
   {
@@ -659,7 +659,7 @@ export const assetManifest = [
     mimeType: "image/png",
     width: 512,
     height: 512,
-    usage: "Tomb Raid mode memory fragment/weapon/consumable icon.",
+    usage: "Forgotten Sanity mode memory fragment/weapon/consumable icon.",
     productionStatus: "FINAL_ASSET",
   },
   {
@@ -669,7 +669,7 @@ export const assetManifest = [
     mimeType: "image/png",
     width: 512,
     height: 512,
-    usage: "Tomb Raid mode memory fragment/weapon/consumable icon.",
+    usage: "Forgotten Sanity mode memory fragment/weapon/consumable icon.",
     productionStatus: "FINAL_ASSET",
   },
   {
@@ -679,7 +679,7 @@ export const assetManifest = [
     mimeType: "image/png",
     width: 512,
     height: 512,
-    usage: "Tomb Raid mode memory fragment/weapon/consumable icon.",
+    usage: "Forgotten Sanity mode memory fragment/weapon/consumable icon.",
     productionStatus: "FINAL_ASSET",
   },
   {
@@ -689,7 +689,7 @@ export const assetManifest = [
     mimeType: "image/png",
     width: 512,
     height: 512,
-    usage: "Tomb Raid mode memory fragment/weapon/consumable icon.",
+    usage: "Forgotten Sanity mode memory fragment/weapon/consumable icon.",
     productionStatus: "FINAL_ASSET",
   },
   {
@@ -699,7 +699,7 @@ export const assetManifest = [
     mimeType: "image/png",
     width: 512,
     height: 512,
-    usage: "Tomb Raid mode memory fragment/weapon/consumable icon.",
+    usage: "Forgotten Sanity mode memory fragment/weapon/consumable icon.",
     productionStatus: "FINAL_ASSET",
   },
   {
@@ -709,7 +709,7 @@ export const assetManifest = [
     mimeType: "image/png",
     width: 512,
     height: 512,
-    usage: "Tomb Raid mode memory fragment/weapon/consumable icon.",
+    usage: "Forgotten Sanity mode memory fragment/weapon/consumable icon.",
     productionStatus: "FINAL_ASSET",
   },
   {
@@ -719,7 +719,7 @@ export const assetManifest = [
     mimeType: "image/png",
     width: 512,
     height: 512,
-    usage: "Tomb Raid mode memory fragment/weapon/consumable icon.",
+    usage: "Forgotten Sanity mode memory fragment/weapon/consumable icon.",
     productionStatus: "FINAL_ASSET",
   },
   {
@@ -729,7 +729,7 @@ export const assetManifest = [
     mimeType: "image/png",
     width: 512,
     height: 512,
-    usage: "Tomb Raid mode memory fragment/weapon/consumable icon.",
+    usage: "Forgotten Sanity mode memory fragment/weapon/consumable icon.",
     productionStatus: "FINAL_ASSET",
   },
   {
@@ -739,7 +739,7 @@ export const assetManifest = [
     mimeType: "image/png",
     width: 512,
     height: 512,
-    usage: "Tomb Raid mode memory fragment/weapon/consumable icon.",
+    usage: "Forgotten Sanity mode memory fragment/weapon/consumable icon.",
     productionStatus: "FINAL_ASSET",
   },
   {
@@ -749,7 +749,7 @@ export const assetManifest = [
     mimeType: "image/png",
     width: 512,
     height: 512,
-    usage: "Tomb Raid mode memory fragment/weapon/consumable icon.",
+    usage: "Forgotten Sanity mode memory fragment/weapon/consumable icon.",
     productionStatus: "FINAL_ASSET",
   },
   {
@@ -759,7 +759,7 @@ export const assetManifest = [
     mimeType: "image/png",
     width: 512,
     height: 512,
-    usage: "Tomb Raid mode memory fragment/weapon/consumable icon.",
+    usage: "Forgotten Sanity mode memory fragment/weapon/consumable icon.",
     productionStatus: "FINAL_ASSET",
   },
   {
@@ -769,7 +769,7 @@ export const assetManifest = [
     mimeType: "image/png",
     width: 512,
     height: 512,
-    usage: "Tomb Raid mode memory fragment/weapon/consumable icon.",
+    usage: "Forgotten Sanity mode memory fragment/weapon/consumable icon.",
     productionStatus: "FINAL_ASSET",
   },
   {
@@ -779,7 +779,7 @@ export const assetManifest = [
     mimeType: "image/png",
     width: 512,
     height: 512,
-    usage: "Tomb Raid mode memory fragment/weapon/consumable icon.",
+    usage: "Forgotten Sanity mode memory fragment/weapon/consumable icon.",
     productionStatus: "FINAL_ASSET",
   },
   {
@@ -789,7 +789,7 @@ export const assetManifest = [
     mimeType: "image/png",
     width: 512,
     height: 512,
-    usage: "Tomb Raid mode memory fragment/weapon/consumable icon.",
+    usage: "Forgotten Sanity mode memory fragment/weapon/consumable icon.",
     productionStatus: "FINAL_ASSET",
   },
   {
@@ -799,7 +799,7 @@ export const assetManifest = [
     mimeType: "image/png",
     width: 512,
     height: 512,
-    usage: "Tomb Raid mode memory fragment/weapon/consumable icon.",
+    usage: "Forgotten Sanity mode memory fragment/weapon/consumable icon.",
     productionStatus: "FINAL_ASSET",
   },
   {
@@ -809,7 +809,7 @@ export const assetManifest = [
     mimeType: "image/png",
     width: 512,
     height: 512,
-    usage: "Tomb Raid mode memory fragment/weapon/consumable icon.",
+    usage: "Forgotten Sanity mode memory fragment/weapon/consumable icon.",
     productionStatus: "FINAL_ASSET",
   },
   {
@@ -819,7 +819,7 @@ export const assetManifest = [
     mimeType: "image/png",
     width: 512,
     height: 512,
-    usage: "Tomb Raid mode memory fragment/weapon/consumable icon.",
+    usage: "Forgotten Sanity mode memory fragment/weapon/consumable icon.",
     productionStatus: "FINAL_ASSET",
   },
   {
@@ -829,7 +829,7 @@ export const assetManifest = [
     mimeType: "image/png",
     width: 512,
     height: 512,
-    usage: "Tomb Raid mode memory fragment/weapon/consumable icon.",
+    usage: "Forgotten Sanity mode memory fragment/weapon/consumable icon.",
     productionStatus: "FINAL_ASSET",
   },
   {
@@ -839,7 +839,7 @@ export const assetManifest = [
     mimeType: "image/png",
     width: 512,
     height: 512,
-    usage: "Tomb Raid mode memory fragment/weapon/consumable icon.",
+    usage: "Forgotten Sanity mode memory fragment/weapon/consumable icon.",
     productionStatus: "FINAL_ASSET",
   },
   {
@@ -849,7 +849,7 @@ export const assetManifest = [
     mimeType: "image/png",
     width: 512,
     height: 512,
-    usage: "Tomb Raid mode memory fragment/weapon/consumable icon.",
+    usage: "Forgotten Sanity mode memory fragment/weapon/consumable icon.",
     productionStatus: "FINAL_ASSET",
   },
   {
@@ -859,7 +859,7 @@ export const assetManifest = [
     mimeType: "image/png",
     width: 512,
     height: 512,
-    usage: "Tomb Raid mode memory fragment/weapon/consumable icon.",
+    usage: "Forgotten Sanity mode memory fragment/weapon/consumable icon.",
     productionStatus: "FINAL_ASSET",
   },
   {
@@ -869,7 +869,7 @@ export const assetManifest = [
     mimeType: "image/png",
     width: 512,
     height: 512,
-    usage: "Tomb Raid mode memory fragment/weapon/consumable icon.",
+    usage: "Forgotten Sanity mode memory fragment/weapon/consumable icon.",
     productionStatus: "FINAL_ASSET",
   },
   {
@@ -879,7 +879,7 @@ export const assetManifest = [
     mimeType: "image/png",
     width: 512,
     height: 512,
-    usage: "Tomb Raid mode memory fragment/weapon/consumable icon.",
+    usage: "Forgotten Sanity mode memory fragment/weapon/consumable icon.",
     productionStatus: "FINAL_ASSET",
   },
   {
@@ -889,7 +889,7 @@ export const assetManifest = [
     mimeType: "image/png",
     width: 512,
     height: 512,
-    usage: "Tomb Raid mode memory fragment/weapon/consumable icon.",
+    usage: "Forgotten Sanity mode memory fragment/weapon/consumable icon.",
     productionStatus: "FINAL_ASSET",
   },
   {
@@ -899,7 +899,7 @@ export const assetManifest = [
     mimeType: "image/png",
     width: 512,
     height: 512,
-    usage: "Tomb Raid mode memory fragment/weapon/consumable icon.",
+    usage: "Forgotten Sanity mode memory fragment/weapon/consumable icon.",
     productionStatus: "FINAL_ASSET",
   },
   {
@@ -909,7 +909,7 @@ export const assetManifest = [
     mimeType: "image/png",
     width: 512,
     height: 512,
-    usage: "Tomb Raid mode memory fragment/weapon/consumable icon.",
+    usage: "Forgotten Sanity mode memory fragment/weapon/consumable icon.",
     productionStatus: "FINAL_ASSET",
   },
   {
@@ -919,7 +919,7 @@ export const assetManifest = [
     mimeType: "image/png",
     width: 512,
     height: 512,
-    usage: "Tomb Raid mode memory fragment/weapon/consumable icon.",
+    usage: "Forgotten Sanity mode memory fragment/weapon/consumable icon.",
     productionStatus: "FINAL_ASSET",
   },
   {
@@ -929,7 +929,7 @@ export const assetManifest = [
     mimeType: "image/png",
     width: 512,
     height: 512,
-    usage: "Tomb Raid mode memory fragment/weapon/consumable icon.",
+    usage: "Forgotten Sanity mode memory fragment/weapon/consumable icon.",
     productionStatus: "FINAL_ASSET",
   },
   {
@@ -939,7 +939,7 @@ export const assetManifest = [
     mimeType: "image/png",
     width: 512,
     height: 512,
-    usage: "Tomb Raid mode memory fragment/weapon/consumable icon.",
+    usage: "Forgotten Sanity mode memory fragment/weapon/consumable icon.",
     productionStatus: "FINAL_ASSET",
   },
   {
@@ -949,7 +949,7 @@ export const assetManifest = [
     mimeType: "image/png",
     width: 512,
     height: 512,
-    usage: "Tomb Raid mode memory fragment/weapon/consumable icon.",
+    usage: "Forgotten Sanity mode memory fragment/weapon/consumable icon.",
     productionStatus: "FINAL_ASSET",
   },
   {
@@ -959,7 +959,7 @@ export const assetManifest = [
     mimeType: "image/png",
     width: 512,
     height: 512,
-    usage: "Tomb Raid mode memory fragment/weapon/consumable icon.",
+    usage: "Forgotten Sanity mode memory fragment/weapon/consumable icon.",
     productionStatus: "FINAL_ASSET",
   },
   {
@@ -969,7 +969,7 @@ export const assetManifest = [
     mimeType: "image/png",
     width: 512,
     height: 512,
-    usage: "Tomb Raid mode memory fragment/weapon/consumable icon.",
+    usage: "Forgotten Sanity mode memory fragment/weapon/consumable icon.",
     productionStatus: "FINAL_ASSET",
   },
   {
@@ -979,7 +979,7 @@ export const assetManifest = [
     mimeType: "image/png",
     width: 512,
     height: 512,
-    usage: "Tomb Raid mode memory fragment/weapon/consumable icon.",
+    usage: "Forgotten Sanity mode memory fragment/weapon/consumable icon.",
     productionStatus: "FINAL_ASSET",
   },
   {
@@ -989,7 +989,7 @@ export const assetManifest = [
     mimeType: "image/png",
     width: 512,
     height: 512,
-    usage: "Tomb Raid mode memory fragment/weapon/consumable icon.",
+    usage: "Forgotten Sanity mode memory fragment/weapon/consumable icon.",
     productionStatus: "FINAL_ASSET",
   },
   {
@@ -999,7 +999,7 @@ export const assetManifest = [
     mimeType: "image/png",
     width: 512,
     height: 512,
-    usage: "Tomb Raid mode memory fragment/weapon/consumable icon.",
+    usage: "Forgotten Sanity mode memory fragment/weapon/consumable icon.",
     productionStatus: "FINAL_ASSET",
   },
   {
@@ -1009,7 +1009,7 @@ export const assetManifest = [
     mimeType: "image/png",
     width: 512,
     height: 512,
-    usage: "Tomb Raid mode memory fragment/weapon/consumable icon.",
+    usage: "Forgotten Sanity mode memory fragment/weapon/consumable icon.",
     productionStatus: "FINAL_ASSET",
   },
   {
@@ -1019,7 +1019,7 @@ export const assetManifest = [
     mimeType: "image/png",
     width: 512,
     height: 512,
-    usage: "Tomb Raid mode memory fragment/weapon/consumable icon.",
+    usage: "Forgotten Sanity mode memory fragment/weapon/consumable icon.",
     productionStatus: "FINAL_ASSET",
   },
   {
@@ -1029,7 +1029,7 @@ export const assetManifest = [
     mimeType: "image/png",
     width: 512,
     height: 512,
-    usage: "Tomb Raid mode memory fragment/weapon/consumable icon.",
+    usage: "Forgotten Sanity mode memory fragment/weapon/consumable icon.",
     productionStatus: "FINAL_ASSET",
   },
   {
@@ -1039,7 +1039,7 @@ export const assetManifest = [
     mimeType: "image/png",
     width: 512,
     height: 512,
-    usage: "Tomb Raid mode memory fragment/weapon/consumable icon.",
+    usage: "Forgotten Sanity mode memory fragment/weapon/consumable icon.",
     productionStatus: "FINAL_ASSET",
   },
   {
@@ -1049,7 +1049,7 @@ export const assetManifest = [
     mimeType: "image/png",
     width: 512,
     height: 512,
-    usage: "Tomb Raid mode memory fragment/weapon/consumable icon.",
+    usage: "Forgotten Sanity mode memory fragment/weapon/consumable icon.",
     productionStatus: "FINAL_ASSET",
   },
   {
@@ -1059,7 +1059,7 @@ export const assetManifest = [
     mimeType: "image/png",
     width: 512,
     height: 512,
-    usage: "Tomb Raid mode memory fragment/weapon/consumable icon.",
+    usage: "Forgotten Sanity mode memory fragment/weapon/consumable icon.",
     productionStatus: "FINAL_ASSET",
   },
   {
@@ -1069,7 +1069,7 @@ export const assetManifest = [
     mimeType: "image/png",
     width: 512,
     height: 512,
-    usage: "Tomb Raid mode memory fragment/weapon/consumable icon.",
+    usage: "Forgotten Sanity mode memory fragment/weapon/consumable icon.",
     productionStatus: "FINAL_ASSET",
   },
   {
@@ -1079,37 +1079,37 @@ export const assetManifest = [
     mimeType: "image/png",
     width: 512,
     height: 512,
-    usage: "Tomb Raid mode memory fragment/weapon/consumable icon.",
+    usage: "Forgotten Sanity mode memory fragment/weapon/consumable icon.",
     productionStatus: "FINAL_ASSET",
   },
   {
-    key: "sprite.tombraid.漂浮眼球",
+    key: "sprite.forgottenSanity.漂浮眼球",
     path: "最终素材/缄默者/漂浮眼球.png",
     kind: "image",
     mimeType: "image/png",
     width: 1024,
     height: 1024,
-    usage: "Tomb Raid mode 缄默者 enemy sprite.",
+    usage: "Forgotten Sanity mode 缄默者 enemy sprite.",
     productionStatus: "FINAL_ASSET",
   },
   {
-    key: "sprite.tombraid.粉笔尘云",
+    key: "sprite.forgottenSanity.粉笔尘云",
     path: "最终素材/缄默者/粉笔尘云.png",
     kind: "image",
     mimeType: "image/png",
     width: 512,
     height: 512,
-    usage: "Tomb Raid mode 缄默者 enemy sprite.",
+    usage: "Forgotten Sanity mode 缄默者 enemy sprite.",
     productionStatus: "FINAL_ASSET",
   },
   {
-    key: "sprite.tombraid.血手",
+    key: "sprite.forgottenSanity.血手",
     path: "最终素材/缄默者/血手.png",
     kind: "image",
     mimeType: "image/png",
     width: 512,
     height: 512,
-    usage: "Tomb Raid mode 缄默者 enemy sprite.",
+    usage: "Forgotten Sanity mode 缄默者 enemy sprite.",
     productionStatus: "FINAL_ASSET",
   },
   {
@@ -1119,7 +1119,7 @@ export const assetManifest = [
     mimeType: "image/png",
     width: 64,
     height: 64,
-    usage: "Tomb Raid mode rarity frame overlay for blue-tier items.",
+    usage: "Forgotten Sanity mode rarity frame overlay for blue-tier items.",
     productionStatus: "FINAL_ASSET",
   },
   {
@@ -1129,7 +1129,7 @@ export const assetManifest = [
     mimeType: "image/png",
     width: 64,
     height: 64,
-    usage: "Tomb Raid mode rarity frame overlay for purple-tier items.",
+    usage: "Forgotten Sanity mode rarity frame overlay for purple-tier items.",
     productionStatus: "FINAL_ASSET",
   },
   {
@@ -1139,7 +1139,7 @@ export const assetManifest = [
     mimeType: "image/png",
     width: 64,
     height: 64,
-    usage: "Tomb Raid mode rarity frame overlay for green-tier items.",
+    usage: "Forgotten Sanity mode rarity frame overlay for green-tier items.",
     productionStatus: "FINAL_ASSET",
   },
   {
@@ -1149,7 +1149,7 @@ export const assetManifest = [
     mimeType: "image/png",
     width: 64,
     height: 64,
-    usage: "Tomb Raid mode rarity frame overlay for gold-tier items.",
+    usage: "Forgotten Sanity mode rarity frame overlay for gold-tier items.",
     productionStatus: "FINAL_ASSET",
   },
   {
@@ -1159,7 +1159,7 @@ export const assetManifest = [
     mimeType: "image/png",
     width: 64,
     height: 64,
-    usage: "Tomb Raid mode rarity frame overlay for white/legendary-tier items.",
+    usage: "Forgotten Sanity mode rarity frame overlay for white/legendary-tier items.",
     productionStatus: "FINAL_ASSET",
   },
   {
@@ -1169,7 +1169,7 @@ export const assetManifest = [
     mimeType: "image/png",
     width: 64,
     height: 64,
-    usage: "Tomb Raid mode skill icon frame.",
+    usage: "Forgotten Sanity mode skill icon frame.",
     productionStatus: "FINAL_ASSET",
   },
   {
@@ -1179,7 +1179,7 @@ export const assetManifest = [
     mimeType: "image/png",
     width: 80,
     height: 80,
-    usage: "Tomb Raid mode current weapon display frame.",
+    usage: "Forgotten Sanity mode current weapon display frame.",
     productionStatus: "FINAL_ASSET",
   },
   {
@@ -1189,7 +1189,7 @@ export const assetManifest = [
     mimeType: "image/png",
     width: 256,
     height: 256,
-    usage: "Tomb Raid mode minimap border frame with compass.",
+    usage: "Forgotten Sanity mode minimap border frame with compass.",
     productionStatus: "FINAL_ASSET",
   },
   {
@@ -1199,7 +1199,7 @@ export const assetManifest = [
     mimeType: "image/png",
     width: 768,
     height: 512,
-    usage: "Tomb Raid mode large map window frame.",
+    usage: "Forgotten Sanity mode large map window frame.",
     productionStatus: "FINAL_ASSET",
   },
   {
@@ -1209,7 +1209,7 @@ export const assetManifest = [
     mimeType: "image/png",
     width: 256,
     height: 28,
-    usage: "Tomb Raid mode HP bar background frame.",
+    usage: "Forgotten Sanity mode HP bar background frame.",
     productionStatus: "FINAL_ASSET",
   },
   {
@@ -1219,7 +1219,7 @@ export const assetManifest = [
     mimeType: "image/png",
     width: 252,
     height: 24,
-    usage: "Tomb Raid mode HP bar fill texture.",
+    usage: "Forgotten Sanity mode HP bar fill texture.",
     productionStatus: "FINAL_ASSET",
   },
   {
@@ -1229,7 +1229,7 @@ export const assetManifest = [
     mimeType: "image/png",
     width: 256,
     height: 28,
-    usage: "Tomb Raid mode sanity bar background frame.",
+    usage: "Forgotten Sanity mode sanity bar background frame.",
     productionStatus: "FINAL_ASSET",
   },
   {
@@ -1239,7 +1239,7 @@ export const assetManifest = [
     mimeType: "image/png",
     width: 252,
     height: 24,
-    usage: "Tomb Raid mode sanity bar fill texture.",
+    usage: "Forgotten Sanity mode sanity bar fill texture.",
     productionStatus: "FINAL_ASSET",
   },
   {
@@ -1249,7 +1249,7 @@ export const assetManifest = [
     mimeType: "image/png",
     width: 64,
     height: 192,
-    usage: "Tomb Raid mode blue rarity loot light beam.",
+    usage: "Forgotten Sanity mode blue rarity loot light beam.",
     productionStatus: "FINAL_ASSET",
   },
   {
@@ -1259,7 +1259,7 @@ export const assetManifest = [
     mimeType: "image/png",
     width: 64,
     height: 192,
-    usage: "Tomb Raid mode purple rarity loot light beam.",
+    usage: "Forgotten Sanity mode purple rarity loot light beam.",
     productionStatus: "FINAL_ASSET",
   },
   {
@@ -1269,7 +1269,7 @@ export const assetManifest = [
     mimeType: "image/png",
     width: 64,
     height: 192,
-    usage: "Tomb Raid mode green rarity loot light beam.",
+    usage: "Forgotten Sanity mode green rarity loot light beam.",
     productionStatus: "FINAL_ASSET",
   },
   {
@@ -1279,7 +1279,7 @@ export const assetManifest = [
     mimeType: "image/png",
     width: 64,
     height: 192,
-    usage: "Tomb Raid mode gold rarity loot light beam.",
+    usage: "Forgotten Sanity mode gold rarity loot light beam.",
     productionStatus: "FINAL_ASSET",
   },
   {
@@ -1289,7 +1289,7 @@ export const assetManifest = [
     mimeType: "image/png",
     width: 64,
     height: 192,
-    usage: "Tomb Raid mode white/legendary rarity loot light beam.",
+    usage: "Forgotten Sanity mode white/legendary rarity loot light beam.",
     productionStatus: "FINAL_ASSET",
   },
   {
@@ -1299,7 +1299,7 @@ export const assetManifest = [
     mimeType: "image/png",
     width: 512,
     height: 512,
-    usage: "Tomb Raid mode fog-of-war vision vignette overlay.",
+    usage: "Forgotten Sanity mode fog-of-war vision vignette overlay.",
     productionStatus: "FINAL_ASSET",
   },
   {
@@ -1309,7 +1309,7 @@ export const assetManifest = [
     mimeType: "image/png",
     width: 512,
     height: 512,
-    usage: "Tomb Raid mode sanity draining red vignette overlay.",
+    usage: "Forgotten Sanity mode sanity draining red vignette overlay.",
     productionStatus: "FINAL_ASSET",
   },
   {
@@ -1319,7 +1319,7 @@ export const assetManifest = [
     mimeType: "image/png",
     width: 128,
     height: 128,
-    usage: "Tomb Raid mode blood-eye overlay for Dan Yuxuan's severed head (血瞳 state).",
+    usage: "Forgotten Sanity mode blood-eye overlay for Dan Yuxuan's severed head (血瞳 state).",
     productionStatus: "FINAL_ASSET",
   },
   {
@@ -1329,7 +1329,7 @@ export const assetManifest = [
     mimeType: "image/png",
     width: 96,
     height: 144,
-    usage: "Tomb Raid mode chest lockpick animation frame 1 (closed).",
+    usage: "Forgotten Sanity mode chest lockpick animation frame 1 (closed).",
     productionStatus: "FINAL_ASSET",
   },
   {
@@ -1339,7 +1339,7 @@ export const assetManifest = [
     mimeType: "image/png",
     width: 96,
     height: 144,
-    usage: "Tomb Raid mode chest lockpick animation frame 2 (scanning).",
+    usage: "Forgotten Sanity mode chest lockpick animation frame 2 (scanning).",
     productionStatus: "FINAL_ASSET",
   },
   {
@@ -1349,7 +1349,7 @@ export const assetManifest = [
     mimeType: "image/png",
     width: 96,
     height: 144,
-    usage: "Tomb Raid mode chest lockpick animation frame 3 (sparking).",
+    usage: "Forgotten Sanity mode chest lockpick animation frame 3 (sparking).",
     productionStatus: "FINAL_ASSET",
   },
   {
@@ -1359,7 +1359,7 @@ export const assetManifest = [
     mimeType: "image/png",
     width: 96,
     height: 144,
-    usage: "Tomb Raid mode chest lockpick animation frame 4 (glowing seams).",
+    usage: "Forgotten Sanity mode chest lockpick animation frame 4 (glowing seams).",
     productionStatus: "FINAL_ASSET",
   },
   {
@@ -1369,7 +1369,7 @@ export const assetManifest = [
     mimeType: "image/png",
     width: 96,
     height: 144,
-    usage: "Tomb Raid mode chest lockpick animation frame 5 (golden burst).",
+    usage: "Forgotten Sanity mode chest lockpick animation frame 5 (golden burst).",
     productionStatus: "FINAL_ASSET",
   },
 ] as const satisfies readonly AssetManifestEntry[];

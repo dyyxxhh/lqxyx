@@ -1,0 +1,287 @@
+import { describe, expect, it, vi } from 'vitest';
+
+import { CombatManager, type IsWalkableFn, type CombatCallbacks } from '../../../forgottenSanity/combat/CombatManager';
+import { PlayerCombat } from '../../../forgottenSanity/combat/PlayerCombat';
+import { Enemy, registerEnemyKind, type EnemyUpdateContext, type Projectile, type ZoneEffect } from '../../../forgottenSanity/combat/Enemy';
+import { WEAK_PUNCH_DAMAGE } from '../../../forgottenSanity/combat/DamageType';
+
+class DummyEnemy extends Enemy {
+  readonly kind = 'butYuxuanHead' as const;
+  readonly textureKey = null;
+  readonly proceduralKind = null;
+  readonly perception = {
+    visionRange: 350,
+    visionHalfAngleDeg: 60,
+    noiseSensitivity: 1.0,
+    alertToChaseMs: 'instant' as const,
+    chaseToSearchMs: 3000,
+    searchToAlertMs: 3000,
+    alertToIdleMs: 5000,
+    patrolKind: 'wander' as const,
+  };
+  lastSeenContext: EnemyUpdateContext | null = null;
+  update(_deltaMs: number, ctx: EnemyUpdateContext): void {
+    this.lastSeenContext = ctx;
+  }
+}
+
+registerEnemyKind('butYuxuanHead', (opts) => new DummyEnemy(opts));
+
+// 设计变更：模拟中立杨云红边（duck-typed aggroState/enrage），供 CombatManager 激怒检测测试。
+// 不依赖 Task 14 的真实 YangYunRedEnemy，使 Task 4 即可独立验证激怒逻辑。
+class FakeNeutralElite extends Enemy {
+  readonly kind = 'yangYunRed' as const;
+  readonly textureKey = null;
+  readonly proceduralKind = null;
+  readonly perception = {
+    visionRange: 350,
+    visionHalfAngleDeg: 60,
+    noiseSensitivity: 1.0,
+    alertToChaseMs: 'instant' as const,
+    chaseToSearchMs: 3000,
+    searchToAlertMs: 3000,
+    alertToIdleMs: 5000,
+    patrolKind: 'wander' as const,
+  };
+  aggroState: 'neutral' | 'hostile' = 'neutral';
+  enragedCount = 0;
+  update(_deltaMs: number, _ctx: EnemyUpdateContext): void { /* noop */ }
+  enrage(): void { this.aggroState = 'hostile'; this.enragedCount++; }
+}
+
+function makeManager(callbacks: CombatCallbacks = {}, isWalkable: IsWalkableFn = () => true): CombatManager {
+  const player = new PlayerCombat();
+  return new CombatManager(player, callbacks, isWalkable);
+}
+
+describe('CombatManager 玩家占位普攻 (spec §3.1 弱拳 5 伤)', () => {
+  it('playerAttack 对扇形内敌人造成 5 伤', () => {
+    const mgr = makeManager();
+    const enemy = new DummyEnemy({ id: 'e1', x: 50, y: 0, maxHp: 100, speed: 0, contactDamage: 0, contactRadius: 20 });
+    mgr.addEnemy(enemy);
+    mgr.setPlayerPosition(0, 0);
+    mgr.playerAttack({ x: 1, y: 0 });
+    expect(enemy.hp).toBe(100 - WEAK_PUNCH_DAMAGE);
+  });
+
+  it('playerAttack 不命中扇形外敌人', () => {
+    const mgr = makeManager();
+    const enemy = new DummyEnemy({ id: 'e1', x: -50, y: 0, maxHp: 100, speed: 0, contactDamage: 0, contactRadius: 20 });
+    mgr.addEnemy(enemy);
+    mgr.setPlayerPosition(0, 0);
+    mgr.playerAttack({ x: 1, y: 0 }); // 朝右，敌人在左
+    expect(enemy.hp).toBe(100);
+  });
+});
+
+describe('CombatManager 接触伤害', () => {
+  it('敌人接触玩家造成 contactDamage，1s 冷却', () => {
+    const onDamaged = vi.fn();
+    const mgr = makeManager({ onPlayerDamaged: onDamaged });
+    const enemy = new DummyEnemy({ id: 'e1', x: 0, y: 0, maxHp: 100, speed: 0, contactDamage: 8, contactRadius: 30 });
+    mgr.addEnemy(enemy);
+    mgr.setPlayerPosition(10, 0);
+    mgr.update(500); // 首次接触，触发 cooldown=1000
+    expect(onDamaged).toHaveBeenCalledTimes(1);
+    expect(mgr.player.hp).toBe(92);
+    mgr.update(500); // 累计 1s，cooldown 仍剩 500ms，不触发
+    expect(onDamaged).toHaveBeenCalledTimes(1);
+    mgr.update(500); // 累计 1.5s，cooldown 归零，再次触发
+    expect(onDamaged).toHaveBeenCalledTimes(2);
+    expect(mgr.player.hp).toBe(84);
+  });
+
+  it('玩家死亡触发 onPlayerDied', () => {
+    const onDied = vi.fn();
+    const mgr = makeManager({ onPlayerDied: onDied });
+    const enemy = new DummyEnemy({ id: 'e1', x: 0, y: 0, maxHp: 100, speed: 0, contactDamage: 200, contactRadius: 30 });
+    mgr.addEnemy(enemy);
+    mgr.setPlayerPosition(10, 0);
+    mgr.update(100);
+    expect(mgr.player.isDead).toBe(true);
+    expect(onDied).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('CombatManager 弹幕推进', () => {
+  it('spawnProjectile 后 update 推进位置', () => {
+    const mgr = makeManager();
+    mgr.setPlayerPosition(1000, 1000);
+    const p: Projectile = {
+      id: 'p1', x: 0, y: 0, vx: 100, vy: 0, speed: 100,
+      damage: 10, category: 'aoe', homingTarget: null, homingStrength: 0,
+      remainingMs: 5000, radius: 10, proceduralKind: 'danYuxuanOrb', ownerId: 'e1',
+    };
+    mgr.spawnProjectile(p);
+    mgr.update(1000); // 1s → x += 100
+    expect(mgr.projectiles[0]!.x).toBeCloseTo(100, 5);
+  });
+
+  it('追踪弹向玩家转向', () => {
+    const mgr = makeManager();
+    mgr.setPlayerPosition(0, 100);
+    const p: Projectile = {
+      id: 'p1', x: 0, y: 0, vx: 100, vy: 0, speed: 100,
+      damage: 10, category: 'aoe', homingTarget: 'player', homingStrength: Math.PI,
+      remainingMs: 5000, radius: 10, proceduralKind: 'danYuxuanOrb', ownerId: 'e1',
+    };
+    mgr.spawnProjectile(p);
+    mgr.update(100); // 短帧：转向但未触达玩家
+    // 强追踪（PI rad/s）应使 vy > 0（向玩家）
+    expect(mgr.projectiles[0]!.vy).toBeGreaterThan(0);
+  });
+
+  it('弹幕命中玩家造成伤害并消失', () => {
+    const mgr = makeManager();
+    mgr.setPlayerPosition(15, 0);
+    const p: Projectile = {
+      id: 'p1', x: 0, y: 0, vx: 100, vy: 0, speed: 100,
+      damage: 14, category: 'aoe', homingTarget: null, homingStrength: 0,
+      remainingMs: 5000, radius: 10, proceduralKind: 'danYuxuanOrb', ownerId: 'e1',
+    };
+    mgr.spawnProjectile(p);
+    mgr.update(100);
+    expect(mgr.player.hp).toBe(100 - 14);
+    expect(mgr.projectiles).toHaveLength(0);
+  });
+});
+
+describe('CombatManager 区域效果', () => {
+  it('windup 期间无伤害，windup 结算 burstDamage', () => {
+    const mgr = makeManager();
+    mgr.setPlayerPosition(50, 0);
+    const z: ZoneEffect = {
+      id: 'z1', shape: 'circle', x: 50, y: 0, radius: 60, width: 0, height: 0, angle: 0,
+      vx: 0, vy: 0, expandSpeed: 0, maxRadius: 60, windupMs: 1200, burstDamage: 30,
+      damagePerSecond: 0, category: 'aoe', remainingMs: 1300, applyDebuffOnce: false,
+      debuffApplied: false, proceduralKind: 'phoneExplosion', ownerId: 'e1',
+    };
+    mgr.spawnZone(z);
+    mgr.update(1000); // windup 中
+    expect(mgr.player.hp).toBe(100);
+    mgr.update(300); // windup 结束 → burst
+    expect(mgr.player.hp).toBe(70);
+  });
+
+  it('DoT 持续伤害', () => {
+    const mgr = makeManager();
+    mgr.setPlayerPosition(0, 0);
+    const z: ZoneEffect = {
+      id: 'z1', shape: 'circle', x: 0, y: 0, radius: 50, width: 0, height: 0, angle: 0,
+      vx: 0, vy: 0, expandSpeed: 0, maxRadius: 50, windupMs: 0, burstDamage: 0,
+      damagePerSecond: 5, category: 'dot', remainingMs: 2000, applyDebuffOnce: false,
+      debuffApplied: false, proceduralKind: 'phoneRinging', ownerId: 'e1',
+    };
+    mgr.spawnZone(z);
+    mgr.update(1000); // 5/s * 1s = 5
+    expect(mgr.player.hp).toBe(95);
+  });
+});
+
+describe('CombatManager 身体上限 (spec §5.9)', () => {
+  it('canSpawnBody 初始 true，registerBody 后 false，unregisterBody 恢复', () => {
+    const mgr = makeManager();
+    expect(mgr.canSpawnBody()).toBe(true);
+    mgr.registerBody();
+    mgr.registerBody();
+    expect(mgr.canSpawnBody()).toBe(false); // 达上限 2
+    mgr.unregisterBody();
+    expect(mgr.canSpawnBody()).toBe(true);
+  });
+});
+
+describe('CombatManager 敌人死亡回调', () => {
+  it('onEnemyKilled 在敌人死亡时触发', () => {
+    const onKill = vi.fn();
+    const mgr = makeManager({ onEnemyKilled: onKill });
+    const enemy = new DummyEnemy({ id: 'e1', x: 50, y: 0, maxHp: 5, speed: 0, contactDamage: 0, contactRadius: 20 });
+    mgr.addEnemy(enemy);
+    mgr.setPlayerPosition(0, 0);
+    mgr.playerAttack({ x: 1, y: 0 }); // 5 伤致死
+    mgr.update(0);
+    expect(onKill).toHaveBeenCalledTimes(1);
+    expect(onKill.mock.calls[0]![0].id).toBe('e1');
+  });
+});
+
+// 设计变更：杨云红边中立→激怒机制（CombatManager 检测）
+describe('CombatManager 杨云红边激怒检测 (设计变更)', () => {
+  it('玩家攻击命中敌人时，350px 视野内中立杨云红边激怒', () => {
+    const mgr = makeManager();
+    const target = new DummyEnemy({ id: 't1', x: 50, y: 0, maxHp: 100, speed: 0, contactDamage: 0, contactRadius: 20 });
+    const elite = new FakeNeutralElite({ id: 'elite1', x: 200, y: 0, maxHp: 100, speed: 0, contactDamage: 0, contactRadius: 20 });
+    mgr.addEnemy(target);
+    mgr.addEnemy(elite);
+    mgr.setPlayerPosition(0, 0);
+    mgr.playerAttack({ x: 1, y: 0 }); // 命中 target(50,0)；elite(200,0) 距 target 150 ≤ 350
+    expect(elite.aggroState).toBe('hostile');
+    expect(elite.enragedCount).toBe(1);
+  });
+
+  it('350px 视野外的中立杨云红边不激怒', () => {
+    const mgr = makeManager();
+    const target = new DummyEnemy({ id: 't1', x: 50, y: 0, maxHp: 100, speed: 0, contactDamage: 0, contactRadius: 20 });
+    const elite = new FakeNeutralElite({ id: 'elite1', x: 500, y: 0, maxHp: 100, speed: 0, contactDamage: 0, contactRadius: 20 });
+    mgr.addEnemy(target);
+    mgr.addEnemy(elite);
+    mgr.setPlayerPosition(0, 0);
+    mgr.playerAttack({ x: 1, y: 0 }); // elite 距 target 450 > 350
+    expect(elite.aggroState).toBe('neutral');
+    expect(elite.enragedCount).toBe(0);
+  });
+
+  it('玩家直接攻击杨云红边本人 → 自身激怒', () => {
+    const mgr = makeManager();
+    const elite = new FakeNeutralElite({ id: 'elite1', x: 50, y: 0, maxHp: 100, speed: 0, contactDamage: 0, contactRadius: 20 });
+    mgr.addEnemy(elite);
+    mgr.setPlayerPosition(0, 0);
+    mgr.playerAttack({ x: 1, y: 0 }); // 直接命中 elite 本人（距离 0 ≤ 350）
+    expect(elite.aggroState).toBe('hostile');
+  });
+
+  it('未命中任何敌人时不激怒', () => {
+    const mgr = makeManager();
+    const elite = new FakeNeutralElite({ id: 'elite1', x: 500, y: 0, maxHp: 100, speed: 0, contactDamage: 0, contactRadius: 20 });
+    mgr.addEnemy(elite);
+    mgr.setPlayerPosition(0, 0);
+    mgr.playerAttack({ x: 1, y: 0 }); // elite 太远，攻击落空
+    expect(elite.aggroState).toBe('neutral');
+  });
+
+  it('中立杨云红边不造成接触伤害', () => {
+    const onDamaged = vi.fn();
+    const mgr = makeManager({ onPlayerDamaged: onDamaged });
+    const elite = new FakeNeutralElite({ id: 'elite1', x: 10, y: 0, maxHp: 100, speed: 0, contactDamage: 22, contactRadius: 30 });
+    mgr.addEnemy(elite);
+    mgr.setPlayerPosition(0, 0);
+    mgr.update(1000); // 中立下应跳过接触伤害
+    expect(onDamaged).not.toHaveBeenCalled();
+  });
+});
+
+// grill 2026-07-17：CombatManager 把 PlayerCombat.lastNoiseRadius 传给怪物 update context
+describe('CombatManager 噪声传递 (grill 2026-07-17，供怪物三态机)', () => {
+  it('玩家 lastNoiseRadius>0 时 ctx.playerNoise 包含玩家位置与半径', () => {
+    const mgr = makeManager();
+    const enemy = new DummyEnemy({ id: 'e1', x: 0, y: 0, maxHp: 10, speed: 0, contactDamage: 0, contactRadius: 0 });
+    mgr.addEnemy(enemy);
+    mgr.setPlayerPosition(100, 200);
+    mgr.player.setNoiseRadius(150); // 普攻噪声
+    mgr.update(16);
+    expect(enemy.lastSeenContext).not.toBeNull();
+    expect(enemy.lastSeenContext!.playerNoise).not.toBeNull();
+    expect(enemy.lastSeenContext!.playerNoise!.x).toBe(100);
+    expect(enemy.lastSeenContext!.playerNoise!.y).toBe(200);
+    expect(enemy.lastSeenContext!.playerNoise!.radius).toBe(150);
+  });
+
+  it('玩家 lastNoiseRadius=0 时 ctx.playerNoise=null', () => {
+    const mgr = makeManager();
+    const enemy = new DummyEnemy({ id: 'e1', x: 0, y: 0, maxHp: 10, speed: 0, contactDamage: 0, contactRadius: 0 });
+    mgr.addEnemy(enemy);
+    mgr.setPlayerPosition(100, 200);
+    // 默认 lastNoiseRadius=0
+    mgr.update(16);
+    expect(enemy.lastSeenContext!.playerNoise).toBeNull();
+  });
+});

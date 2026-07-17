@@ -4,8 +4,8 @@ import { BootScene } from '../scenes/BootScene';
 import { GameScene } from '../scenes/GameScene';
 import { PlayScene } from '../scenes/PlayScene';
 import { PreloadScene } from '../scenes/PreloadScene';
-import { TombRaidHubScene } from '../tombraid/TombRaidHubScene';
-import { TombRaidScene } from '../tombraid/TombRaidScene';
+import { ForgottenSanityHubScene } from '../forgottenSanity/ForgottenSanityHubScene';
+import { ForgottenSanityScene } from '../forgottenSanity/ForgottenSanityScene';
 import { GAME_HEIGHT, GAME_WIDTH, refreshCanvasDebugState } from './scaffoldState';
 
 export { GAME_HEIGHT, GAME_SCENES, GAME_WIDTH, createInitialSceneDebugState } from './scaffoldState';
@@ -35,7 +35,7 @@ export function createGameConfig(parent: string): Phaser.Types.Core.GameConfig {
       width: GAME_WIDTH,
       height: GAME_HEIGHT
     },
-    scene: [BootScene, PreloadScene, GameScene, PlayScene, TombRaidHubScene, TombRaidScene]
+    scene: [BootScene, PreloadScene, GameScene, PlayScene, ForgottenSanityHubScene, ForgottenSanityScene]
   };
 }
 
@@ -48,9 +48,9 @@ export function createGame(parent = 'game-root'): Phaser.Game {
         game.scene.stop('GameScene');
         game.scene.start('PlayScene');
       },
-      startTombRaidHub: () => {
+      startForgottenSanityHub: () => {
         game.scene.stop('GameScene');
-        game.scene.start('TombRaidHubScene');
+        game.scene.start('ForgottenSanityHubScene');
       },
     };
   }

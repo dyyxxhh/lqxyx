@@ -1,14 +1,14 @@
-# 摸金模式（Tomb Raid Mode）设计规格
+# 被遗忘的理智（Forgotten Sanity Mode）设计规格
 
 > **重建说明**：本 spec 从创建计划时的思考过程日志（`a.txt`）中还原。所有数值、数据结构、规则均来自日志中对 spec 各章节的引用。
 
 ## §1 入口与结算
 
 ### §1.1 概述
-摸金模式是影中咎的 roguelike 副模式。玩家在程序生成的地下城中探索、战斗、收集记忆碎片，达到基准理智值后可撤离。死亡则丢失全部本局战利品。
+被遗忘的理智是影中咎的 roguelike 副模式。玩家在程序生成的地下城中探索、战斗、收集记忆碎片，达到基准理智值后可撤离。死亡则丢失全部本局战利品。
 
 ### §1.2 场景结构
-- `GameScene` 主菜单 → 「摸金模式」按钮 → `TombRaidHubScene`（枢纽）→ `TombRaidScene`（对局）
+- `GameScene` 主菜单 → 「被遗忘的理智」按钮 → `ForgottenSanityHubScene`（枢纽）→ `ForgottenSanityScene`（对局）
 - 复用 `BootScene` / `PreloadScene`，不修改预加载流程
 - 独立 localStorage 存档键，不污染剧情模式 `SaveState`
 
@@ -35,7 +35,7 @@ export type SettlementOutcome =
 
 ### §2.2 房间类型（9 种）
 ```ts
-export type TombRaidRoomKind =
+export type ForgottenSanityRoomKind =
   | 'entrance' | 'corridor' | 'classroom' | 'vault' | 'hall'
   | 'trap' | 'dark' | 'switchRoom' | 'exit';
 ```
@@ -64,14 +64,14 @@ export type TombRaidRoomKind =
 
 ### §2.6 地图数据结构
 ```ts
-export interface TombRaidMapManifest {
+export interface ForgottenSanityMapManifest {
   id: string;
   seed: number;
   roomCount: number;
   bounds: { width: 5000; height: 4000 };
-  rooms: readonly TombRaidRoom[];
-  doors: readonly TombRaidDoor[];
-  chests: readonly TombRaidChest[];
+  rooms: readonly ForgottenSanityRoom[];
+  doors: readonly ForgottenSanityDoor[];
+  chests: readonly ForgottenSanityChest[];
   baselineSanity: number;
   entranceRoomId: string;
   exitRoomId: string;
@@ -576,8 +576,8 @@ progress: 0..1, rate = 1/2500 per ms, decayRate = 1/2500 per ms（松开时回�
 
 ### §8.1 仓库（Stash）
 - 无限槽位
-- 存 `items: readonly TombRaidStashItem[]` + `sanity: number` 理智账
-- localStorage key: `ying-zhong-jiu.tomb-raid.stash.v1`
+- 存 `items: readonly ForgottenSanityStashItem[]` + `sanity: number` 理智账
+- localStorage key: `ying-zhong-jiu.forgotten-sanity.stash.v1`
 
 ### §8.2 商城（Shop）
 - 卖价 = 碎片面值 ×1（1:1）
@@ -592,8 +592,8 @@ progress: 0..1, rate = 1/2500 per ms, decayRate = 1/2500 per ms（松开时回�
 
 ```ts
 export type ConsumeResult =
-  | { readonly ok: true; readonly stash: TombRaidStashState }
-  | { readonly ok: false; readonly reason: 'insufficient-stock'; readonly stash: TombRaidStashState };
+  | { readonly ok: true; readonly stash: ForgottenSanityStashState }
+  | { readonly ok: false; readonly reason: 'insufficient-stock'; readonly stash: ForgottenSanityStashState };
 ```
 
 ### §8.4 永久升级（6 种）
@@ -609,32 +609,32 @@ export type ConsumeResult =
 
 ### §8.5 存档 Schema（4 个独立 localStorage key）
 ```ts
-// ying-zhong-jiu.tomb-raid.stash.v1
-export interface TombRaidStashState {
+// ying-zhong-jiu.forgotten-sanity.stash.v1
+export interface ForgottenSanityStashState {
   readonly schemaVersion: number;
   readonly sanity: number;
-  readonly items: readonly TombRaidStashItem[];
+  readonly items: readonly ForgottenSanityStashItem[];
 }
-export interface TombRaidStashItem {
+export interface ForgottenSanityStashItem {
   readonly itemId: string;
   readonly quantity: number;
 }
 
-// ying-zhong-jiu.tomb-raid.upgrades.v1
-export type TombRaidUpgradeId = 'physique' | 'swift' | 'pickup' | 'sharp' | 'lucky' | 'armory';
-export interface TombRaidUpgradesState {
+// ying-zhong-jiu.forgotten-sanity.upgrades.v1
+export type ForgottenSanityUpgradeId = 'physique' | 'swift' | 'pickup' | 'sharp' | 'lucky' | 'armory';
+export interface ForgottenSanityUpgradesState {
   readonly schemaVersion: number;
-  readonly tiers: Readonly<Record<TombRaidUpgradeId, number>>;
+  readonly tiers: Readonly<Record<ForgottenSanityUpgradeId, number>>;
 }
 
-// ying-zhong-jiu.tomb-raid.best.v1
-export interface TombRaidBestState {
+// ying-zhong-jiu.forgotten-sanity.best.v1
+export interface ForgottenSanityBestState {
   readonly schemaVersion: number;
   readonly bestSanity: number;
 }
 
-// ying-zhong-jiu.tomb-raid.progress.v1
-export interface TombRaidProgressState {
+// ying-zhong-jiu.forgotten-sanity.progress.v1
+export interface ForgottenSanityProgressState {
   readonly schemaVersion: number;
   readonly starterPackGranted: boolean;
 }
@@ -687,12 +687,12 @@ export type LootRollMode = 'single' | 'independent' | 'multiPick';
 
 ### §11.1 目录结构
 ```
-src/tombraid/
-├── state/tombRaidState.ts       # 4 key 存档 + 起手包
+src/forgottenSanity/
+├── state/forgottenSanityState.ts       # 4 key 存档 + 起手包
 ├── map/
-│   ├── tombRaidMapState.ts      # manifest 类型
-│   ├── TombRaidMapGenerator.ts  # 程序化生成器（纯函数）
-│   └── TombRaidMapRenderer.ts   # 薄渲染器
+│   ├── forgottenSanityMapState.ts      # manifest 类型
+│   ├── ForgottenSanityMapGenerator.ts  # 程序化生成器（纯函数）
+│   └── ForgottenSanityMapRenderer.ts   # 薄渲染器
 ├── combat/
 │   ├── DamageType.ts            # 伤害类型 + DebuffTracker
 │   ├── PlayerCombat.ts          # 玩家战斗状态
@@ -717,13 +717,13 @@ src/tombraid/
 │   └── LoadoutManager.ts        # 起配
 ├── ui/
 │   ├── HubUI.ts                 # 枢纽 5 面板
-│   ├── TombRaidHUD.ts           # 对局 HUD
+│   ├── ForgottenSanityHUD.ts           # 对局 HUD
 │   ├── Minimap.ts               # 小地图 + 大地图
 │   ├── RedEdgeFogOverlay.ts     # 红边雾战
 │   ├── SettlementScreen.ts      # 撤离/死亡结算
 │   └── MobileControls.ts        # 移动端控件
-├── TombRaidHubScene.ts          # 枢纽场景
-└── TombRaidScene.ts             # 对局场景
+├── ForgottenSanityHubScene.ts          # 枢纽场景
+└── ForgottenSanityScene.ts             # 对局场景
 ```
 
 ### §11.2 约束

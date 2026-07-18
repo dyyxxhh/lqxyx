@@ -97,6 +97,7 @@ export class CombatManager {
   private timeMs = 0;
   private projectileCounter = 0;
   private zoneCounter = 0;
+  private enemyCounter = 0;
   // plan 4: 投射物命中追踪（每枚投射物仅命中同一敌人一次）
   private readonly projectileHitTracker = new Map<string, Set<string>>();
 
@@ -517,6 +518,19 @@ export class CombatManager {
     // 6. 粉笔尘云视野减益
     this.updateVisionDebuff();
 
+    // 6b. spec §5.9 C: 头颅复活检查（按真实 timeMs，不受远房降级影响）
+    for (const enemy of this.enemies) {
+      if (enemy.dead || enemy.kind !== 'danYuxuanBody') continue;
+      const body = enemy as unknown as {
+        tickHeadRevive?: (nowMs: number, spawnFn: (kind: EnemyKind, x: number, y: number, parentId: string) => Enemy | null) => number;
+      };
+      if (typeof body.tickHeadRevive === 'function') {
+        body.tickHeadRevive(this.timeMs, (kind, x, y, parentId) => {
+          return this.spawnEnemyAt(kind, x, y, parentId);
+        });
+      }
+    }
+
     // 7. 清理死亡敌人
     this.handleDeadEnemies();
   }
@@ -545,6 +559,17 @@ export class CombatManager {
     if (enemy === null) return null;
     if (parentId !== undefined) enemy.parentId = parentId;
     this.addEnemy(enemy);
+    return enemy;
+  }
+
+  /** spec §5.9 C: 在指定位置生成绑定身体的头颅（由 DanYuxuanBodyEnemy.tickHeadRevive 调用）。 */
+  private spawnEnemyAt(kind: EnemyKind, x: number, y: number, parentId: string): Enemy | null {
+    const id = `enemy-${this.enemyCounter++}`;
+    const opts = this.defaultEnemyOpts(kind, id, x, y);
+    const enemy = createEnemy(kind, opts);
+    if (enemy === null) return null;
+    enemy.parentId = parentId;
+    this.enemies.push(enemy);
     return enemy;
   }
 
@@ -721,15 +746,22 @@ export class CombatManager {
     for (let i = this.enemies.length - 1; i >= 0; i--) {
       const enemy = this.enemies[i]!;
       if (!enemy.dead) continue;
-      // 通知身体：绑定头颅死亡
+      // 通知身体：绑定头颅死亡（spec §5.9 B/C）
       if (enemy.parentId !== null) {
         const body = this.enemies.find((e) => e.id === enemy.parentId && !e.dead);
-        if (body !== undefined && typeof (body as unknown as { onBoundHeadDied?: (head: Enemy) => void }).onBoundHeadDied === 'function') {
-          (body as unknown as { onBoundHeadDied: (head: Enemy) => void }).onBoundHeadDied(enemy);
+        if (body !== undefined && typeof (body as unknown as { onBoundHeadDied?: (head: Enemy, timeMs: number) => void }).onBoundHeadDied === 'function') {
+          (body as unknown as { onBoundHeadDied: (head: Enemy, timeMs: number) => void }).onBoundHeadDied(enemy, this.timeMs);
         }
         // 30% 标记身体位置
         if (this.rng.chance(0.3)) {
           this.callbacks.onMarkBodyOnMinimap?.(enemy.parentId, body?.x ?? 0, body?.y ?? 0);
+        }
+      }
+      // 身体死亡 → 通知 onBodyDied（spec §5.9 B 机制 B：清场所有绑定头颅）
+      if (enemy.kind === 'danYuxuanBody') {
+        const body = enemy as unknown as { onBodyDied?: () => void };
+        if (typeof body.onBodyDied === 'function') {
+          body.onBodyDied();
         }
       }
       // 精英死亡事件

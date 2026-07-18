@@ -109,29 +109,21 @@ describe('DanYuxuanBodyEnemy 机制 C：头颅死亡 20s 复活 (spec §5.9)', (
   it('头颅死亡 20s 后复活（身体存活，1Hz 真实时间推进）', () => {
     const e = new DanYuxuanBodyEnemy('body1', 0, 0);
     const head = { id: 'h1', dead: false, x: 100, y: 100, hp: 70, maxHp: 70 } as unknown as Enemy;
-    const heads = (e as unknown as { boundHeads: { head: Enemy; deadAtMs: number | null; deathX: number; deathY: number }[] }).boundHeads;
-    heads.push({ head, deadAtMs: null, deathX: 100, deathY: 100 });
-    // CombatManager 在头颅死亡时设置 dead=true 后调用 onBoundHeadDied
-    (head as unknown as { dead: boolean }).dead = true;
-    (head as unknown as { hp: number }).hp = 0;
-    e.onBoundHeadDied(head); // deadAtMs = 0（占位，死亡时刻 timeMs=0）
-    // 时间推进 21s → timeMs 21000 - deadAtMs 0 = 21000 ≥ 20000 → 复活
-    e.update(21000, ctxStub({ timeMs: 21000 }));
-    expect(head.dead).toBe(false);
-    expect((head as unknown as { hp: number }).hp).toBe(70);
+    e.__testInjectBoundHead(head);
+    e.onBoundHeadDied(head, 1000); // deadAtMs = 1000（真实死亡时刻）
+    // 21s 后 → 21000-1000=20000 ≥ 20000 → 复活
+    const revived = e.__testTickRevive(21000);
+    expect(revived).toBe(true);
   });
 
   it('头颅死亡 <20s 不复活', () => {
     const e = new DanYuxuanBodyEnemy('body1', 0, 0);
     const head = { id: 'h1', dead: false, x: 100, y: 100, hp: 70, maxHp: 70 } as unknown as Enemy;
-    const heads = (e as unknown as { boundHeads: { head: Enemy; deadAtMs: number | null; deathX: number; deathY: number }[] }).boundHeads;
-    heads.push({ head, deadAtMs: null, deathX: 100, deathY: 100 });
-    (head as unknown as { dead: boolean }).dead = true;
-    (head as unknown as { hp: number }).hp = 0;
-    e.onBoundHeadDied(head); // deadAtMs = 0
-    // timeMs 19000 - deadAtMs 0 = 19000 < 20000 → 不复活
-    e.update(19000, ctxStub({ timeMs: 19000 }));
-    expect(head.dead).toBe(true);
+    e.__testInjectBoundHead(head);
+    e.onBoundHeadDied(head, 1000); // deadAtMs = 1000
+    // 19s 后 → 19000-1000=18000 < 20000 → 不复活
+    const revived = e.__testTickRevive(19000);
+    expect(revived).toBe(false);
   });
 });
 
@@ -146,5 +138,48 @@ describe('DanYuxuanBodyEnemy 召唤计时器不受降级影响 (spec §5.9 grill
       e.update(250, ctxStub({ playerPos: { x: 5000, y: 5000 }, timeMs, onSpawn: (m) => spawned.push(m) }));
     }
     expect(spawned.length).toBe(1);
+  });
+});
+
+describe('DanYuxuanBody bound head lifecycle (spec §5.9 B/C)', () => {
+  it('onBodyDied kills all bound heads', () => {
+    const body = new DanYuxuanBodyEnemy('body-1', 100, 100);
+    // 模拟已召唤 2 头颅
+    const head1 = { id: 'h1', dead: false } as unknown as Enemy;
+    const head2 = { id: 'h2', dead: false } as unknown as Enemy;
+    body.__testInjectBoundHead(head1);
+    body.__testInjectBoundHead(head2);
+    body.onBodyDied();
+    expect(head1.dead).toBe(true);
+    expect(head2.dead).toBe(true);
+  });
+
+  it('onBoundHeadDied records real timeMs (not 0)', () => {
+    const body = new DanYuxuanBodyEnemy('body-2', 0, 0);
+    const head = { id: 'h9', dead: false, x: 200, y: 200 } as unknown as Enemy;
+    body.__testInjectBoundHead(head);
+    body.onBoundHeadDied(head, 15000); // timeMs=15s
+    // 20s 后复活
+    const revived = body.__testTickRevive(15000 + 20000);
+    expect(revived).toBe(true);
+  });
+
+  it('does not revive before 20s after head death', () => {
+    const body = new DanYuxuanBodyEnemy('body-3', 0, 0);
+    const head = { id: 'h10', dead: false, x: 200, y: 200 } as unknown as Enemy;
+    body.__testInjectBoundHead(head);
+    body.onBoundHeadDied(head, 10000);
+    const revived = body.__testTickRevive(25000); // 15s 后 — 未满 20s
+    expect(revived).toBe(false);
+  });
+
+  it('does not revive if body is dead', () => {
+    const body = new DanYuxuanBodyEnemy('body-4', 0, 0);
+    const head = { id: 'h11', dead: false, x: 200, y: 200 } as unknown as Enemy;
+    body.__testInjectBoundHead(head);
+    body.onBoundHeadDied(head, 5000);
+    (body as unknown as { dead: boolean }).dead = true;
+    const revived = body.__testTickRevive(30000);
+    expect(revived).toBe(false);
   });
 });

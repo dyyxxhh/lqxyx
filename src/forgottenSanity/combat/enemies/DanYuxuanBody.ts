@@ -68,17 +68,8 @@ export class DanYuxuanBodyEnemy extends Enemy {
     // spec §5.9 grill 补充：召唤计时器始终 1Hz 真实时间推进，不受 §5.11.7 远房 4Hz 降级影响。
     // 因此此处直接累加 deltaMs（CombatManager 调用时无论 60Hz/4Hz，deltaMs 都是真实流逝时间）。
 
-    // 机制 C：复活到期头颅（20s 真实时间）
-    for (const bh of this.boundHeads) {
-      if (bh.deadAtMs !== null && ctx.timeMs - bh.deadAtMs >= REVIVE_MS) {
-        // 复活：重置 dead/hp/位置
-        (bh.head as unknown as { dead: boolean }).dead = false;
-        (bh.head as unknown as { hp: number }).hp = (bh.head as unknown as { maxHp: number }).maxHp;
-        (bh.head as unknown as { x: number }).x = bh.deathX;
-        (bh.head as unknown as { y: number }).y = bh.deathY;
-        bh.deadAtMs = null;
-      }
-    }
+    // 机制 C：复活逻辑由 CombatManager 通过 tickHeadRevive 驱动（spec §5.9 C，按真实 timeMs 推进）。
+    // 此处仅推进召唤计时器。
 
     // 机制 A：召唤血瞳头颅（30s 真实时间）
     this.summonTimer -= deltaMs;
@@ -111,15 +102,11 @@ export class DanYuxuanBodyEnemy extends Enemy {
   }
 
   /** CombatManager 在绑定头颅死亡时调用（spec §5.9 C 复活机制 + §5.9 D 30% 标记） */
-  onBoundHeadDied(head: Enemy): void {
+  onBoundHeadDied(head: Enemy, timeMs: number): void {
     const bh = this.boundHeads.find((b) => b.head === head);
     if (bh !== undefined && bh.deadAtMs === null) {
-      // 记录死亡时间戳（CombatManager 调用时 ctx.timeMs 已正确推进）
-      // 通过 head 自身的死亡时刻推断：onBoundHeadDied 调用紧接 handleDeadEnemies，
-      // 此时 dead=true；我们将 deadAtMs 标记为 0（占位），update 中用 ctx.timeMs - deadAtMs
-      // 在 timeMs ≥ 20s 时复活。真实 CombatManager 调用此方法时 timeMs 通常 ≥ 头颅死亡时间。
-      // 为兼容测试，调用方可通过 setHeadDeathTime 显式修正；此处用 0 兼容多数场景。
-      bh.deadAtMs = 0;
+      // 记录真实死亡时刻 timeMs（spec §5.9 C：按真实时间推进 20s 复活）
+      bh.deadAtMs = timeMs;
       bh.deathX = (head as unknown as { x: number }).x;
       bh.deathY = (head as unknown as { y: number }).y;
     }
@@ -130,6 +117,61 @@ export class DanYuxuanBodyEnemy extends Enemy {
     for (const bh of this.boundHeads) {
       (bh.head as unknown as { dead: boolean }).dead = true;
     }
+    this.boundHeads = [];
+  }
+
+  /**
+   * 机制 C：推进头颅复活检查（spec §5.9 C）。
+   * 由 CombatManager.update 每帧调用，按真实 timeMs 判定 20s 复活到期。
+   * 复活时通过 spawnFn 生成新头颅替换旧条目（原位死亡坐标）。
+   * 返回本次 tick 复活的头颅数量。
+   */
+  tickHeadRevive(
+    nowMs: number,
+    spawnFn: (kind: EnemyKind, x: number, y: number, parentId: string) => Enemy | null,
+  ): number {
+    if (this.dead) return 0;
+    let revived = 0;
+    for (let i = this.boundHeads.length - 1; i >= 0; i--) {
+      const bh = this.boundHeads[i]!;
+      if (bh.deadAtMs === null) continue;
+      if (nowMs - bh.deadAtMs >= REVIVE_MS) {
+        const newHead = spawnFn('butYuxuanHeadBloodEye', bh.deathX, bh.deathY, this.id);
+        if (newHead !== null) {
+          this.boundHeads.splice(i, 1);
+          this.boundHeads.push({
+            head: newHead,
+            deadAtMs: null,
+            deathX: bh.deathX,
+            deathY: bh.deathY,
+          });
+          revived += 1;
+        }
+      }
+    }
+    return revived;
+  }
+
+  /** 测试钩子：注入绑定头颅（不经过召唤流程） */
+  __testInjectBoundHead(head: Enemy): void {
+    this.boundHeads.push({
+      head,
+      deadAtMs: null,
+      deathX: (head as unknown as { x: number }).x ?? 0,
+      deathY: (head as unknown as { y: number }).y ?? 0,
+    });
+  }
+
+  /** 测试钩子：以 fake spawnFn 推进复活检查，返回是否复活了至少一个头颅 */
+  __testTickRevive(nowMs: number): boolean {
+    let revived = 0;
+    const spawnFn = (_kind: EnemyKind, x: number, y: number, _pid: string): Enemy => {
+      const fakeHead = { id: `revived-${nowMs}`, dead: false, x, y } as unknown as Enemy;
+      revived += 1;
+      return fakeHead;
+    };
+    this.tickHeadRevive(nowMs, spawnFn);
+    return revived > 0;
   }
 }
 

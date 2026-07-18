@@ -104,6 +104,9 @@ export class ForgottenSanityRunController {
   private knockbackVy = 0;
   private knockbackRemainingMs = 0;
 
+  // fistDash 锁定向冲刺状态（spec §3.2: 0.3s / 250px / 833px/s / 撞墙即停）
+  private dashLockState: { activeMs: number; dirX: number; dirY: number } | null = null;
+
   // 宝箱交互
   private readonly chestDecrypts = new Map<string, ChestDecrypt>();
   private readonly openedChests = new Set<string>();
@@ -345,6 +348,35 @@ export class ForgottenSanityRunController {
   // 移动
   // ───────────────────────────────────────────────────────────────────
   private handleMovement(deltaMs: number): void {
+    // spec §3.2: fistDash 冲刺期间忽略键盘输入，按锁定方向推进（250px / 0.3s = 833 px/s）
+    if (this.dashLockState !== null) {
+      const dash = this.dashLockState;
+      const dashSpeed = 833;
+      const stepMs = Math.min(deltaMs, dash.activeMs);
+      const dx = dash.dirX * dashSpeed * (stepMs / 1000);
+      const dy = dash.dirY * dashSpeed * (stepMs / 1000);
+      if (this.checkWalkable(this.playerX + dx, this.playerY)) {
+        this.playerX += dx;
+      } else {
+        this.dashLockState = null; // 撞墙立即停止
+      }
+      if (this.dashLockState !== null && this.checkWalkable(this.playerX, this.playerY + dy)) {
+        this.playerY += dy;
+      } else if (this.dashLockState !== null) {
+        this.dashLockState = null;
+      }
+      dash.activeMs -= stepMs;
+      if (dash.activeMs <= 0) this.dashLockState = null;
+      // 朝向仍按冲刺方向（用于攻击/视觉）
+      this.facingX = dash.dirX;
+      this.facingY = dash.dirY;
+      // 地图边界钳制
+      this.playerX = Math.max(0, Math.min(this.manifest.bounds.width, this.playerX));
+      this.playerY = Math.max(0, Math.min(this.manifest.bounds.height, this.playerY));
+      this.isMoving = true;
+      return;
+    }
+
     let dx = 0;
     let dy = 0;
     if (this.cursors.left.isDown) dx -= 1;
@@ -435,6 +467,10 @@ export class ForgottenSanityRunController {
     const dir = { x: this.facingX, y: this.facingY };
     const timeMs = this.combatManager.getTimeMs();
     this.weaponAdapter.performUltimate(dir, timeMs);
+    // spec §3.2: fistDash 锁定向 + 250px/0.3s 实际冲刺（833 px/s）
+    if (this.loadout.weaponId === 'weapon.fistGauntlet') {
+      this.dashLockState = { activeMs: 300, dirX: dir.x, dirY: dir.y };
+    }
   }
 
   private onInteractPressed(): void {

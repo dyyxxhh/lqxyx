@@ -145,13 +145,12 @@ describe('performUltimate — 拳套 fistDash 无敌', () => {
     expect(player.hp).toBe(before);
   });
 
-  it('生成跟随玩家的冲拳区域', () => {
+  it('不生成 followPlayer DoT 区域 — 改用 dash 状态机', () => {
     const { adapter, manager, player } = makeAdapter();
     player.weaponId = 'weapon.fistGauntlet';
     manager.setPlayerPosition(0, 0);
     adapter.performUltimate({ x: 1, y: 0 }, 0);
-    expect(manager.playerZones).toHaveLength(1);
-    expect(manager.playerZones[0]!.followPlayer).toBe(true);
+    expect(manager.playerZones).toHaveLength(0);
   });
 });
 
@@ -228,5 +227,40 @@ describe('performUltimate — 视觉事件', () => {
     const event = onVisual.mock.calls[0]![0];
     expect(event.kind).toBe('ultimateFired');
     expect(event.weaponId).toBe('weapon.ruler');
+  });
+});
+
+describe('fistDash 路径伤害与末端伤害 (spec §4.7/§3.2)', () => {
+  it('路径伤害 40 — 沿冲刺方向 250px 内最近敌', () => {
+    const { adapter, manager, player } = makeAdapter();
+    player.weaponId = 'weapon.fistGauntlet';
+    manager.setPlayerPosition(0, 0);
+    const e = makeEnemy(100, 0, 100);
+    manager.addEnemy(e);
+    adapter.performUltimate({ x: 1, y: 0 }, 0);
+    expect(e.hp).toBe(60);
+  });
+
+  it('末端伤害 40 — 冲刺结束点 r=60 内圆形 AOE', () => {
+    const { adapter, manager, player } = makeAdapter();
+    player.weaponId = 'weapon.fistGauntlet';
+    manager.setPlayerPosition(0, 0);
+    // 冲刺终点 (250, 0)；敌人 (300, 50) 距终点 ≈70.7 ≤ 60+contactRadius(24)=84（末端 AOE 内）
+    // 距原点 ≈304 > 250+contactRadius(24)=274（路径扇形外）→ 仅受末端伤害 40
+    const e = makeEnemy(300, 50, 100);
+    manager.addEnemy(e);
+    adapter.performUltimate({ x: 1, y: 0 }, 0);
+    expect(e.hp).toBe(60);
+  });
+
+  it('路径外的敌人不受路径伤害', () => {
+    const { adapter, manager, player } = makeAdapter();
+    player.weaponId = 'weapon.fistGauntlet';
+    manager.setPlayerPosition(0, 0);
+    // 敌人在 y=200，路径半角 22.5° 不覆盖（atan(200/100)≈63° > 22.5°）
+    const e = makeEnemy(100, 200, 100);
+    manager.addEnemy(e);
+    adapter.performUltimate({ x: 1, y: 0 }, 0);
+    expect(e.hp).toBe(100);
   });
 });

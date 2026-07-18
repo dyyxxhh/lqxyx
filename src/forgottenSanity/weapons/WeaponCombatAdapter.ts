@@ -91,6 +91,9 @@ export class WeaponCombatAdapter {
     private readonly onVisualEvent: ((event: WeaponVisualEvent) => void) | null = null,
   ) {}
 
+  /** grill §3.2: fistDash 锁定向 — 记录最近一次大招方向供 ultFistDash 复用。 */
+  private lastDir: Vec2 = { x: 0, y: 1 };
+
   /** 拾取替换武器：设置新武器，重置 CD，返回旧武器 ID（用于地面掉落）。 */
   equipWeapon(newId: WeaponId): string {
     const player = this.combat.player;
@@ -135,6 +138,7 @@ export class WeaponCombatAdapter {
     const pos = this.combat.getPlayerPosition();
     const dir = normalizeDir(direction);
     const ult = weapon.ultimate;
+    this.lastDir = { x: dir.x, y: dir.y };
 
     this.emit({
       kind: 'ultimateFired', weaponId: weapon.id,
@@ -249,19 +253,23 @@ export class WeaponCombatAdapter {
     this.emit({ kind: 'projectileSpawned', effectKind: ult.effectKind, x: pos.x, y: pos.y, angle: 0 });
   }
 
-  // -- 拳套：无敌冲拳（跟随玩家 DoT 区域 + 无敌态）(grill §4.7: 0.3s / 250px / 无敌 / 锁定向) --
+  // -- 拳套：无敌冲拳（实际冲刺 + 路径首敌 + 末端命中）(grill §4.7/§3.2: 0.3s / 250px / 无敌 / 锁定向) --
   private ultFistDash(ult: FistDashUlt, pos: Vec2): void {
+    // 1. 玩家无敌 300ms
     this.combat.player.setInvincible(ult.invincibleMs);
-    const dps = ult.durationMs > 0 ? (ult.totalDamage * 1000) / ult.durationMs : ult.totalDamage;
-    this.combat.spawnPlayerZone({
-      id: `wzone-${playerZoneCounter++}`,
-      shape: 'circle', x: pos.x, y: pos.y, radius: ult.radius,
-      burstDamage: 0, damagePerSecond: dps,
-      category: 'melee', remainingMs: ult.durationMs,
-      applyDebuffOnce: false, debuffApplied: false,
-      followPlayer: true, proceduralKind: ult.effectKind,
-    });
-    this.emit({ kind: 'zoneSpawned', x: pos.x, y: pos.y, radius: ult.radius, proceduralKind: ult.effectKind });
+    // 2. 锁定向 + 实际冲刺由 ForgottenSanityRunController 监听 ultimateFired 事件后设置 dashLockState
+    //    （performUltimate 已 emit ultimateFired，此处不重复 emit）
+    // 3. 路径伤害 40（沿冲刺方向直线 250px 内最近敌，半角 22.5° 扇形）
+    const dir = this.lastDir;
+    this.combat.damageClosestEnemyInFan(
+      pos.x, pos.y, dir.x, dir.y,
+      250, Math.PI / 8,
+      { amount: 40, category: 'melee' },
+    );
+    // 4. 末端伤害 40（冲刺结束点 r=60 内圆形 AOE）
+    const endX = pos.x + dir.x * 250;
+    const endY = pos.y + dir.y * 250;
+    this.combat.damageEnemiesInCircle(endX, endY, 60, { amount: 40, category: 'melee' });
   }
 
   // -- 锁链：群拉 + root + burn DoT 区域 (grill §4.7: 拉扯≤200px / root2s / burn10/s×3s) --

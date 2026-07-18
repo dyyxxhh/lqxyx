@@ -103,8 +103,8 @@ describe('Plan 6 integration smoke: starter pack + loadout flow', () => {
     expect(stash2.items.find((i) => i.itemId === 'consumable.celery')?.quantity).toBe(3);
   });
 
-  it('ALL_LOOT has 48 entries with correct sanity values for jadePendant(220) and chalkStub(12)', () => {
-    expect(ALL_LOOT.length).toBe(48);
+  it('ALL_LOOT has 49 entries (48 spec §6 + 1 §10.1 vaultKey) with correct sanity values for jadePendant(220) and chalkStub(12)', () => {
+    expect(ALL_LOOT.length).toBe(49);
     expect(getLootItem('treasure.jadePendant')?.sanityValue).toBe(220);
     expect(getLootItem('material.chalkStub')?.sanityValue).toBe(12);
   });

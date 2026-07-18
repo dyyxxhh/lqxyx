@@ -22,14 +22,14 @@ describe('LootItem types (spec §6.1/§6.8)', () => {
 });
 
 describe('ALL_LOOT completeness (spec §6.2-§6.6)', () => {
-  it('has exactly 48 items', () => {
-    expect(ALL_LOOT).toHaveLength(48);
+  it('has 49 items (48 spec §6 + 1 spec §10.1 vaultKey)', () => {
+    expect(ALL_LOOT).toHaveLength(49);
   });
 
-  it('rarity counts: blue 12 / purple 12 / green 12 / gold 8 / white 4', () => {
+  it('rarity counts: blue 13 (12 §6 + vaultKey) / purple 12 / green 12 / gold 8 / white 4', () => {
     const counts: Record<LootRarity, number> = { blue: 0, purple: 0, green: 0, gold: 0, white: 0 };
     for (const it of ALL_LOOT) counts[it.rarity] += 1;
-    expect(counts).toEqual({ blue: 12, purple: 12, green: 12, gold: 8, white: 4 });
+    expect(counts).toEqual({ blue: 13, purple: 12, green: 12, gold: 8, white: 4 });
   });
 
   it('all ids are unique', () => {
@@ -44,7 +44,7 @@ describe('ALL_LOOT completeness (spec §6.2-§6.6)', () => {
     }
   });
 
-  it('sanityValue ranges per rarity (table-authoritative)', () => {
+  it('sanityValue ranges per rarity (table-authoritative, excludes §10.1 vaultKey special)', () => {
     const ranges: Record<LootRarity, [number, number]> = {
       blue: [10, 35],
       purple: [45, 95],
@@ -53,6 +53,8 @@ describe('ALL_LOOT completeness (spec §6.2-§6.6)', () => {
       white: [750, 1500],
     };
     for (const it of ALL_LOOT) {
+      // spec §10.1 vaultKey is a special blue material with sanity 0 (non-sellable, red-edge only); excluded from §6 range table
+      if (it.id === 'material.vaultKey') continue;
       const [min, max] = ranges[it.rarity];
       expect(it.sanityValue).toBeGreaterThanOrEqual(min);
       expect(it.sanityValue).toBeLessThanOrEqual(max);
@@ -259,3 +261,15 @@ function _compileTimeAssert(item: LootItem): void {
   void item;
 }
 void _compileTimeAssert;
+
+describe('vaultKey (spec §10.1)', () => {
+  it('is registered as blue material with sanityValue 0', () => {
+    const item = getLootItem('material.vaultKey');
+    expect(item).toBeDefined();
+    expect(item!.rarity).toBe('blue');
+    expect(item!.type).toBe('material');
+    expect(item!.sanityValue).toBe(0);
+    expect(item!.effect).toBeNull();
+    expect(item!.name).toBe('仓库钥匙');
+  });
+});

@@ -539,6 +539,18 @@ export const ALL_LOOT: readonly LootItem[] = [
     effect: null,
   },
 
+  // === spec §10.1 仓库钥匙（特殊：蓝阶材料 sanity 0，不可售卖，仅红边掉落） ===
+  {
+    id: 'material.vaultKey',
+    name: '仓库钥匙',
+    rarity: 'blue',
+    type: 'material',
+    sanityValue: 0,
+    spriteKey: 'loot.仓库钥匙',
+    description: '杨云红边掉落的钥匙，可开启宝藏房门。',
+    effect: null,
+  },
+
   // === 白阶 4 件（sanity 750-1500）spec §6.6 ===
   {
     id: 'treasure.blankDiploma',

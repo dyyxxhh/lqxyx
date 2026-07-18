@@ -1083,6 +1083,16 @@ export const assetManifest = [
     productionStatus: "FINAL_ASSET",
   },
   {
+    key: "loot.仓库钥匙",
+    path: "最终素材/记忆碎片/仓库钥匙.png",
+    kind: "image",
+    mimeType: "image/png",
+    width: 512,
+    height: 512,
+    usage: "Forgotten Sanity mode — vault door key dropped by Yang Yun red edge (spec §10.1).",
+    productionStatus: "FINAL_ASSET",
+  },
+  {
     key: "sprite.forgottenSanity.漂浮眼球",
     path: "最终素材/缄默者/漂浮眼球.png",
     kind: "image",

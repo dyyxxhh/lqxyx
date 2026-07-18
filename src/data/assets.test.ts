@@ -143,6 +143,7 @@ const expectedFinalAssetPaths = [
   "最终素材/记忆碎片/镇魂铃.png",
   "最终素材/记忆碎片/黄铜书签.png",
   "最终素材/记忆碎片/黑色毕业照.png",
+  "最终素材/记忆碎片/仓库钥匙.png",
 ];
 
 describe("asset manifest", () => {
@@ -150,7 +151,7 @@ describe("asset manifest", () => {
     const manifestPaths = assetManifest.map((asset) => asset.path).sort();
 
     expect(manifestPaths).toEqual([...expectedFinalAssetPaths].sort());
-    expect(assetManifest).toHaveLength(134);
+    expect(assetManifest).toHaveLength(135);
   });
 
   it("allows only final production asset roots and rejects forbidden roots", () => {

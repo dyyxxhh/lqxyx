@@ -35,8 +35,8 @@ describe('lootSpriteKeyFor resolver', () => {
     expect(lootSpriteKeyFor('material.nonexistent')).toBeUndefined();
   });
 
-  it('LOOT_SPRITE_KEY_MAP has exactly 48 entries (one per spec §6 item)', () => {
-    expect(LOOT_SPRITE_KEY_MAP.size).toBe(48);
+  it('LOOT_SPRITE_KEY_MAP has 49 entries (48 spec §6 + 1 §10.1 vaultKey)', () => {
+    expect(LOOT_SPRITE_KEY_MAP.size).toBe(49);
   });
 });
 
@@ -59,8 +59,21 @@ describe('validateLootSpriteKeys cross-validation with assetManifest', () => {
     }
   });
 
-  it('manifest has 52 loot.* entries (48 spec + 4 non-§6 plan 4 weapons)', () => {
+  it('manifest has 53 loot.* entries (48 spec + 4 non-§6 plan 4 weapons + 1 §10.1 vaultKey)', () => {
     const lootEntries = assetManifest.filter((a) => a.key.startsWith('loot.'));
-    expect(lootEntries).toHaveLength(52);
+    expect(lootEntries).toHaveLength(53);
+  });
+});
+
+describe('vaultKey sprite key', () => {
+  it('resolves material.vaultKey to loot.仓库钥匙', () => {
+    expect(lootSpriteKeyFor('material.vaultKey')).toBe('loot.仓库钥匙');
+  });
+
+  it('validateLootSpriteKeys passes for vaultKey', () => {
+    const failures = validateLootSpriteKeys();
+    expect(failures).not.toContain(
+      expect.stringContaining('material.vaultKey'),
+    );
   });
 });

@@ -64,6 +64,8 @@ export const LOOT_SPRITE_KEY_MAP: ReadonlyMap<string, string> = new Map<string, 
   ['weapon.soulBanner', 'loot.万魂幡'],
   ['treasure.emeraldRing', 'loot.祖母绿戒指'],
   ['relic.blackGraduationPhoto', 'loot.黑色毕业照'],
+  // spec §10.1 仓库钥匙（非 §6 碎片，单独注册）
+  ['material.vaultKey', 'loot.仓库钥匙'],
 ]);
 
 /**

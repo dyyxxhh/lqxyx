@@ -289,7 +289,12 @@ export interface WeaponUltimate {
   - 独立碎片掷骰：紫 50% / 绿 30% / 金 8% / 白 2%
   - 触发全屏遮罩"理智正在消散", 持续 2s
   - 视野变为 220px（红边雾战）
-  - 理智刷新 +100%
+  - 缄默者复制 ×2（仅普通缄默者：①但宇轩头颅/②秦浩睿/③桌椅/④电话/⑤血手/⑥漂浮眼球/⑦粉笔尘云/⑧血瞳头颅）
+    - 复制数量 = 现有普通缄默者数量，即每个原体生成 1 个复制体（共 ×2 现有数量）
+    - 复制体属性与原体一致（HP/接触伤/speed/攻击间隔/感知参数）
+    - 复制体出生位置 = 玩家视口（1280×720）+ 100px buffer 外的随机房间内随机点
+    - 复制体按原体同表 ×1.0 掉落
+    - 复制体标记 `isDuplicate=true` 防止递归
 
 ### §5.11 感知 / 巡逻 / 脱战（普通缄默者三态机）
 
@@ -662,15 +667,20 @@ export interface ForgottenSanityProgressState {
 - 击杀杨云红边后触发
 - 全屏遮罩"理智正在消散", 持续 2s
 - 视野缩减为 220px
-- 理智刷新 +100%
+- 缄默者复制 ×2（详见 §5.10 击杀奖励）：以玩家视口外 100px buffer 生成等量复制体
 
 ---
 
 ## §10 掉落
 
 ### §10.1 杨云红边掉落
-- 钥匙不在 LootTable 中，由调用方（CombatManager）单独发放
-- **钥匙用途**：开启宝藏房门（vault door），进入后宝箱免费破译
+- 钥匙不在 LootTable 中，由 `ForgottenSanityRunController.handleEliteDefeated` 单独发放至 `inventory.add('material.vaultKey', 1)`
+- **钥匙用途完整流程**：
+  1. 红边被击杀 → `handleEliteDefeated` 触发 `inventory.add('material.vaultKey', 1)` + `combatManager.duplicateSilentOnes(playerViewport)` + 红边雾战遮罩
+  2. 玩家移动至 vault door（`ForgottenSanityMapRenderer.createVaultDoorInteraction` 注册的 hitArea，80×80 zone）
+  3. 玩家按 H 交互 → `onInteractPressed` 中 vault door 分支优先于 exit 分支，调用 `tryUnlockVaultDoor()`
+  4. `tryUnlockVaultDoor()` 校验 `inventory.has('material.vaultKey', 1)` → 调用 `renderer.unlockVaultDoor()` + `inventory.remove('material.vaultKey', 1)` + 提示
+  5. vault door 解锁后，玩家进入宝藏房 → 房内宝箱 `isVaultChest: chest.roomId === manifest.vaultRoomId` → `ChestDecrypt` 构造时跳过破译阶段（直接 `phase = 'opened'`），免费破译开启
 - yangYunRed LootTable 仅做独立碎片掷骰（4 个稀有度各自独立掷骰），可返回 0–4 件
 
 ### §10.2 掉落表模式
@@ -771,7 +781,7 @@ floor=0, walls=1, door=6, label=7, hitArea=8, player=10, chest=3, UI=1000+
 | 杨云红边掉钥匙概率 | 100% |
 | 白阶毕业证占比 | 70% |
 | 红边击杀后视野 | 220px |
-| 红边击杀后理智刷新 | +100% |
+| 红边击杀后缄默者复制 | ×2 现有数量 |
 | 召唤核心召唤间隔 | 30s |
 | 召唤核心最大血眼数 | 3 |
 | 头颅复活时间 | 20s |

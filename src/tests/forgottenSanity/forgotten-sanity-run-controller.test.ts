@@ -36,3 +36,74 @@ describe('ForgottenSanityRunController.runEvacuation (spec §1.3 — stash uncha
     expect(methodBody).toMatch(/runEvacuationSettlement\s*\(/);
   });
 });
+
+import type Phaser from 'phaser';
+import { Minimap } from '../../forgottenSanity/ui/Minimap';
+
+describe('Minimap fog of war (spec §9.2)', () => {
+  it('does not render chest marker in unexplored cell', () => {
+    // Minimap 是 Phaser 薄层；用 mock scene 验证 add.circle 调用
+    const calls: Array<{ x: number; y: number; color: number }> = [];
+    const fakeScene = {
+      add: {
+        rectangle: () => ({
+          setOrigin: () => ({ setScrollFactor: () => ({ setDepth: () => ({ setInteractive: () => ({ on: () => ({}) }) }) }) }),
+          setScrollFactor: () => ({ setDepth: () => ({ setInteractive: () => ({ on: () => ({}) }) }) }),
+        }),
+        circle: vi.fn((x: number, y: number, _r: number, color: number) => {
+          calls.push({ x, y, color });
+          return {
+            setScrollFactor: () => ({ setDepth: () => ({}) }),
+            destroy: () => {},
+          };
+        }),
+      },
+      cameras: { main: { width: 200, height: 200 } },
+      input: { keyboard: { addKey: () => ({ on: () => {} }) } },
+    } as unknown as Phaser.Scene;
+    const minimap = new Minimap(fakeScene);
+    // cellIndex = row*5 + col, col=floor(x/1000), row=floor(y/1000)
+    // 玩家 (500,500) → cell 0；宝箱 (2000,2000) → cell 12；出口 (3000,3000) → cell 18
+    minimap.update({
+      playerX: 500, playerY: 500, // cell 0
+      exploredCells: [0],          // 仅 cell 0 已探索
+      chestMarkers: [{ id: 'c1', x: 2000, y: 2000, opened: false, kind: 'normal' }], // cell 12，未探索
+      bodyMarkers: [],
+      exitDiscovered: true, exitX: 3000, exitY: 3000, // cell 18，未探索
+    });
+    // 仅玩家点应被绘制（cell 0 已探索，玩家点不过滤）
+    expect(calls.length).toBe(1);
+  });
+
+  it('renders chest marker when its cell is explored', () => {
+    const calls: Array<{ x: number; y: number }> = [];
+    const fakeScene = {
+      add: {
+        rectangle: () => ({
+          setOrigin: () => ({ setScrollFactor: () => ({ setDepth: () => ({ setInteractive: () => ({ on: () => ({}) }) }) }) }),
+          setScrollFactor: () => ({ setDepth: () => ({ setInteractive: () => ({ on: () => ({}) }) }) }),
+        }),
+        circle: vi.fn((x: number, y: number) => {
+          calls.push({ x, y });
+          return {
+            setScrollFactor: () => ({ setDepth: () => ({}) }),
+            destroy: () => {},
+          };
+        }),
+      },
+      cameras: { main: { width: 200, height: 200 } },
+      input: { keyboard: { addKey: () => ({ on: () => {} }) } },
+    } as unknown as Phaser.Scene;
+    const minimap = new Minimap(fakeScene);
+    // 宝箱 (2000,2000) → cell 12；exploredCells 包含 12 时应绘制
+    minimap.update({
+      playerX: 500, playerY: 500, // cell 0
+      exploredCells: [0, 12],      // cell 0 + cell 12 已探索
+      chestMarkers: [{ id: 'c1', x: 2000, y: 2000, opened: false, kind: 'normal' }], // cell 12
+      bodyMarkers: [],
+      exitDiscovered: false, exitX: 0, exitY: 0,
+    });
+    // 玩家点 + 宝箱点 = 2 个 circle
+    expect(calls.length).toBe(2);
+  });
+});

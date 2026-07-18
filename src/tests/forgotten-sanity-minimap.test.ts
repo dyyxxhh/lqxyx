@@ -45,7 +45,9 @@ function chain(seed: Record<string, any>): any {
 function update(over: Partial<MinimapUpdate> = {}): MinimapUpdate {
   return {
     playerX: 2500, playerY: 2000,
-    exploredCells: [0, 1, 2],
+    // 包含所有默认标记所在 cell（player@cell12, chest/body@cell6, exit@cell19），
+    // 以便既有测试聚焦验证标记渲染而非雾战过滤（spec §9.2 雾战过滤由独立测试覆盖）。
+    exploredCells: [0, 1, 2, 6, 12, 19],
     chestMarkers: [{ id: 'chest-1', x: 1000, y: 1000, opened: false, kind: 'normal' }],
     bodyMarkers: [{ bodyId: 'body-1', x: 1500, y: 1500 }],
     exitDiscovered: true, exitX: 4500, exitY: 3500,

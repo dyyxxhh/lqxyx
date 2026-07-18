@@ -117,8 +117,17 @@ export class Minimap {
     for (const m of this.markers) m.destroy();
     this.markers = [];
 
-    // spec §9.2: 雾战脚步点亮——计划标注雾战视觉为 future work，本阶段仅消费 exploredCells 字段不做过滤。
-    void u.exploredCells;
+    // spec §9.2: 雾战脚步点亮——仅绘制已探索 cell 内的宝箱/出口/身体标记。
+    // 玩家点本身始终绘制（玩家所在 cell 必然已探索）。
+    const exploredSet = new Set<number>(u.exploredCells);
+    const cellCols = 5;      // GRID_COLS (spec §2.1)
+    const cellWidth = 1000;  // CELL_WIDTH
+    const cellHeight = 1000; // CELL_HEIGHT
+    const cellIndexOf = (wx: number, wy: number): number => {
+      const col = Math.floor(wx / cellWidth);
+      const row = Math.floor(wy / cellHeight);
+      return row * cellCols + col;
+    };
 
     const px = this.worldToMinimapX(u.playerX);
     const py = this.worldToMinimapY(u.playerY);
@@ -126,6 +135,8 @@ export class Minimap {
       .setScrollFactor(0).setDepth(MINIMAP_DEPTH + 1));
 
     for (const c of u.chestMarkers) {
+      const cellIdx = cellIndexOf(c.x, c.y);
+      if (!exploredSet.has(cellIdx)) continue;
       const cx = this.worldToMinimapX(c.x);
       const cy = this.worldToMinimapY(c.y);
       const color = c.opened
@@ -136,13 +147,18 @@ export class Minimap {
     }
 
     if (u.exitDiscovered) {
-      const ex = this.worldToMinimapX(u.exitX);
-      const ey = this.worldToMinimapY(u.exitY);
-      this.markers.push(this.scene.add.circle(ex, ey, 4, COLOR_EXIT, 1)
-        .setScrollFactor(0).setDepth(MINIMAP_DEPTH + 1));
+      const exitCell = cellIndexOf(u.exitX, u.exitY);
+      if (exploredSet.has(exitCell)) {
+        const ex = this.worldToMinimapX(u.exitX);
+        const ey = this.worldToMinimapY(u.exitY);
+        this.markers.push(this.scene.add.circle(ex, ey, 4, COLOR_EXIT, 1)
+          .setScrollFactor(0).setDepth(MINIMAP_DEPTH + 1));
+      }
     }
 
     for (const b of u.bodyMarkers) {
+      const cellIdx = cellIndexOf(b.x, b.y);
+      if (!exploredSet.has(cellIdx)) continue;
       const bx = this.worldToMinimapX(b.x);
       const by = this.worldToMinimapY(b.y);
       this.markers.push(this.scene.add.circle(bx, by, 3, COLOR_BODY, 1)

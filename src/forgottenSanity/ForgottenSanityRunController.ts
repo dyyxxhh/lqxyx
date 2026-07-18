@@ -107,6 +107,9 @@ export class ForgottenSanityRunController {
   // fistDash 锁定向冲刺状态（spec §3.2: 0.3s / 250px / 833px/s / 撞墙即停）
   private dashLockState: { activeMs: number; dirX: number; dirY: number } | null = null;
 
+  // spec §9.2: 雾战 — 玩家走过的 cell 永久点亮（小地图过滤标记用）
+  private readonly exploredCells = new Set<number>();
+
   // 宝箱交互
   private readonly chestDecrypts = new Map<string, ChestDecrypt>();
   private readonly openedChests = new Set<string>();
@@ -297,6 +300,9 @@ export class ForgottenSanityRunController {
     // 1. 输入 → 移动
     this.handleMovement(deltaMs);
 
+    // spec §9.2: 雾战 — 玩家走过的 cell 永久点亮
+    this.updateExploredCells();
+
     // 2. 同步玩家位置到 CombatManager
     this.combatManager.setPlayerPosition(this.playerX, this.playerY);
 
@@ -421,6 +427,20 @@ export class ForgottenSanityRunController {
     // 地图边界钳制
     this.playerX = Math.max(0, Math.min(this.manifest.bounds.width, this.playerX));
     this.playerY = Math.max(0, Math.min(this.manifest.bounds.height, this.playerY));
+  }
+
+  // ───────────────────────────────────────────────────────────────────
+  // 雾战脚步点亮（spec §9.2）：玩家当前所在 cell 永久加入 exploredCells
+  // ───────────────────────────────────────────────────────────────────
+  private updateExploredCells(): void {
+    const cellCols = 5;      // GRID_COLS (spec §2.1)
+    const cellWidth = 1000;  // CELL_WIDTH
+    const cellHeight = 1000; // CELL_HEIGHT
+    const col = Math.floor(this.playerX / cellWidth);
+    const row = Math.floor(this.playerY / cellHeight);
+    if (col >= 0 && col < 5 && row >= 0 && row < 4) {
+      this.exploredCells.add(row * cellCols + col);
+    }
   }
 
   // ───────────────────────────────────────────────────────────────────
@@ -730,7 +750,7 @@ export class ForgottenSanityRunController {
     const update: MinimapUpdate = {
       playerX: this.playerX,
       playerY: this.playerY,
-      exploredCells: [], // 雾战视觉暂不实现，全图可见
+      exploredCells: [...this.exploredCells], // spec §9.2 雾战
       chestMarkers,
       bodyMarkers,
       exitDiscovered: this.exitDiscovered,

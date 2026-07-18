@@ -16,17 +16,23 @@ describe('ForgottenSanityRunController.runEvacuation (spec §1.3 — no double d
 
 describe('ForgottenSanityRunController.runEvacuation (spec §1.3 — stash unchanged by controller)', () => {
   it('controller path does not modify stash (side effect owned by SettlementScreen)', async () => {
-    // 契约级断言：controller 不再 import storeStash / depositRunInventory
-    // 通过检查模块导出符号在 controller 源码中是否被引用来判定
-    // 这里用静态扫描替代 — 检查 controller 源码不含 depositRunInventory 调用
+    // 契约级断言：runEvacuation 方法体不调用 depositRunInventory / storeStash。
+    // 起配阶段的 storeStash(built.stash) 是合法的（consumeLoadoutFromStash 副作用），
+    // 不在禁用范围内 — 故只检查 runEvacuation 方法体而非整个文件。
     const fs = await import('fs');
     const path = await import('path');
     const ctrlSrc = fs.readFileSync(
       path.resolve(__dirname, '../../forgottenSanity/ForgottenSanityRunController.ts'),
       'utf8',
     );
-    // controller 不应直接调用 depositRunInventory 或 storeStash
-    expect(ctrlSrc).not.toMatch(/depositRunInventory\s*\(/);
-    expect(ctrlSrc).not.toMatch(/storeStash\s*\(/);
+    // 提取 runEvacuation 方法体
+    const match = ctrlSrc.match(/private runEvacuation\(\)[^{]*\{([\s\S]*?)\n  \}/);
+    expect(match).not.toBeNull();
+    const methodBody = match![1]!;
+    // 方法体内不应含 depositRunInventory 或 storeStash 调用
+    expect(methodBody).not.toMatch(/depositRunInventory\s*\(/);
+    expect(methodBody).not.toMatch(/storeStash\s*\(/);
+    // 应当调用 scene.runEvacuationSettlement
+    expect(methodBody).toMatch(/runEvacuationSettlement\s*\(/);
   });
 });

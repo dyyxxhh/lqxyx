@@ -53,7 +53,6 @@ import { ChestDecrypt } from './loot/ChestDecrypt';
 import {
   loadStash,
   storeStash,
-  depositRunInventory,
 } from './meta/StashManager';
 import {
   loadUpgradesState,
@@ -611,13 +610,10 @@ export class ForgottenSanityRunController {
 
   private runEvacuation(): void {
     if (this.player.isDead) return;
-    const outcome = this.scene.runEvacuationSettlement(this.inventory, this.manifest.baselineSanity);
-    if (outcome.kind === 'evacuated') {
-      // spec §1.3：碎片入仓库 + 更新 best sanity
-      const stash = loadStash();
-      const result = depositRunInventory(stash, this.inventory);
-      storeStash(result.stash);
-    }
+    // spec §1.3：撤离成功副作用（碎片入仓库 + best sanity 更新）由
+    // SettlementScreen.handleEvacuated 统一负责。controller 仅路由到 settlement UI。
+    // 删除原双重 depositRunInventory + storeStash 调用，避免战利品×2。
+    this.scene.runEvacuationSettlement(this.inventory, this.manifest.baselineSanity);
   }
 
   // ───────────────────────────────────────────────────────────────────

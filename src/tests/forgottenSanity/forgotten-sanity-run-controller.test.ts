@@ -107,3 +107,69 @@ describe('Minimap fog of war (spec §9.2)', () => {
     expect(calls.length).toBe(2);
   });
 });
+
+describe('handleEliteDefeated source contract (spec §5.10 + §9.3 + §10.1)', () => {
+  it('handleEliteDefeated adds vaultKey + calls duplicateSilentOnes + removes exitDiscovered side effect', async () => {
+    const fs = await import('fs');
+    const path = await import('path');
+    const ctrlSrc = fs.readFileSync(
+      path.resolve(__dirname, '../../forgottenSanity/ForgottenSanityRunController.ts'),
+      'utf8',
+    );
+    const match = ctrlSrc.match(/private handleEliteDefeated\(\)[^{]*\{([\s\S]*?)\n  \}/);
+    expect(match).not.toBeNull();
+    const body = match![1]!;
+    // 必须添加仓库钥匙
+    expect(body).toMatch(/inventory\.add\(['"]material\.vaultKey['"],\s*1\)/);
+    // 必须调用 duplicateSilentOnes
+    expect(body).toMatch(/duplicateSilentOnes\s*\(/);
+    // 必须调用 triggerRedEdgeKill
+    expect(body).toMatch(/triggerRedEdgeKill\s*\(/);
+    // 必须做碎片掷骰
+    expect(body).toMatch(/rollLootTable\s*\(/);
+    // 不应再含 exitDiscovered = true（旧占位逻辑已删除）
+    expect(body).not.toMatch(/exitDiscovered\s*=\s*true/);
+  });
+});
+
+describe('tryUnlockVaultDoor source contract (spec §10.1)', () => {
+  it('tryUnlockVaultDoor consumes key + calls unlockVaultDoor when key present', async () => {
+    const fs = await import('fs');
+    const path = await import('path');
+    const ctrlSrc = fs.readFileSync(
+      path.resolve(__dirname, '../../forgottenSanity/ForgottenSanityRunController.ts'),
+      'utf8',
+    );
+    const match = ctrlSrc.match(/private tryUnlockVaultDoor\(\)[^{]*\{([\s\S]*?)\n  \}/);
+    expect(match).not.toBeNull();
+    const body = match![1]!;
+    // 必须检查 vaultUnlocked
+    expect(body).toMatch(/vaultUnlocked/);
+    // 必须检查 inventory.has('material.vaultKey')
+    expect(body).toMatch(/inventory\.has\(['"]material\.vaultKey['"]\)/);
+    // 必须消耗钥匙
+    expect(body).toMatch(/inventory\.remove\(['"]material\.vaultKey['"],\s*1\)/);
+    // 必须调用 unlockVaultDoor
+    expect(body).toMatch(/unlockVaultDoor\s*\(/);
+  });
+
+  it('onInteractPressed routes to vault door before exit', async () => {
+    const fs = await import('fs');
+    const path = await import('path');
+    const ctrlSrc = fs.readFileSync(
+      path.resolve(__dirname, '../../forgottenSanity/ForgottenSanityRunController.ts'),
+      'utf8',
+    );
+    const match = ctrlSrc.match(/private onInteractPressed\(\)[^{]*\{([\s\S]*?)\n  \}/);
+    expect(match).not.toBeNull();
+    const body = match![1]!;
+    // 必须有 distanceToVaultDoor 判断
+    expect(body).toMatch(/distanceToVaultDoor/);
+    // vault door 分支必须在 runEvacuation 之前
+    const vaultIdx = body.indexOf('distanceToVaultDoor');
+    const exitIdx = body.indexOf('distanceToExit');
+    expect(vaultIdx).toBeGreaterThan(-1);
+    expect(exitIdx).toBeGreaterThan(-1);
+    expect(vaultIdx).toBeLessThan(exitIdx);
+  });
+});

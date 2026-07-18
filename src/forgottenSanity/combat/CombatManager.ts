@@ -622,6 +622,50 @@ export class CombatManager {
     return enemy;
   }
 
+  /** spec §9.3: 缄默者复制 ×2 — 仅复制 8 种普通缄默者（排除但宇轩身体、杨云红边、影分身）。
+   *  复制体出生位置在玩家视口 + 100px buffer 外的随机点。
+   *  复制体属性与原体一致；isDuplicate=true 防止递归复制。
+   *  返回复制的敌人数量。 */
+  duplicateSilentOnes(playerViewport: { x: number; y: number; width: number; height: number }): number {
+    const normalKinds: ReadonlySet<EnemyKind> = new Set<EnemyKind>([
+      'butYuxuanHead', 'qinHaoruiHead', 'deskChairs', 'phone',
+      'bloodHand', 'floatingEye', 'chalkDust', 'butYuxuanHeadBloodEye',
+    ]);
+    const originals = this.enemies.filter(
+      (e) => !e.dead && !e.isDuplicate && normalKinds.has(e.kind),
+    );
+    let duplicated = 0;
+    const buffer = 100;
+    const vx0 = playerViewport.x - buffer;
+    const vx1 = playerViewport.x + playerViewport.width + buffer;
+    const vy0 = playerViewport.y - buffer;
+    const vy1 = playerViewport.y + playerViewport.height + buffer;
+    for (const orig of originals) {
+      let nx = 0, ny = 0;
+      let ok = false;
+      for (let attempt = 0; attempt < 10; attempt++) {
+        nx = this.rng.int(0, 5000);
+        ny = this.rng.int(0, 4000);
+        const inBuffer = nx >= vx0 && nx <= vx1 && ny >= vy0 && ny <= vy1;
+        if (!inBuffer && this.isWalkable(nx, ny)) {
+          ok = true;
+          break;
+        }
+      }
+      if (!ok) continue;
+      const id = `enemy-${this.enemyCounter++}`;
+      const opts = this.defaultEnemyOpts(orig.kind, id, nx, ny);
+      const clone = createEnemy(orig.kind, opts);
+      if (clone === null) continue;
+      clone.hp = orig.hp;
+      clone.parentId = orig.parentId;
+      clone.isDuplicate = true;
+      this.enemies.push(clone);
+      duplicated += 1;
+    }
+    return duplicated;
+  }
+
   private defaultEnemyOpts(kind: EnemyKind, id: string, x: number, y: number) {
     // 各敌人初始数值；与子类构造保持一致
     const table: Record<EnemyKind, { maxHp: number; speed: number; contactDamage: number; contactRadius: number }> = {

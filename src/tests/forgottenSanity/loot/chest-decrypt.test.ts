@@ -276,3 +276,29 @@ describe('ChestDecrypt loot card spawn (spec §7.3)', () => {
     expect(() => cd.destroy()).not.toThrow();
   });
 });
+
+describe('vault chest free decrypt (spec §10.1)', () => {
+  it('isVaultChest=true skips decrypting phase and enters opened directly', () => {
+    const scene = createFakeScene();
+    const decrypt = new ChestDecrypt({
+      scene: phaserScene(scene),
+      x: 100, y: 100,
+      lootItems: [],
+      isVaultChest: true,
+    });
+    // vault chest 应直接进入 opened 态
+    expect(decrypt.snapshot().phase).toBe('opened');
+    decrypt.destroy();
+  });
+
+  it('isVaultChest=false (default) starts in idle phase', () => {
+    const scene = createFakeScene();
+    const decrypt = new ChestDecrypt({
+      scene: phaserScene(scene),
+      x: 100, y: 100,
+      lootItems: [],
+    });
+    expect(decrypt.snapshot().phase).toBe('idle');
+    decrypt.destroy();
+  });
+});

@@ -120,6 +120,10 @@ export class ForgottenSanityRunController {
   private exitY: number;
   private exitDiscovered = false;
 
+  // spec §10.1: vault door 交互
+  private vaultDoorX = 0;
+  private vaultDoorY = 0;
+
   // 计时
   private elapsedMs = 0;
   private readonly startTime: number;
@@ -274,6 +278,14 @@ export class ForgottenSanityRunController {
 
     // spec §5.11.7: 派生 adjacentRooms 并传入 CombatManager（远房 4Hz 降级判定）
     this.combatManager.setAdjacentRooms(this.deriveAdjacentRooms(this.manifest));
+
+    // spec §10.1: vault door 交互 hitArea
+    const vaultDoor = this.manifest.doors.find((d) => d.roomId === this.manifest.vaultRoomId);
+    if (vaultDoor !== undefined) {
+      const pos = this.renderer.createVaultDoorInteraction(vaultDoor);
+      this.vaultDoorX = pos.x;
+      this.vaultDoorY = pos.y;
+    }
 
     this.startTime = this.scene.time.now;
   }
@@ -517,7 +529,7 @@ export class ForgottenSanityRunController {
 
   private onInteractPressed(): void {
     if (this.player.isDead) return;
-    // 优先：正在破译的宝箱 → 推进；否则：附近宝箱 → 开始破译；否则：撤离点
+    // 优先：正在破译的宝箱 → 推进；否则：附近宝箱 → 开始破译；否则：vault door；否则：撤离点
     if (this.activeChestId !== null) {
       // ChestDecrypt 自带 F 键 wiring，这里不重复处理
       return;
@@ -526,6 +538,11 @@ export class ForgottenSanityRunController {
     const chest = this.findNearestChest();
     if (chest !== null) {
       this.startChestDecrypt(chest);
+      return;
+    }
+    // spec §10.1: vault door
+    if (this.distanceToVaultDoor() <= EXIT_INTERACT_DISTANCE) {
+      this.tryUnlockVaultDoor();
       return;
     }
     // 撤离点
@@ -617,21 +634,22 @@ export class ForgottenSanityRunController {
 
   private handleEliteDefeated(): void {
     // spec §5.10：杨云红边击杀奖励
-    // 1. 碎片掷骰
+    // 1. 碎片掷骰（独立掷骰）
     const loot = rollLootTable(YANG_YUN_RED_LOOT_TABLE, this.rng.next.bind(this.rng));
     for (const item of loot) {
       this.inventory.add(item.id, 1);
     }
-    // 2. 全屏遮罩 + 视野 220 + 理智刷新 +100%
+    // 2. 仓库钥匙 100% 掉落（spec §10.1）
+    this.inventory.add('material.vaultKey', 1);
+    // 3. 全屏遮罩 + 红边雾战视野 220px（spec §9.3）
     this.scene.triggerRedEdgeKill(this.playerX, this.playerY);
-    // 3. 理智刷新：本局背包总值 +100%
-    const current = this.inventory.totalSanityValue();
-    // 用一个白阶 placeholder 表示 +100% 理智（简化：直接加 sanityValue 到 stash？spec §5.10 说"理智刷新+100%"指本局）
-    // 此处简化：给 inventory 加一个虚拟高价值碎片不可行，改为在结算时乘以 1.x。
-    // 暂用 stash sanity +100% 当前值（玩家可立即在仓库看到）
-    void current;
-    // 4. 仓库钥匙 100% 掉落（spec §10.1）—— 简化：直接标记 exitDiscovered
-    this.exitDiscovered = true;
+    // 4. 缄默者复制 ×2（spec §9.3 替换原"理智刷新+100%"）
+    this.combatManager.duplicateSilentOnes({
+      x: this.playerX - 640,  // 视口左上角 = 玩家中心 - 半宽
+      y: this.playerY - 360,
+      width: 1280,
+      height: 720,
+    });
   }
 
   // ───────────────────────────────────────────────────────────────────
@@ -677,6 +695,7 @@ export class ForgottenSanityRunController {
     const loot = rollLootTable(table, this.rng.next.bind(this.rng));
     const cx = chest.bounds.x + chest.bounds.width / 2;
     const cy = chest.bounds.y + chest.bounds.height / 2;
+    const isVaultChest = chest.roomId === this.manifest.vaultRoomId;
     const decrypt = new ChestDecrypt({
       scene: this.scene,
       x: cx,
@@ -685,6 +704,7 @@ export class ForgottenSanityRunController {
       onLootCollected: (item: LootItem) => {
         this.inventory.add(item.id, 1);
       },
+      isVaultChest,
     });
     this.chestDecrypts.set(chest.id, decrypt);
     this.activeChestId = chest.id;
@@ -703,6 +723,24 @@ export class ForgottenSanityRunController {
 
   private distanceToExit(): number {
     return Math.sqrt((this.exitX - this.playerX) ** 2 + (this.exitY - this.playerY) ** 2);
+  }
+
+  // spec §10.1: vault door 距离判定
+  private distanceToVaultDoor(): number {
+    return Math.sqrt((this.vaultDoorX - this.playerX) ** 2 + (this.vaultDoorY - this.playerY) ** 2);
+  }
+
+  private tryUnlockVaultDoor(): void {
+    if (this.renderer.vaultUnlocked) {
+      (this.scene as unknown as { showToast?: (msg: string) => void }).showToast?.('已解锁');
+      return;
+    }
+    if (!this.inventory.has('material.vaultKey')) {
+      (this.scene as unknown as { showToast?: (msg: string) => void }).showToast?.('需要仓库钥匙');
+      return;
+    }
+    this.inventory.remove('material.vaultKey', 1);
+    this.renderer.unlockVaultDoor();
   }
 
   private checkExitProximity(): void {

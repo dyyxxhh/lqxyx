@@ -79,6 +79,15 @@ class FakeRoomEnemy extends Enemy {
   }
 }
 
+// spec §9.3 duplicateSilentOnes 测试用：为 7 种普通缄默者（除 butYuxuanHead 已注册 DummyEnemy 外）
+// 注册 FakeRoomEnemy 工厂，使 createEnemy 在复制时能成功构造。
+for (const k of [
+  'qinHaoruiHead', 'deskChairs', 'phone', 'bloodHand',
+  'floatingEye', 'chalkDust', 'butYuxuanHeadBloodEye',
+] as const) {
+  registerEnemyKind(k, (opts) => new FakeRoomEnemy(opts.id, opts.x, opts.y, k));
+}
+
 function makeManager(callbacks: CombatCallbacks = {}, isWalkable: IsWalkableFn = () => true): CombatManager {
   const player = new PlayerCombat();
   return new CombatManager(player, callbacks, isWalkable);
@@ -395,5 +404,45 @@ describe('far-room 4Hz downgrade (spec §5.11.7)', () => {
     cm.addEnemy(body);
     cm.update(100);
     expect(tickSummonSpy).toHaveBeenCalledWith(100); // 真实 deltaMs，不受 4Hz 降级影响
+  });
+});
+
+// spec §9.3 缄默者复制 ×2 — 红边击杀后复制 8 种普通缄默者（排除但宇轩身体、杨云红边、影分身）
+describe('duplicateSilentOnes (spec §9.3 缄默者复制)', () => {
+  it('duplicates count of normal silent ones only (excludes body/elite/phantom)', () => {
+    const cm = new CombatManager(new PlayerCombat(), {}, () => true, createCombatRng(1));
+    cm.addEnemy(new FakeRoomEnemy('e1', 100, 100, 'butYuxuanHead'));
+    cm.addEnemy(new FakeRoomEnemy('e2', 200, 100, 'qinHaoruiHead'));
+    cm.addEnemy(new FakeRoomEnemy('b1', 300, 100, 'danYuxuanBody')); // 不复制
+    cm.addEnemy(new FakeRoomEnemy('elite', 400, 100, 'yangYunRed')); // 不复制
+    cm.addEnemy(new FakeRoomEnemy('phantom', 500, 100, 'yangYunRedPhantom')); // 不复制
+    const before = cm.enemies.filter((e) => !e.isDuplicate).length;
+    expect(before).toBe(5);
+    cm.duplicateSilentOnes({ x: 0, y: 0, width: 1280, height: 720 });
+    const duplicates = cm.enemies.filter((e) => e.isDuplicate);
+    expect(duplicates.length).toBe(2); // 仅 2 个普通缄默者各复制 1 个
+  });
+
+  it('duplicate is born outside player viewport + 100px buffer', () => {
+    const cm = new CombatManager(new PlayerCombat(), {}, () => true, createCombatRng(1));
+    cm.addEnemy(new FakeRoomEnemy('e1', 0, 0, 'butYuxuanHead'));
+    cm.duplicateSilentOnes({ x: 0, y: 0, width: 1280, height: 720 });
+    const dup = cm.enemies.find((e) => e.isDuplicate);
+    expect(dup).toBeDefined();
+    // 在视口+100 buffer 外
+    const outside = dup!.x < -100 || dup!.x > 1380 || dup!.y < -100 || dup!.y > 820;
+    expect(outside).toBe(true);
+  });
+
+  it('duplicate isDuplicate=true prevents recursive duplication', () => {
+    const cm = new CombatManager(new PlayerCombat(), {}, () => true, createCombatRng(1));
+    cm.addEnemy(new FakeRoomEnemy('e1', 0, 0, 'butYuxuanHead'));
+    cm.duplicateSilentOnes({ x: 0, y: 0, width: 1280, height: 720 });
+    expect(cm.enemies.filter((e) => e.isDuplicate).length).toBe(1);
+    // 再次调用不应复制 isDuplicate=true 的敌人
+    cm.duplicateSilentOnes({ x: 0, y: 0, width: 1280, height: 720 });
+    // e1 是原体（isDuplicate=false）会再复制 1 个，但已有 duplicate 不会再复制
+    // 所以总数 = 1 原体 + 2 复制 = 3
+    expect(cm.enemies.filter((e) => e.isDuplicate).length).toBe(2);
   });
 });

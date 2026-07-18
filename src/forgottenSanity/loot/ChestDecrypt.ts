@@ -65,6 +65,7 @@ export interface ChestDecryptConfig {
   readonly lootItems: readonly LootItem[];
   readonly onLootCollected?: (item: LootItem) => void;
   readonly inputKey?: string;
+  readonly isVaultChest?: boolean;
 }
 
 interface LootCardHandle {
@@ -108,6 +109,12 @@ export class ChestDecrypt {
     this.particleGraphics = config.scene.add.graphics();
     this.container.add([this.cabinet, this.ringGraphics, this.arcGraphics, this.particleGraphics]);
 
+    if (config.isVaultChest === true) {
+      // spec §10.1: vault chest 免费破译 — 跳过 decrypting 阶段，直接进入 opened 态
+      (this.state as unknown as { phase: 'idle' | 'decrypting' | 'opened' | 'completed' }).phase = 'opened';
+      this.handleOpenStart();
+      return; // 不调用 wireInput（无需 F 键）
+    }
     this.wireInput();
   }
 

@@ -9,6 +9,7 @@ import {
   WALL_THICKNESS,
   type ForgottenSanityMapManifest,
   type ForgottenSanityRect,
+  type ForgottenSanityDoorSpawn,
 } from './forgottenSanityMapState';
 
 // 复用剧情模式 MapRenderer 的颜色与 frame 常量
@@ -45,6 +46,8 @@ export class ForgottenSanityMapRenderer {
   private collisionZones: ForgottenSanityRect[] = [];
   private _currentManifest: ForgottenSanityMapManifest | null = null;
   private floorFrameEnsured = false;
+  private vaultDoorUnlocked = false;
+  private vaultDoorZone: Phaser.GameObjects.Zone | null = null;
 
   constructor(scene: Phaser.Scene) {
     this.scene = scene;
@@ -52,6 +55,23 @@ export class ForgottenSanityMapRenderer {
 
   get currentManifest(): ForgottenSanityMapManifest | null {
     return this._currentManifest;
+  }
+
+  get vaultUnlocked(): boolean {
+    return this.vaultDoorUnlocked;
+  }
+
+  /** spec §10.1: 在 vault door 上注册交互 hitArea。返回 door 中心坐标。 */
+  createVaultDoorInteraction(vaultDoor: ForgottenSanityDoorSpawn): { x: number; y: number } {
+    const cx = vaultDoor.bounds.x + vaultDoor.bounds.width / 2;
+    const cy = vaultDoor.bounds.y + vaultDoor.bounds.height / 2;
+    this.vaultDoorZone = this.scene.add.zone(cx, cy, 80, 80);
+    this.vaultDoorZone.setInteractive();
+    return { x: cx, y: cy };
+  }
+
+  unlockVaultDoor(): void {
+    this.vaultDoorUnlocked = true;
   }
 
   render(manifest: ForgottenSanityMapManifest): void {

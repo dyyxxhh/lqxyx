@@ -215,6 +215,9 @@ export abstract class Enemy implements EnemyViewMetadata {
   invulnMs = 0;                              // 无敌帧（桌椅翻桌期间）
   parentId: string | null = null;            // 绑定身体（召唤核心头颅）
   contactBurn: ContactBurn | null = null;    // 接触附加 burn（杨云红边二阶段）
+  /** 接触伤害覆盖（spec §5.10 杨云红边冲撞期间 contactDamageOverride=50）。
+   *  null 表示用 contactDamage；非 null 表示用 override 值。 */
+  contactDamageOverride: number | null = null;
   abstract readonly textureKey: string | null;
   abstract readonly proceduralKind: ProceduralKind | null;
   /** 三态机感知参数（spec §5.11.10，子类提供） */

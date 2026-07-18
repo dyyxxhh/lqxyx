@@ -721,11 +721,29 @@ export class CombatManager {
       const burnDebuff = enemy.contactBurn !== null
         ? { type: 'burn' as const, dps: enemy.contactBurn.dps, remainingMs: enemy.contactBurn.durationMs }
         : undefined;
+      // spec §5.10 杨云红边冲撞期间 contactDamageOverride=50
+      const effectiveDamage = enemy.contactDamageOverride ?? enemy.contactDamage;
       const instance: DamageInstance = burnDebuff !== undefined
-        ? { amount: enemy.contactDamage, category: 'melee', debuff: burnDebuff }
-        : { amount: enemy.contactDamage, category: 'melee' };
+        ? { amount: effectiveDamage, category: 'melee', debuff: burnDebuff }
+        : { amount: effectiveDamage, category: 'melee' };
       this.player.takeDamage(instance);
       enemy.contactCooldownMs = PLAYER_CONTACT_DAMAGE_COOLDOWN_MS;
+      // 击退（仅冲撞中的杨云红边触发）
+      if (enemy.kind === 'yangYunRed' && enemy.contactDamageOverride !== null) {
+        const elite = enemy as unknown as {
+          chargeState: 'idle' | 'windup' | 'charging';
+          chargeDirX: number;
+          chargeDirY: number;
+        };
+        if (elite.chargeState === 'charging') {
+          const knockbackPx = 80;
+          this.callbacks.onKnockback?.(
+            elite.chargeDirX * knockbackPx,
+            elite.chargeDirY * knockbackPx,
+            200,
+          );
+        }
+      }
     }
   }
 

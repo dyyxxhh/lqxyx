@@ -99,6 +99,11 @@ export class ForgottenSanityRunController {
   private isRunning = false;
   private isMoving = false;
 
+  // 击退状态（spec §5.10 杨云红边冲撞命中后的 200ms 推开效果）
+  private knockbackVx = 0;
+  private knockbackVy = 0;
+  private knockbackRemainingMs = 0;
+
   // 宝箱交互
   private readonly chestDecrypts = new Map<string, ChestDecrypt>();
   private readonly openedChests = new Set<string>();
@@ -182,6 +187,7 @@ export class ForgottenSanityRunController {
       onEnemyKilled: (enemy) => this.handleEnemyKilled(enemy),
       onEliteDefeated: () => this.handleEliteDefeated(),
       onMarkBodyOnMinimap: (bodyId, x, y) => this.scene.markBodyOnMinimap(bodyId, x, y),
+      onKnockback: (vx, vy, durationMs) => this.applyKnockback(vx, vy, durationMs),
     };
     this.combatManager = new CombatManager(this.player, callbacks, isWalkable);
     this.weaponCooldowns = new WeaponCooldowns();
@@ -271,6 +277,20 @@ export class ForgottenSanityRunController {
 
     this.elapsedMs = time - this.startTime;
 
+    // 击退位移（spec §5.10 杨云红边冲撞命中后的 200ms 推开效果）
+    if (this.knockbackRemainingMs > 0) {
+      const stepMs = Math.min(deltaMs, this.knockbackRemainingMs);
+      const remainBefore = this.knockbackRemainingMs;
+      this.knockbackRemainingMs -= stepMs;
+      const ratio = stepMs / remainBefore;
+      const dx = this.knockbackVx * ratio;
+      const dy = this.knockbackVy * ratio;
+      if (this.checkWalkable(this.playerX + dx, this.playerY)) this.playerX += dx;
+      if (this.checkWalkable(this.playerX, this.playerY + dy)) this.playerY += dy;
+      this.knockbackVx -= dx;
+      this.knockbackVy -= dy;
+    }
+
     // 1. 输入 → 移动
     this.handleMovement(deltaMs);
 
@@ -310,6 +330,15 @@ export class ForgottenSanityRunController {
 
     // 10. 撤离点检测
     this.checkExitProximity();
+  }
+
+  // ───────────────────────────────────────────────────────────────────
+  // 击退（spec §5.10 杨云红边冲撞命中后由 CombatManager 触发）
+  // ───────────────────────────────────────────────────────────────────
+  private applyKnockback(vx: number, vy: number, durationMs: number): void {
+    this.knockbackVx = vx;
+    this.knockbackVy = vy;
+    this.knockbackRemainingMs = durationMs;
   }
 
   // ───────────────────────────────────────────────────────────────────

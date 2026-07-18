@@ -30,7 +30,7 @@ const CHARGE_SPEED = 320;
 // spec §5.10 冲撞伤害 50：charging 态下由 CombatManager contact damage（contactDamage=22）
 // + 击退效果实现；此处常量保留作为 spec 数值参考（实际接触伤害由 CombatManager 处理）。
 const PHASE2_CHARGE_SPEED = 380;
-const PHASE2_CHARGE_INTERVAL_MS = 1800;
+export const PHASE2_CHARGE_INTERVAL_MS = 1500;
 
 // 幻影
 const CLONE_HP_THRESHOLD = 0.7;
@@ -228,6 +228,8 @@ export class YangYunRedEnemy extends Enemy {
 
   private updateCharge(deltaMs: number, ctx: EnemyUpdateContext, interval: number): void {
     if (this.chargeState === 'idle') {
+      // idle 用基础 contactDamage
+      this.contactDamageOverride = null;
       // 普通移动朝向玩家
       this.moveTowardPlayer(deltaMs, ctx);
       this.chargeTimer -= deltaMs;
@@ -244,13 +246,18 @@ export class YangYunRedEnemy extends Enemy {
         }
       }
     } else if (this.chargeState === 'windup') {
+      // windup 不冲撞
+      this.contactDamageOverride = null;
       this.chargeElapsed += deltaMs;
       if (this.chargeElapsed >= CHARGE_WINDUP_MS) {
         this.chargeState = 'charging';
+        // spec §5.10 进入 charging 态即激活冲撞伤害 50
+        this.contactDamageOverride = 50;
         this.chargeElapsed = 0;
       }
     } else {
-      // charging
+      // charging — spec §5.10 冲撞伤害 50
+      this.contactDamageOverride = 50;
       const speed = this.phase === 2 ? PHASE2_CHARGE_SPEED : CHARGE_SPEED;
       const seconds = deltaMs / 1000;
       this.x += this.chargeDirX * speed * seconds;
@@ -258,6 +265,7 @@ export class YangYunRedEnemy extends Enemy {
       this.chargeElapsed += deltaMs;
       if (this.chargeElapsed >= CHARGE_DURATION_MS) {
         this.chargeState = 'idle';
+        this.contactDamageOverride = null;
       }
     }
   }

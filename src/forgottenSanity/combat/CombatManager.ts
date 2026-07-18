@@ -100,6 +100,10 @@ export class CombatManager {
   private enemyCounter = 0;
   // plan 4: 投射物命中追踪（每枚投射物仅命中同一敌人一次）
   private readonly projectileHitTracker = new Map<string, Set<string>>();
+  // spec §5.11.7: 远房 4Hz 降级 — 玩家当前房间 + 邻接表 + 远房累计毫秒
+  private playerRoomId: string | null = null;
+  private adjacentRooms: Map<string, Set<string>> = new Map();
+  private readonly farRoomAccumMs = new Map<string, number>();
 
   constructor(
     player: PlayerCombat,
@@ -124,6 +128,16 @@ export class CombatManager {
 
   getPlayerPosition(): Vec2 {
     return this.playerPosition;
+  }
+
+  /** spec §5.11.7: 设置玩家当前所在房间 ID（用于远房 4Hz 降级判定）。 */
+  setPlayerRoomId(roomId: string | null): void {
+    this.playerRoomId = roomId;
+  }
+
+  /** spec §5.11.7: 设置房间邻接表（key=房间 ID，value=邻接房间 ID 集合，双向）。 */
+  setAdjacentRooms(map: Map<string, Set<string>>): void {
+    this.adjacentRooms = map;
   }
 
   addEnemy(enemy: Enemy): void {
@@ -490,8 +504,16 @@ export class CombatManager {
     this.player.tick(deltaMs);
     if (this.player.isDead) return;
 
-    // 2. 敌人 AI 更新（plan 4: 状态门控 — stun/root 跳过 AI，fear 逃离覆盖）
+    // 2. 敌人 AI 更新 — spec §5.11.7 远房 4Hz 降级
+    //    当前/邻接房间 60Hz；远房（非当前非邻接）4Hz（每 250ms 推进一次 250ms deltaMs）。
+    //    但召唤核心的召唤计时器（tickSummonTimer）和头颅复活检查（tickHeadRevive）
+    //    始终按真实时间推进（spec §5.9 A/C，远房降级例外）。
     const ctx = this.makeContext();
+    const playerRoomId = this.playerRoomId;
+    const adjacent = playerRoomId !== null
+      ? (this.adjacentRooms.get(playerRoomId) ?? new Set<string>())
+      : new Set<string>();
+
     for (const enemy of this.enemies) {
       if (enemy.dead) continue;
       if (enemy.invulnMs > 0) enemy.invulnMs = Math.max(0, enemy.invulnMs - deltaMs);
@@ -500,13 +522,46 @@ export class CombatManager {
       }
       enemy.tickStatus(deltaMs);
       if (enemy.dead) continue;
+
+      // spec §5.9 A: 召唤核心召唤计时器始终按真实时间推进（远房降级例外）
+      const summonExt = enemy as unknown as { tickSummonTimer?: (ms: number) => void };
+      if (typeof summonExt.tickSummonTimer === 'function') {
+        summonExt.tickSummonTimer(deltaMs);
+      }
+      // spec §5.9 C: 头颅复活检查也始终按真实 timeMs 推进（远房降级例外）
+      const reviveExt = enemy as unknown as {
+        tickHeadRevive?: (nowMs: number, spawnFn: (kind: EnemyKind, x: number, y: number, parentId: string) => Enemy | null) => number;
+      };
+      if (typeof reviveExt.tickHeadRevive === 'function') {
+        reviveExt.tickHeadRevive(this.timeMs, (kind, x, y, parentId) => {
+          return this.spawnEnemyAt(kind, x, y, parentId);
+        });
+      }
+
       if (enemy.isStunned() || enemy.isRooted()) continue;
       const fleeFrom = enemy.getFleeFrom();
       if (fleeFrom !== null) {
         this.moveEnemyFleeing(enemy, deltaMs, fleeFrom);
         continue;
       }
-      enemy.update(deltaMs, ctx);
+
+      // 双路：当前/邻接 60Hz；远房 4Hz（250ms/帧）
+      // playerRoomId 未设置（场景尚未同步房间）时按近房 60Hz 处理（向后兼容 + 首帧保护）
+      const enemyRoomId = enemy.currentRoomId;
+      const inNearRoom = playerRoomId === null
+        || enemyRoomId === playerRoomId
+        || (enemyRoomId !== null && adjacent.has(enemyRoomId));
+      if (inNearRoom) {
+        enemy.update(deltaMs, ctx);
+      } else {
+        const acc = (this.farRoomAccumMs.get(enemy.id) ?? 0) + deltaMs;
+        if (acc >= 250) {
+          enemy.update(250, ctx);
+          this.farRoomAccumMs.set(enemy.id, acc - 250);
+        } else {
+          this.farRoomAccumMs.set(enemy.id, acc);
+        }
+      }
     }
 
     // 3. 弹幕推进
@@ -525,20 +580,7 @@ export class CombatManager {
     // 6. 粉笔尘云视野减益
     this.updateVisionDebuff();
 
-    // 6b. spec §5.9 C: 头颅复活检查（按真实 timeMs，不受远房降级影响）
-    for (const enemy of this.enemies) {
-      if (enemy.dead || enemy.kind !== 'danYuxuanBody') continue;
-      const body = enemy as unknown as {
-        tickHeadRevive?: (nowMs: number, spawnFn: (kind: EnemyKind, x: number, y: number, parentId: string) => Enemy | null) => number;
-      };
-      if (typeof body.tickHeadRevive === 'function') {
-        body.tickHeadRevive(this.timeMs, (kind, x, y, parentId) => {
-          return this.spawnEnemyAt(kind, x, y, parentId);
-        });
-      }
-    }
-
-    // 7. 清理死亡敌人
+    // 7. 清理死亡敌人（含 onBodyDied / onBoundHeadDied）
     this.handleDeadEnemies();
   }
 

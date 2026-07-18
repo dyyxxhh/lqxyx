@@ -214,6 +214,8 @@ export abstract class Enemy implements EnemyViewMetadata {
   contactCooldownMs = 0;
   invulnMs = 0;                              // 无敌帧（桌椅翻桌期间）
   parentId: string | null = null;            // 绑定身体（召唤核心头颅）
+  /** spec §5.11.7: 当前所在房间 ID，用于远房 4Hz 降级判定。AI 跨门时由场景更新。 */
+  currentRoomId: string | null = null;
   contactBurn: ContactBurn | null = null;    // 接触附加 burn（杨云红边二阶段）
   /** 接触伤害覆盖（spec §5.10 杨云红边冲撞期间 contactDamageOverride=50）。
    *  null 表示用 contactDamage；非 null 表示用 override 值。 */

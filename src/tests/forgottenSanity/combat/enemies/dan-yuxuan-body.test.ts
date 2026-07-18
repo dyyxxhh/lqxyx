@@ -63,6 +63,8 @@ describe('DanYuxuanBodyEnemy 机制 A：30s 召唤血瞳头颅 (spec §5.9)', ()
   it('30s 后召唤 1 个 butYuxuanHeadBloodEye，距玩家 ≥ 200px', () => {
     const e = new DanYuxuanBodyEnemy('body1', 0, 0);
     const spawned: Enemy[] = [];
+    // spec §5.9 grill：召唤计时器由 tickSummonTimer 推进（update 不再递减）
+    e.tickSummonTimer(30000);
     e.update(30000, ctxStub({ playerPos: { x: 5000, y: 5000 }, onSpawn: (m) => spawned.push(m) }));
     expect(spawned.length).toBe(1);
     expect(spawned[0]!.kind).toBe('butYuxuanHeadBloodEye');
@@ -80,6 +82,7 @@ describe('DanYuxuanBodyEnemy 机制 A：30s 召唤血瞳头颅 (spec §5.9)', ()
       heads.push({ head, deadAtMs: null });
     }
     const spawned: Enemy[] = [];
+    e.tickSummonTimer(30000);
     e.update(30000, ctxStub({ playerPos: { x: 5000, y: 5000 }, onSpawn: (m) => spawned.push(m) }));
     expect(spawned.length).toBe(0);
   });
@@ -87,6 +90,7 @@ describe('DanYuxuanBodyEnemy 机制 A：30s 召唤血瞳头颅 (spec §5.9)', ()
   it('召唤的头颅 parentId 设置为身体 id（机制 D 链路）', () => {
     const e = new DanYuxuanBodyEnemy('body1', 0, 0);
     const spawned: Enemy[] = [];
+    e.tickSummonTimer(30000);
     e.update(30000, ctxStub({ playerPos: { x: 5000, y: 5000 }, onSpawn: (m) => spawned.push(m) }));
     expect(spawned[0]!.parentId).toBe('body1');
   });
@@ -129,12 +133,13 @@ describe('DanYuxuanBodyEnemy 机制 C：头颅死亡 20s 复活 (spec §5.9)', (
 
 describe('DanYuxuanBodyEnemy 召唤计时器不受降级影响 (spec §5.9 grill 补充)', () => {
   it('update 间隔不影响召唤总周期：30s 真实时间后召唤', () => {
-    // 模拟远房 4Hz 降级：每 250ms 一次 update，共 120 次 = 30s
+    // 模拟远房 4Hz 降级：每 250ms 一次 tickSummonTimer + update，共 120 次 = 30s
     const e = new DanYuxuanBodyEnemy('body1', 0, 0);
     const spawned: Enemy[] = [];
     let timeMs = 0;
     for (let i = 0; i < 120; i++) {
       timeMs += 250;
+      e.tickSummonTimer(250);  // 真实时间推进召唤计时器
       e.update(250, ctxStub({ playerPos: { x: 5000, y: 5000 }, timeMs, onSpawn: (m) => spawned.push(m) }));
     }
     expect(spawned.length).toBe(1);

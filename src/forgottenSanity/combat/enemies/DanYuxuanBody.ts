@@ -63,20 +63,24 @@ export class DanYuxuanBodyEnemy extends Enemy {
     });
   }
 
-  update(deltaMs: number, ctx: EnemyUpdateContext): void {
+  update(_deltaMs: number, ctx: EnemyUpdateContext): void {
     // 身体非攻击性，不走三态机；aiState 始终 idle。
-    // spec §5.9 grill 补充：召唤计时器始终 1Hz 真实时间推进，不受 §5.11.7 远房 4Hz 降级影响。
-    // 因此此处直接累加 deltaMs（CombatManager 调用时无论 60Hz/4Hz，deltaMs 都是真实流逝时间）。
-
+    // spec §5.9 grill 补充：召唤计时器由 CombatManager 通过 tickSummonTimer 始终按真实时间推进。
+    // 此处仅做触发判定（update 可能被远房降级为 4Hz，但触发检查无副作用）。
     // 机制 C：复活逻辑由 CombatManager 通过 tickHeadRevive 驱动（spec §5.9 C，按真实 timeMs 推进）。
-    // 此处仅推进召唤计时器。
 
-    // 机制 A：召唤血瞳头颅（30s 真实时间）
-    this.summonTimer -= deltaMs;
+    // 机制 A：召唤血瞳头颅（30s 真实时间，由 tickSummonTimer 推进 summonTimer）
     if (this.summonTimer <= 0) {
       this.summonTimer = SUMMON_INTERVAL_MS;
       this.trySummon(ctx);
     }
+  }
+
+  /** spec §5.9 A: 召唤计时器始终按真实时间推进（远房降级例外）。
+   *  由 CombatManager.update 每帧调用，不受 4Hz 降级影响。 */
+  tickSummonTimer(deltaMs: number): void {
+    if (this.dead) return;
+    this.summonTimer -= deltaMs;
   }
 
   private trySummon(ctx: EnemyUpdateContext): void {

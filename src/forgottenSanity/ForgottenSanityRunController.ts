@@ -272,7 +272,24 @@ export class ForgottenSanityRunController {
     this.keyK.on('down', () => this.onUltimatePressed());
     this.keyH.on('down', () => this.onInteractPressed());
 
+    // spec §5.11.7: 派生 adjacentRooms 并传入 CombatManager（远房 4Hz 降级判定）
+    this.combatManager.setAdjacentRooms(this.deriveAdjacentRooms(this.manifest));
+
     this.startTime = this.scene.time.now;
+  }
+
+  /** spec §5.11.7: 由 corridor 的 fromRoomId/toRoomId 派生双向邻接表。 */
+  private deriveAdjacentRooms(manifest: ForgottenSanityMapManifest): Map<string, Set<string>> {
+    const map = new Map<string, Set<string>>();
+    for (const c of manifest.corridors) {
+      let s1 = map.get(c.fromRoomId);
+      if (s1 === undefined) { s1 = new Set(); map.set(c.fromRoomId, s1); }
+      s1.add(c.toRoomId);
+      let s2 = map.get(c.toRoomId);
+      if (s2 === undefined) { s2 = new Set(); map.set(c.toRoomId, s2); }
+      s2.add(c.fromRoomId);
+    }
+    return map;
   }
 
   // ───────────────────────────────────────────────────────────────────
@@ -441,6 +458,11 @@ export class ForgottenSanityRunController {
     if (col >= 0 && col < 5 && row >= 0 && row < 4) {
       this.exploredCells.add(row * cellCols + col);
     }
+    // spec §5.11.7: 同步玩家当前房间 ID 给 CombatManager（远房降级判定）
+    const currentRoom = this.manifest.rooms.find(
+      (r) => rectContains(r.bounds, { x: this.playerX, y: this.playerY }),
+    );
+    this.combatManager.setPlayerRoomId(currentRoom?.id ?? null);
   }
 
   // ───────────────────────────────────────────────────────────────────

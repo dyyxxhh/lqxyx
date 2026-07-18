@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { CombatManager, type IsWalkableFn, type CombatCallbacks } from '../../../forgottenSanity/combat/CombatManager';
 import { PlayerCombat } from '../../../forgottenSanity/combat/PlayerCombat';
-import { Enemy, registerEnemyKind, type EnemyUpdateContext, type Projectile, type ZoneEffect } from '../../../forgottenSanity/combat/Enemy';
+import { Enemy, registerEnemyKind, type EnemyUpdateContext, type Projectile, type ZoneEffect, createCombatRng } from '../../../forgottenSanity/combat/Enemy';
 import { WEAK_PUNCH_DAMAGE } from '../../../forgottenSanity/combat/DamageType';
 
 class DummyEnemy extends Enemy {
@@ -283,5 +283,27 @@ describe('CombatManager 噪声传递 (grill 2026-07-17，供怪物三态机)', (
     // 默认 lastNoiseRadius=0
     mgr.update(16);
     expect(enemy.lastSeenContext!.playerNoise).toBeNull();
+  });
+});
+
+describe('player projectile wall collision (spec §3.2 rangedPiercing 遇墙停止)', () => {
+  it('projectile is removed when next step is not walkable', () => {
+    const isWalkable = (x: number, _y: number): boolean => x < 200;
+    const cm = new CombatManager(new PlayerCombat(), {}, isWalkable, createCombatRng(1));
+    cm.setPlayerPosition(0, 0);
+    cm.spawnPlayerProjectile({
+      id: 'p1', x: 100, y: 0,
+      vx: 400, vy: 0, speed: 400,
+      damage: 10, category: 'melee',
+      pierceRemaining: 1, remainingMs: 100000, radius: 8,
+      proceduralKind: 'rulerShard',
+    });
+    cm.update(16);
+    // 投射物推进 ~6.4px → 仍 walkable (106.4 < 200)
+    cm.update(16);
+    // 多帧推进直到 x ≥ 200
+    for (let i = 0; i < 100; i++) cm.update(16);
+    // 投射物应已被墙消除（remainingMs 仍有大量余额，证明是墙导致消除而非超时）
+    expect(cm.playerProjectiles.length).toBe(0);
   });
 });

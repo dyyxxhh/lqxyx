@@ -318,8 +318,15 @@ export class CombatManager {
       const ux = p.vx / p.speed;
       const uy = p.vy / p.speed;
       for (let s = 0; s < steps; s++) {
-        p.x += ux * stepDist;
-        p.y += uy * stepDist;
+        const nextX = p.x + ux * stepDist;
+        const nextY = p.y + uy * stepDist;
+        // spec §3.2: rangedPiercing 遇墙停止 — 下一步不可走则立即移除投射物
+        if (!this.isWalkable(nextX, nextY)) {
+          p.remainingMs = 0;
+          break;
+        }
+        p.x = nextX;
+        p.y = nextY;
         p.remainingMs -= stepDt;
         let hitSet = this.projectileHitTracker.get(p.id);
         if (hitSet === undefined) {

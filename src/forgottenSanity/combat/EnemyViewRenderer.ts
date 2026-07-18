@@ -2,13 +2,23 @@
 // 集中式程序绘制渲染器。仅此文件 import type Phaser（编译期擦除）。
 // spec §5.5-§5.11 / Task 15：贴图敌人 scene.add.image；程序绘制敌人 scene.add.graphics；
 // 血瞳头颅叠加红眼+血描边；幻影用 tint。
+// spec §5.11.8（Task 10）：三态玩家可见反馈（头顶图标 + chase 红 tint）。
 import type Phaser from 'phaser';
 import type { Enemy, Projectile, ZoneEffect, ProceduralKind } from './Enemy';
+
+// spec §5.11.8: 三态头顶图标常量
+const STATE_ICON_OFFSET_Y = -12;
+const STATE_ICON_DEPTH = 11;
+const STATE_ICON_COLOR_ALERT = 0xffffff;
+const STATE_ICON_COLOR_CHASE = 0xff4444;
+const STATE_ICON_COLOR_SEARCH = 0xffffff;
+const CHASE_TINT = 0xff8888;
 
 interface EnemyView {
   enemyId: string;
   image: Phaser.GameObjects.Image | null;
   graphics: Phaser.GameObjects.Graphics | null;
+  stateIcon: Phaser.GameObjects.Text | null;
 }
 
 export class EnemyViewRenderer {
@@ -46,7 +56,16 @@ export class EnemyViewRenderer {
       this.drawBloodEyeOverlay(graphics, enemy.x, enemy.y);
     }
 
-    this.views.set(enemy.id, { enemyId: enemy.id, image, graphics });
+    // spec §5.11.8: 三态头顶图标
+    const stateIcon = this.createStateIcon(enemy);
+    if (stateIcon !== null) stateIcon.setDepth(STATE_ICON_DEPTH);
+
+    // spec §5.11.8: chase 红 tint
+    if (enemy.aiState === 'chase' && image !== null) {
+      image.setTint(CHASE_TINT);
+    }
+
+    this.views.set(enemy.id, { enemyId: enemy.id, image, graphics, stateIcon });
   }
 
   updateView(enemy: Enemy): void {
@@ -62,6 +81,28 @@ export class EnemyViewRenderer {
         this.drawBloodEyeOverlay(view.graphics, enemy.x, enemy.y);
       }
     }
+
+    // spec §5.11.8: 头顶图标刷新（销毁旧图标，按当前 aiState 重建）
+    if (view.stateIcon !== null) {
+      view.stateIcon.destroy();
+      view.stateIcon = null;
+    }
+    const newIcon = this.createStateIcon(enemy);
+    if (newIcon !== null) {
+      newIcon.setDepth(STATE_ICON_DEPTH);
+      view.stateIcon = newIcon;
+    } else {
+      view.stateIcon = null;
+    }
+
+    // spec §5.11.8: chase tint 刷新（位置已更新）
+    if (view.image !== null) {
+      if (enemy.aiState === 'chase') {
+        view.image.setTint(CHASE_TINT);
+      } else if (enemy.tint === null) {
+        view.image.clearTint();
+      }
+    }
   }
 
   destroyView(enemyId: string): void {
@@ -69,6 +110,7 @@ export class EnemyViewRenderer {
     if (view === undefined) return;
     view.image?.destroy();
     view.graphics?.destroy();
+    view.stateIcon?.destroy();
     this.views.delete(enemyId);
   }
 
@@ -80,6 +122,7 @@ export class EnemyViewRenderer {
     for (const view of this.views.values()) {
       view.image?.destroy();
       view.graphics?.destroy();
+      view.stateIcon?.destroy();
     }
     this.views.clear();
   }
@@ -124,6 +167,34 @@ export class EnemyViewRenderer {
     // 血色描边
     g.lineStyle(2, 0x660000, 1);
     g.strokeCircle(0, 0, 24);
+  }
+
+  // spec §5.11.8: 三态头顶图标（idle=null / alert=? / chase=! / search=…）
+  private createStateIcon(enemy: Enemy): Phaser.GameObjects.Text | null {
+    const iconChar: string | null =
+      enemy.aiState === 'alert' ? '?' :
+      enemy.aiState === 'chase' ? '!' :
+      enemy.aiState === 'search' ? '…' : null;
+    if (iconChar === null) return null;
+    const color =
+      enemy.aiState === 'chase' ? STATE_ICON_COLOR_CHASE :
+      enemy.aiState === 'alert' ? STATE_ICON_COLOR_ALERT :
+      STATE_ICON_COLOR_SEARCH;
+    const textStyle = {
+      fontFamily: 'monospace',
+      fontSize: '10px',
+      color: `#${color.toString(16).padStart(6, '0')}`,
+      stroke: '#000000',
+      strokeThickness: 2,
+    } as Phaser.Types.GameObjects.Text.TextStyle;
+    const text = this.scene.add.text(
+      enemy.x,
+      enemy.y + STATE_ICON_OFFSET_Y,
+      iconChar,
+      textStyle,
+    );
+    text.setOrigin(0.5, 0.5);
+    return text;
   }
 
   drawProjectile(p: Projectile): Phaser.GameObjects.Graphics | Phaser.GameObjects.Image {

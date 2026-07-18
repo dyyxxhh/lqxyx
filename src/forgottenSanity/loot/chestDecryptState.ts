@@ -1,7 +1,7 @@
 // src/forgottenSanity/loot/chestDecryptState.ts
-// 宝箱破译纯状态机：hold/release 无回退 + 4 锁扣 0.25/0.5/0.75/1.0。
-// 纯 TS，无 Phaser import。spec §7.1/§7.2，plan 5 Task 4。
-export type ChestDecryptPhase = 'idle' | 'decrypting' | 'opening' | 'completed';
+// 宝箱破译纯状态机：hold/release 回退到上一锁扣 + 4 锁扣 0.25/0.5/0.75/1.0。
+// 纯 TS，无 Phaser import。spec §7.1/§7.2。
+export type ChestDecryptPhase = 'idle' | 'decrypting' | 'opened' | 'completed';
 
 export const CHEST_DECRYPT_TOTAL_MS = 2500;
 export const CHEST_DECRYPT_LOCK_COUNT = 4;
@@ -52,9 +52,13 @@ export class ChestDecryptState {
 
   advance(deltaMs: number): void {
     if (deltaMs <= 0) return;
-    if (this.phase === 'decrypting' && this.holding) {
-      this.advanceDecrypt(deltaMs);
-    } else if (this.phase === 'opening') {
+    if (this.phase === 'decrypting') {
+      if (this.holding) {
+        this.advanceDecrypt(deltaMs);
+      } else {
+        this.decayProgress(deltaMs);
+      }
+    } else if (this.phase === 'opened') {
       this.advanceOpening(deltaMs);
     }
   }
@@ -90,10 +94,20 @@ export class ChestDecryptState {
       this.callbacks.onLockBroken?.(this.brokenLocks - 1);
     }
     if (this.progress >= 1) {
-      this.phase = 'opening';
+      this.phase = 'opened';
       this.holding = false;
       this.callbacks.onOpenStart?.();
     }
+  }
+
+  /** spec §7.1/§7.2: 松开时以 1/2500 per ms 回退，到上一个已崩开锁扣处停止。 */
+  private decayProgress(deltaMs: number): void {
+    const lastLock = Math.floor(this.progress * CHEST_DECRYPT_LOCK_COUNT) / CHEST_DECRYPT_LOCK_COUNT;
+    const decayed = this.progress - deltaMs / CHEST_DECRYPT_TOTAL_MS;
+    this.progress = Math.max(lastLock, decayed);
+    if (this.progress < 0) this.progress = 0;
+    // elapsedMs 同步回退到当前 progress 对应的时间
+    this.elapsedMs = this.progress * CHEST_DECRYPT_TOTAL_MS;
   }
 
   private advanceOpening(deltaMs: number): void {

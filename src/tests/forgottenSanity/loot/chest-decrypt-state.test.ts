@@ -45,27 +45,26 @@ describe('ChestDecryptState lifecycle', () => {
   });
 });
 
-describe('ChestDecryptState hold/release (no regression, spec §7.1)', () => {
-  it('release pauses progress without regression', () => {
+describe('ChestDecryptState hold/release (spec §7.1 — release decays)', () => {
+  it('release causes progress to decay', () => {
     const s = new ChestDecryptState();
     s.start();
-    s.advance(500); // progress 0.2
-    expect(s.snapshot().progress).toBeCloseTo(0.2, 3);
+    s.advance(500); // progress 0.2 (no lock broken)
     s.release();
-    s.advance(1000); // holding=false → 不推进
-    expect(s.snapshot().progress).toBeCloseTo(0.2, 3);
+    s.advance(1000); // holding=false → decay 0.2-0.4 → 0 (clamp at 0)
+    expect(s.snapshot().progress).toBe(0);
     expect(s.snapshot().holding).toBe(false);
   });
 
-  it('hold resumes progress from where it paused', () => {
+  it('hold resumes progress after decay', () => {
     const s = new ChestDecryptState();
     s.start();
     s.advance(500); // 0.2
     s.release();
-    s.advance(1000); // 不动
+    s.advance(1000); // decay to 0
     s.hold();
-    s.advance(500); // 0.2 + 0.2 = 0.4
-    expect(s.snapshot().progress).toBeCloseTo(0.4, 3);
+    s.advance(500); // 0.2
+    expect(s.snapshot().progress).toBeCloseTo(0.2, 3);
     expect(s.snapshot().holding).toBe(true);
   });
 
@@ -127,33 +126,85 @@ describe('ChestDecryptState progress & lock milestones (spec §7.1)', () => {
 });
 
 describe('ChestDecryptState completion (spec §7.1/§7.3)', () => {
-  it('progress reaches 1.0 -> phase opening + onOpenStart', () => {
+  it('progress reaches 1.0 -> phase opened + onOpenStart', () => {
     const onOpenStart = vi.fn();
     const s = new ChestDecryptState({ onOpenStart });
     s.start();
     s.advance(2500);
-    expect(s.snapshot().phase).toBe('opening');
+    expect(s.snapshot().phase).toBe('opened');
     expect(onOpenStart).toHaveBeenCalledTimes(1);
   });
 
-  it('opening -> completed after CHEST_DECRYPT_OPEN_DURATION_MS', () => {
+  it('opened -> completed after CHEST_DECRYPT_OPEN_DURATION_MS', () => {
     const onCompleted = vi.fn();
     const s = new ChestDecryptState({ onCompleted });
     s.start();
-    s.advance(2500); // opening
+    s.advance(2500); // opened
     expect(onCompleted).not.toHaveBeenCalled();
     s.advance(CHEST_DECRYPT_OPEN_DURATION_MS);
     expect(s.snapshot().phase).toBe('completed');
     expect(onCompleted).toHaveBeenCalledTimes(1);
   });
 
-  it('holding is false during opening/completed', () => {
+  it('holding is false during opened/completed', () => {
     const s = new ChestDecryptState();
     s.start();
     s.advance(2500);
     expect(s.snapshot().holding).toBe(false);
     s.advance(CHEST_DECRYPT_OPEN_DURATION_MS);
     expect(s.snapshot().holding).toBe(false);
+  });
+});
+
+describe('ChestDecryptState decay (spec §7.1/§7.2 decayRate)', () => {
+  it('release causes progress to decay at 1/2500 per ms', () => {
+    const s = new ChestDecryptState();
+    s.start();
+    s.advance(625); // 0.25 → lock 0 broken
+    expect(s.snapshot().brokenLocks).toBe(1);
+    s.release();
+    s.advance(625); // decay 0.25 → 0.0 (锁定在 0.25 不下退)
+    expect(s.snapshot().progress).toBeCloseTo(0.25, 4);
+  });
+
+  it('decay stops at last broken lock milestone', () => {
+    const s = new ChestDecryptState();
+    s.start();
+    s.advance(1250); // 0.5 → locks 0,1 broken
+    s.release();
+    s.advance(10000); // 大幅回退
+    expect(s.snapshot().progress).toBeCloseTo(0.5, 4);
+  });
+
+  it('decay does not regress below 0 when no lock broken', () => {
+    const s = new ChestDecryptState();
+    s.start();
+    s.advance(300); // 0.12, no lock
+    s.release();
+    s.advance(5000);
+    expect(s.snapshot().progress).toBe(0);
+    expect(s.snapshot().brokenLocks).toBe(0);
+  });
+
+  it('hold after decay resumes forward progress', () => {
+    const s = new ChestDecryptState();
+    s.start();
+    s.advance(900); // 0.36
+    s.release();
+    s.advance(500); // decay to 0.25 lock
+    expect(s.snapshot().progress).toBeCloseTo(0.25, 4);
+    s.hold();
+    s.advance(625); // 0.25 + 0.25 = 0.5
+    expect(s.snapshot().progress).toBeCloseTo(0.5, 4);
+  });
+});
+
+describe('ChestDecryptState phase name opened (spec §7.2)', () => {
+  it('uses "opened" not "opening" after progress reaches 1.0', () => {
+    const s = new ChestDecryptState();
+    s.start();
+    s.advance(2500);
+    expect(s.snapshot().phase).toBe('opened');
   });
 });
 

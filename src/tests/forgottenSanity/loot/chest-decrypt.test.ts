@@ -200,7 +200,7 @@ describe('ChestDecrypt update advances state', () => {
     const cd = new ChestDecrypt({ scene: phaserScene(scene), x: 0, y: 0, lootItems: [] });
     fireKey(scene, 'keydown-F');
     cd.update(CHEST_DECRYPT_TOTAL_MS);
-    expect(cd.snapshot().phase).toBe('opening');
+    expect(cd.snapshot().phase).toBe('opened');
     cd.destroy();
   });
 });

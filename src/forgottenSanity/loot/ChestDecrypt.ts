@@ -159,7 +159,7 @@ export class ChestDecrypt {
 
     // 进度弧 r100，0°→360° 随 progress 填充，金色描边。
     this.arcGraphics.clear();
-    if (snap.phase === 'decrypting' || snap.phase === 'opening') {
+    if (snap.phase === 'decrypting' || snap.phase === 'opened') {
       this.arcGraphics.lineStyle(4, 0xffd700, 1);
       this.arcGraphics.beginPath();
       this.arcGraphics.arc(
@@ -193,7 +193,7 @@ export class ChestDecrypt {
 
     // 粒子 16 个，r120-150 漂浮，1s 寿命循环。
     this.particleGraphics.clear();
-    if (snap.phase === 'decrypting' || snap.phase === 'opening') {
+    if (snap.phase === 'decrypting' || snap.phase === 'opened') {
       const cycle = (snap.elapsedMs % PARTICLE_LIFETIME_MS) / PARTICLE_LIFETIME_MS;
       const spin = cycle * Math.PI * 2;
       for (let i = 0; i < PARTICLE_COUNT; i++) {

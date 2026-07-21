@@ -4,6 +4,7 @@ import {
   isUpgradesState,
   loadStashState,
   loadUpgradesState,
+  loadTyped,
   FORGOTTEN_SANITY_STASH_STORAGE_KEY,
   FORGOTTEN_SANITY_UPGRADES_STORAGE_KEY,
 } from '../../../forgottenSanity/state/forgottenSanityState';
@@ -68,6 +69,109 @@ describe('H4: loadStashState fallback on invalid', () => {
     });
     const result = loadUpgradesState();
     expect(result.status).toBe('invalid');
+    vi.unstubAllGlobals();
+  });
+});
+
+describe('H2: schemaVersion migration framework', () => {
+  it('returns version-mismatch when no migration provided', () => {
+    vi.stubGlobal('localStorage', {
+      getItem: () => JSON.stringify({ schemaVersion: 0, items: [] }),
+      setItem: () => {},
+      removeItem: () => {},
+    });
+    const result = loadTyped(
+      'test.key',
+      1,
+      (s): s is { schemaVersion: number; items: unknown[] } =>
+        typeof s === 'object' && s !== null && (s as Record<string, unknown>).schemaVersion === 1,
+      () => ({ schemaVersion: 1, items: [] }),
+    );
+    expect(result.status).toBe('invalid');
+    expect(result.reason).toBe('version-mismatch');
+    vi.unstubAllGlobals();
+  });
+
+  it('applies migration when provided', () => {
+    vi.stubGlobal('localStorage', {
+      getItem: () => JSON.stringify({ schemaVersion: 0, items: [] }),
+      setItem: () => {},
+      removeItem: () => {},
+    });
+    const migrations = new Map([
+      [0, (s: unknown) => { const obj = s as Record<string, unknown>; return { ...obj, schemaVersion: 1 }; }],
+    ]);
+    const result = loadTyped(
+      'test.key',
+      1,
+      (s): s is { schemaVersion: number; items: unknown[] } =>
+        typeof s === 'object' && s !== null && (s as Record<string, unknown>).schemaVersion === 1,
+      () => ({ schemaVersion: 1, items: [] }),
+      migrations,
+    );
+    expect(result.status).toBe('ok');
+    expect(result.state.schemaVersion).toBe(1);
+    vi.unstubAllGlobals();
+  });
+
+  it('returns migration-failed when migration throws', () => {
+    vi.stubGlobal('localStorage', {
+      getItem: () => JSON.stringify({ schemaVersion: 0, items: [] }),
+      setItem: () => {},
+      removeItem: () => {},
+    });
+    const migrations = new Map([
+      [0, () => { throw new Error('migration boom'); }],
+    ]);
+    const result = loadTyped(
+      'test.key',
+      1,
+      (s): s is { schemaVersion: number; items: unknown[] } =>
+        typeof s === 'object' && s !== null && (s as Record<string, unknown>).schemaVersion === 1,
+      () => ({ schemaVersion: 1, items: [] }),
+      migrations,
+    );
+    expect(result.status).toBe('invalid');
+    expect(result.reason).toBe('migration-failed');
+    vi.unstubAllGlobals();
+  });
+
+  it('returns migration-failed when migrated state fails validation', () => {
+    vi.stubGlobal('localStorage', {
+      getItem: () => JSON.stringify({ schemaVersion: 0, items: [] }),
+      setItem: () => {},
+      removeItem: () => {},
+    });
+    const migrations = new Map([
+      [0, (s: unknown) => s], // 不改 schemaVersion，验证会失败
+    ]);
+    const result = loadTyped(
+      'test.key',
+      1,
+      (s): s is { schemaVersion: number; items: unknown[] } =>
+        typeof s === 'object' && s !== null && (s as Record<string, unknown>).schemaVersion === 1,
+      () => ({ schemaVersion: 1, items: [] }),
+      migrations,
+    );
+    expect(result.status).toBe('invalid');
+    expect(result.reason).toBe('migration-failed');
+    vi.unstubAllGlobals();
+  });
+
+  it('existing callers without migrations param still work', () => {
+    // 验证 migrations 是可选参数，现有调用方无需改动
+    vi.stubGlobal('localStorage', {
+      getItem: () => null,
+      setItem: () => {},
+      removeItem: () => {},
+    });
+    const result = loadTyped(
+      'test.key',
+      1,
+      (s): s is { schemaVersion: number } => typeof s === 'object' && s !== null,
+      () => ({ schemaVersion: 1 }),
+    );
+    expect(result.status).toBe('ok');
     vi.unstubAllGlobals();
   });
 });

@@ -52,6 +52,19 @@ export type ForgottenSanityLoadResult<T> =
   | { readonly status: 'empty'; readonly state: T }
   | { readonly status: 'invalid'; readonly reason: ForgottenSanityInvalidReason; readonly state: T };
 
+// H2: schemaVersion 迁移框架类型
+// LoadResult 与 ForgottenSanityLoadResult 区别：成功统一为 'ok'（合并 'valid'/'empty'），
+// reason 增加 'migration-failed'。loadTyped 导出版本使用此类型，便于迁移场景。
+export type LoadInvalidReason = ForgottenSanityInvalidReason | 'migration-failed';
+
+export type LoadResult<T> =
+  | { readonly status: 'ok'; readonly state: T }
+  | { readonly status: 'invalid'; readonly reason: LoadInvalidReason; readonly state: T };
+
+export type MigrationFn<S> = (state: unknown) => S;
+
+const NO_MIGRATIONS: Map<number, MigrationFn<unknown>> = new Map();
+
 export type GrantStarterPackResult =
   | { readonly granted: true; readonly stash: ForgottenSanityStashState; readonly progress: ForgottenSanityProgressState }
   | { readonly granted: false; readonly stash: ForgottenSanityStashState; readonly progress: ForgottenSanityProgressState };
@@ -105,7 +118,7 @@ function isProgressState(value: unknown): value is ForgottenSanityProgressState 
   return isRecord(value) && typeof value.starterPackGranted === 'boolean';
 }
 
-function loadTyped<T>(
+function loadTypedInternal<T>(
   storage: Storage,
   key: string,
   guard: (value: unknown) => value is T,
@@ -133,6 +146,55 @@ function loadTyped<T>(
   return { status: 'valid', state: parsed };
 }
 
+/**
+ * H2: schemaVersion 迁移框架导出版本。
+ * - 使用全局 localStorage（不接收 storage 参数，测试用 vi.stubGlobal('localStorage', ...)）
+ * - 成功状态统一为 'ok'（合并原 'valid'/'empty'）
+ * - schemaVersion 不匹配时查 migrations，存在则迁移 + 二次 validate
+ * - migrations 是可选参数，默认 NO_MIGRATIONS（现有 v1→v1 identity，无需迁移）
+ */
+export function loadTyped<S>(
+  key: string,
+  currentVersion: number,
+  validate: (s: unknown) => s is S,
+  fallback: () => S,
+  migrations: Map<number, MigrationFn<unknown>> = NO_MIGRATIONS,
+): LoadResult<S> {
+  const raw = localStorage.getItem(key);
+  if (raw === null) {
+    return { status: 'ok', state: fallback() };
+  }
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return { status: 'invalid', reason: 'corrupt-json', state: fallback() };
+  }
+  if (!isRecord(parsed)) {
+    return { status: 'invalid', reason: 'invalid-shape', state: fallback() };
+  }
+  if (parsed.schemaVersion !== currentVersion) {
+    const migrate = migrations.get(parsed.schemaVersion as number);
+    if (!migrate) {
+      return { status: 'invalid', reason: 'version-mismatch', state: fallback() };
+    }
+    let migrated: unknown;
+    try {
+      migrated = migrate(parsed);
+    } catch {
+      return { status: 'invalid', reason: 'migration-failed', state: fallback() };
+    }
+    if (!validate(migrated)) {
+      return { status: 'invalid', reason: 'migration-failed', state: fallback() };
+    }
+    return { status: 'ok', state: migrated };
+  }
+  if (!validate(parsed)) {
+    return { status: 'invalid', reason: 'invalid-shape', state: fallback() };
+  }
+  return { status: 'ok', state: parsed };
+}
+
 export function createDefaultStashState(): ForgottenSanityStashState {
   return { schemaVersion: FORGOTTEN_SANITY_SCHEMA_VERSION, sanity: 0, items: [] };
 }
@@ -153,19 +215,19 @@ export function createDefaultProgressState(): ForgottenSanityProgressState {
 }
 
 export function loadStashState(storage: Storage = localStorage): ForgottenSanityLoadResult<ForgottenSanityStashState> {
-  return loadTyped(storage, FORGOTTEN_SANITY_STASH_STORAGE_KEY, isStashState, createDefaultStashState);
+  return loadTypedInternal(storage, FORGOTTEN_SANITY_STASH_STORAGE_KEY, isStashState, createDefaultStashState);
 }
 
 export function loadUpgradesState(storage: Storage = localStorage): ForgottenSanityLoadResult<ForgottenSanityUpgradesState> {
-  return loadTyped(storage, FORGOTTEN_SANITY_UPGRADES_STORAGE_KEY, isUpgradesState, createDefaultUpgradesState);
+  return loadTypedInternal(storage, FORGOTTEN_SANITY_UPGRADES_STORAGE_KEY, isUpgradesState, createDefaultUpgradesState);
 }
 
 export function loadBestState(storage: Storage = localStorage): ForgottenSanityLoadResult<ForgottenSanityBestState> {
-  return loadTyped(storage, FORGOTTEN_SANITY_BEST_STORAGE_KEY, isBestState, createDefaultBestState);
+  return loadTypedInternal(storage, FORGOTTEN_SANITY_BEST_STORAGE_KEY, isBestState, createDefaultBestState);
 }
 
 export function loadProgressState(storage: Storage = localStorage): ForgottenSanityLoadResult<ForgottenSanityProgressState> {
-  return loadTyped(storage, FORGOTTEN_SANITY_PROGRESS_STORAGE_KEY, isProgressState, createDefaultProgressState);
+  return loadTypedInternal(storage, FORGOTTEN_SANITY_PROGRESS_STORAGE_KEY, isProgressState, createDefaultProgressState);
 }
 
 export function saveStashState(state: ForgottenSanityStashState, storage: Storage = localStorage): void {

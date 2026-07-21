@@ -233,6 +233,33 @@ describe('ChestDecryptState reset', () => {
   });
 });
 
+describe('ChestDecryptState decay red flash (spec §4.3)', () => {
+  it('default progressArcColor is gold 0xffd700', () => {
+    const s = new ChestDecryptState();
+    expect(s.getProgressArcColor()).toBe(0xffd700);
+  });
+
+  it('decay sets progressArcColor to red 0xff4444', () => {
+    const s = new ChestDecryptState();
+    s.start();
+    s.advance(1000); // holding=true → progress 0.4
+    s.release();
+    s.advance(100); // holding=false → decay → red flash
+    expect(s.getProgressArcColor()).toBe(0xff4444);
+  });
+
+  it('progressArcColor restores to gold 0xffd700 after 200ms', () => {
+    const s = new ChestDecryptState();
+    s.start();
+    s.advance(1000); // progress 0.4
+    s.release();
+    s.advance(100); // decay → red, flash=200ms
+    s.hold();
+    s.advance(200); // holding=true, flash expires → gold
+    expect(s.getProgressArcColor()).toBe(0xffd700);
+  });
+});
+
 // Static type asserts
 function _compileTimeAssert(phase: ChestDecryptPhase): void {
   void phase;

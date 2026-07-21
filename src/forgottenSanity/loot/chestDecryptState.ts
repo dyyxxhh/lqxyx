@@ -7,12 +7,18 @@ export const CHEST_DECRYPT_TOTAL_MS = 2500;
 export const CHEST_DECRYPT_LOCK_COUNT = 4;
 export const CHEST_DECRYPT_OPEN_DURATION_MS = 600;
 
+// spec §4.3: decay 触发时进度弧变红 0xff4444 持续 200ms，然后恢复金色 0xffd700。
+export const CHEST_DECRYPT_GOLD_COLOR = 0xffd700;
+export const CHEST_DECRYPT_RED_FLASH_COLOR = 0xff4444;
+export const CHEST_DECRYPT_RED_FLASH_DURATION_MS = 200;
+
 export interface ChestDecryptSnapshot {
   readonly phase: ChestDecryptPhase;
   readonly progress: number;
   readonly brokenLocks: number;
   readonly elapsedMs: number;
   readonly holding: boolean;
+  readonly progressArcColor: number;
 }
 
 export interface ChestDecryptCallbacks {
@@ -30,6 +36,8 @@ export class ChestDecryptState {
   private brokenLocks = 0;
   private holding = false;
   private openElapsedMs = 0;
+  private progressArcColor: number = CHEST_DECRYPT_GOLD_COLOR;
+  private redFlashRemainingMs = 0;
   private readonly callbacks: ChestDecryptCallbacks;
 
   constructor(callbacks: ChestDecryptCallbacks = {}) {
@@ -52,6 +60,7 @@ export class ChestDecryptState {
 
   advance(deltaMs: number): void {
     if (deltaMs <= 0) return;
+    this.updateRedFlash(deltaMs);
     if (this.phase === 'decrypting') {
       if (this.holding) {
         this.advanceDecrypt(deltaMs);
@@ -63,6 +72,10 @@ export class ChestDecryptState {
     }
   }
 
+  getProgressArcColor(): number {
+    return this.progressArcColor;
+  }
+
   reset(): void {
     this.phase = 'idle';
     this.progress = 0;
@@ -70,6 +83,8 @@ export class ChestDecryptState {
     this.brokenLocks = 0;
     this.holding = false;
     this.openElapsedMs = 0;
+    this.progressArcColor = CHEST_DECRYPT_GOLD_COLOR;
+    this.redFlashRemainingMs = 0;
   }
 
   snapshot(): ChestDecryptSnapshot {
@@ -79,6 +94,7 @@ export class ChestDecryptState {
       brokenLocks: this.brokenLocks,
       elapsedMs: this.elapsedMs,
       holding: this.holding,
+      progressArcColor: this.progressArcColor,
     };
   }
 
@@ -108,6 +124,22 @@ export class ChestDecryptState {
     if (this.progress < 0) this.progress = 0;
     // elapsedMs 同步回退到当前 progress 对应的时间
     this.elapsedMs = this.progress * CHEST_DECRYPT_TOTAL_MS;
+    // spec §4.3: decay 触发时进度弧变红 0xff4444，200ms 后恢复金色。
+    this.redFlashRemainingMs = CHEST_DECRYPT_RED_FLASH_DURATION_MS;
+    this.progressArcColor = CHEST_DECRYPT_RED_FLASH_COLOR;
+  }
+
+  /** spec §4.3: 推进红闪计时器，到期后恢复金色。 */
+  private updateRedFlash(deltaMs: number): void {
+    if (this.redFlashRemainingMs > 0) {
+      this.redFlashRemainingMs -= deltaMs;
+      if (this.redFlashRemainingMs <= 0) {
+        this.redFlashRemainingMs = 0;
+        this.progressArcColor = CHEST_DECRYPT_GOLD_COLOR;
+      } else {
+        this.progressArcColor = CHEST_DECRYPT_RED_FLASH_COLOR;
+      }
+    }
   }
 
   private advanceOpening(deltaMs: number): void {

@@ -164,10 +164,10 @@ export class ChestDecrypt {
   private render(): void {
     const snap = this.state.snapshot();
 
-    // 进度弧 r100，0°→360° 随 progress 填充，金色描边。
+    // 进度弧 r100，0°→360° 随 progress 填充；decay 触发时变红 200ms（spec §4.3）。
     this.arcGraphics.clear();
     if (snap.phase === 'decrypting' || snap.phase === 'opened') {
-      this.arcGraphics.lineStyle(4, 0xffd700, 1);
+      this.arcGraphics.lineStyle(4, snap.progressArcColor, 1);
       this.arcGraphics.beginPath();
       this.arcGraphics.arc(
         0,

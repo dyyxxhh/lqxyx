@@ -16,6 +16,7 @@ import type { Inventory } from './loot/Inventory';
 import type { CombatManager } from './combat/CombatManager';             // Plan 3：空手弱拳 fallback
 import type { WeaponCombatAdapter } from './weapons/WeaponCombatAdapter'; // Plan 4：装备武器普攻
 import type { Vec2 } from './combat/Enemy';                              // 共享方向类型
+import { WallHitRenderer } from './combat/WallHitRenderer';              // Task 6 (#4)：撞墙粒子渲染
 import { UNARMED_ID, type Loadout } from './meta/LoadoutManager';        // unarmed 路由常量 + loadout 类型
 import { ForgottenSanityRunController } from './ForgottenSanityRunController';
 
@@ -61,6 +62,8 @@ export class ForgottenSanityScene extends Phaser.Scene {
   private pendingBodyMarkers: MinimapUpdate['bodyMarkers'][number][] = [];
   // 对局装配器（create 时若真实 Phaser API 可用则实例化；mock 测试环境跳过）
   private runController: ForgottenSanityRunController | null = null;
+  // Task 6 (#4): 撞墙粒子渲染器（与 CombatManager.wallHitParticles 同步）
+  private wallHitRenderer: WallHitRenderer | null = null;
   // 暂停状态（Task 1 简单实现：仅切换布尔；Task 21 引入 PauseMenu 时扩展）
   private paused = false;
 
@@ -144,6 +147,12 @@ export class ForgottenSanityScene extends Phaser.Scene {
       this.runController = new ForgottenSanityRunController(this);
     }
 
+    // Task 6 (#4): 撞墙粒子渲染器（feature-detection：mock 测试环境无 add.rectangle 跳过创建）
+    const addRectangle = (this.add as unknown as { rectangle?: unknown }).rectangle;
+    if (typeof addRectangle === 'function') {
+      this.wallHitRenderer = new WallHitRenderer(this);
+    }
+
     // ── 测试钩子（仅 DEV / test 环境挂载到 window）──
     // plan 2026-07-19 Task 1：当前仅暴露壳 + 占位返回值。
     // __testTriggerEliteDefeat 直接调用 runController.handleEliteDefeated()（已改 public）。
@@ -225,6 +234,10 @@ export class ForgottenSanityScene extends Phaser.Scene {
     if (this.runController !== null) {
       this.runController.update(_time, _delta);
     }
+    // Task 6 (#4): 同步撞墙粒子视图（combatManager 由 runController 装配时注入 setCombatDeps）
+    if (this.wallHitRenderer !== null && this.combatManager !== null) {
+      this.wallHitRenderer.sync(this.combatManager.getWallHitParticles());
+    }
   }
 
   // ── 普攻路由（unarmed vs 武器）──
@@ -300,6 +313,8 @@ export class ForgottenSanityScene extends Phaser.Scene {
   public destroyPlan6Ui(): void {
     this.runController?.destroy();
     this.runController = null;
+    this.wallHitRenderer?.destroy();
+    this.wallHitRenderer = null;
     this.hud?.destroy();
     this.minimap?.destroy();
     this.fogOverlay?.destroy();

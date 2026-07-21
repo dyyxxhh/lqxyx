@@ -446,3 +446,62 @@ describe('duplicateSilentOnes (spec §9.3 缄默者复制)', () => {
     expect(cm.enemies.filter((e) => e.isDuplicate).length).toBe(2);
   });
 });
+
+// Task 6 (#4): 敌方投射物撞墙检测 + spawnWallHitFx 粒子（3 个 / 200ms 渐隐 / 白色 0xffffff）
+describe('#4 enemy projectile wall collision + spawnWallHitFx (Task 6)', () => {
+  function makeWallCm(): CombatManager {
+    // 墙在 x>=100；投射物从 x=50 向 +x 推进必撞墙
+    const isWalkable = (x: number, _y: number): boolean => x < 100;
+    const cm = new CombatManager(new PlayerCombat(), {}, isWalkable, createCombatRng(1));
+    cm.setPlayerPosition(0, 1000); // 玩家远离投射物，避免触发玩家碰撞
+    return cm;
+  }
+
+  function spawnEnemyProjectile(cm: CombatManager): void {
+    const p: Projectile = {
+      id: 'p1', x: 50, y: 50, vx: 200, vy: 0, speed: 200,
+      damage: 10, category: 'aoe', homingTarget: null, homingStrength: 0,
+      remainingMs: 100000, radius: 10, proceduralKind: 'danYuxuanOrb', ownerId: 'e1',
+    };
+    cm.spawnProjectile(p);
+  }
+
+  it('stops enemy projectile on wall hit (sub-stepped, no tunneling)', () => {
+    const cm = makeWallCm();
+    spawnEnemyProjectile(cm);
+    cm.update(16 * 20); // 320ms → 推进 64px → x≈114 应撞墙（x≥100）
+    expect(cm.projectiles.length).toBe(0);
+  });
+
+  it('spawns 3 wall hit particles on wall collision', () => {
+    const cm = makeWallCm();
+    spawnEnemyProjectile(cm);
+    cm.update(16 * 20); // 撞墙生成粒子
+    const particles = cm.getWallHitParticles();
+    expect(particles.length).toBe(3);
+    // 粒子均为白色
+    for (const p of particles) {
+      expect(p.color).toBe(0xffffff);
+      expect(p.maxLifeMs).toBe(200);
+      expect(p.lifeMs).toBe(200); // 同帧生成的粒子尚未老化
+    }
+  });
+
+  it('particles fade out after 200ms', () => {
+    const cm = makeWallCm();
+    spawnEnemyProjectile(cm);
+    cm.update(16 * 20); // 撞墙生成粒子（updateWallHitParticles 先于 updateProjectiles，故未老化）
+    expect(cm.getWallHitParticles().length).toBe(3);
+    cm.update(200); // 推进 200ms → 粒子 lifeMs 归零
+    expect(cm.getWallHitParticles().length).toBe(0);
+  });
+
+  it('enemy projectile that does not hit wall continues flying (no false removal)', () => {
+    const cm = new CombatManager(new PlayerCombat(), {}, () => true, createCombatRng(1));
+    cm.setPlayerPosition(0, 1000);
+    spawnEnemyProjectile(cm);
+    cm.update(16 * 20); // 全图可走，应继续推进
+    expect(cm.projectiles.length).toBe(1);
+    expect(cm.getWallHitParticles().length).toBe(0);
+  });
+});

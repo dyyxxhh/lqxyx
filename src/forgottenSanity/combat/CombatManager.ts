@@ -74,12 +74,30 @@ export interface PlayerZone {
   proceduralKind: ProceduralKind;  // WeaponZoneKind 之一
 }
 
+// Task 6 (#4): 撞墙粒子 — 3 个 / 随机方向 50px/s / 200ms 渐隐 / 白色 0xffffff
+export interface WallHitParticle {
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  lifeMs: number;
+  maxLifeMs: number;
+  color: number;
+}
+
 const MAX_DAN_YUXUAN_BODIES = 2;
 const PLAYER_ATTACK_RANGE = 64;
 const PLAYER_ATTACK_HALF_ANGLE = Math.PI / 4; // 45° 半角 → 90° 扇形
 // 设计变更：杨云红边中立→激怒。玩家攻击命中敌人时，350px 视野内的中立杨云红边永久激怒。
 // CombatManager 不 import 敌人子类（保持核心与插件解耦），故本地声明，数值与 YangYunRed.VISION_RANGE 一致。
 const ELITE_AGGRO_VISION_RANGE = 350;
+// Task 6 (#4): 撞墙粒子参数
+const WALL_HIT_PARTICLE_COUNT = 3;
+const WALL_HIT_PARTICLE_SPEED = 50;        // px/s
+const WALL_HIT_PARTICLE_LIFE_MS = 200;
+const WALL_HIT_PARTICLE_COLOR = 0xffffff;
+// Task 6 (#4): 敌侧投射物子步进最大步长（px），避免高速穿墙
+const ENEMY_PROJECTILE_SUBSTEP_PX = 4;
 
 export class CombatManager {
   readonly player: PlayerCombat;
@@ -104,6 +122,8 @@ export class CombatManager {
   private playerRoomId: string | null = null;
   private adjacentRooms: Map<string, Set<string>> = new Map();
   private readonly farRoomAccumMs = new Map<string, number>();
+  // Task 6 (#4): 撞墙粒子池（spawnWallHitFx 生成，updateWallHitParticles 推进）
+  private readonly wallHitParticles: WallHitParticle[] = [];
 
   constructor(
     player: PlayerCombat,
@@ -521,6 +541,9 @@ export class CombatManager {
     this.player.tick(deltaMs);
     if (this.player.isDead) return;
 
+    // 1b. Task 6 (#4): 撞墙粒子老化 — 先于 updateProjectiles（同帧新生成的粒子不应被老化）
+    this.updateWallHitParticles(deltaMs);
+
     // 2. 敌人 AI 更新 — spec §5.11.7 远房 4Hz 降级
     //    当前/邻接房间 60Hz；远房（非当前非邻接）4Hz（每 250ms 推进一次 250ms deltaMs）。
     //    但召唤核心的召唤计时器（tickSummonTimer）和头颅复活检查（tickHeadRevive）
@@ -703,9 +726,15 @@ export class CombatManager {
   }
 
   private updateProjectiles(deltaMs: number): void {
+    // Task 6 (#4): 子步进推进 — 避免高速投射物穿墙
+    //   一帧内按 ENEMY_PROJECTILE_SUBSTEP_PX 分多步推进，每步先检查 isWalkable
+    //   不可走 → 在当前（最后一个可走）位置生成 spawnWallHitFx 并移除投射物
+    //   保留现有 homing 转向（一帧一次）与玩家碰撞逻辑（每步检查）
+    const dead: number[] = [];
     const seconds = deltaMs / 1000;
-    for (const p of this.projectiles) {
-      // 追踪
+    for (let i = 0; i < this.projectiles.length; i++) {
+      const p = this.projectiles[i]!;
+      // 追踪（保留：一帧一次转向）
       if (p.homingTarget === 'player') {
         const dx = this.playerPosition.x - p.x;
         const dy = this.playerPosition.y - p.y;
@@ -724,27 +753,81 @@ export class CombatManager {
           }
         }
       }
-      p.x += p.vx * seconds;
-      p.y += p.vy * seconds;
-      p.remainingMs -= deltaMs;
-      // 碰撞玩家
-      if (!this.player.isDead) {
-        const ddx = p.x - this.playerPosition.x;
-        const ddy = p.y - this.playerPosition.y;
-        if (ddx * ddx + ddy * ddy <= (p.radius + 16) * (p.radius + 16)) {
-          const instance: DamageInstance = {
-            amount: p.damage,
-            category: p.category,
-            ...(p.debuff !== undefined ? { debuff: p.debuff } : {}),
-          };
-          this.player.takeDamage(instance);
-          p.remainingMs = 0;
+      // 子步进推进
+      const totalDist = Math.hypot(p.vx, p.vy) * seconds;
+      const steps = Math.max(1, Math.ceil(totalDist / ENEMY_PROJECTILE_SUBSTEP_PX));
+      const stepDt = deltaMs / steps;
+      let removed = false;
+      for (let s = 0; s < steps; s++) {
+        const nx = p.x + p.vx * stepDt / 1000;
+        const ny = p.y + p.vy * stepDt / 1000;
+        // #4: 撞墙检测 — 下一步不可走则生成墙撞粒子并移除
+        if (!this.isWalkable(nx, ny)) {
+          this.spawnWallHitFx(p.x, p.y);
+          removed = true;
+          break;
+        }
+        p.x = nx;
+        p.y = ny;
+        p.remainingMs -= stepDt;
+        // 碰撞玩家（保留现有逻辑）
+        if (!this.player.isDead) {
+          const ddx = p.x - this.playerPosition.x;
+          const ddy = p.y - this.playerPosition.y;
+          if (ddx * ddx + ddy * ddy <= (p.radius + 16) * (p.radius + 16)) {
+            const instance: DamageInstance = {
+              amount: p.damage,
+              category: p.category,
+              ...(p.debuff !== undefined ? { debuff: p.debuff } : {}),
+            };
+            this.player.takeDamage(instance);
+            p.remainingMs = 0;
+            removed = true;
+            break;
+          }
+        }
+        if (p.remainingMs <= 0) {
+          removed = true;
+          break;
         }
       }
+      if (removed) dead.push(i);
     }
-    // 清理过期
-    for (let i = this.projectiles.length - 1; i >= 0; i--) {
-      if (this.projectiles[i]!.remainingMs <= 0) this.projectiles.splice(i, 1);
+    // 清理过期 / 撞墙 / 命中玩家的投射物
+    for (let i = dead.length - 1; i >= 0; i--) {
+      this.projectiles.splice(dead[i]!, 1);
+    }
+  }
+
+  // Task 6 (#4): 撞墙粒子 API — spawnWallHitFx 生成 3 个随机方向白色粒子
+  //   WallHitRenderer.sync() 每帧读取 getWallHitParticles() 同步视图
+  spawnWallHitFx(x: number, y: number): void {
+    for (let i = 0; i < WALL_HIT_PARTICLE_COUNT; i++) {
+      const angle = this.rng.next() * Math.PI * 2;
+      this.wallHitParticles.push({
+        x,
+        y,
+        vx: Math.cos(angle) * WALL_HIT_PARTICLE_SPEED,
+        vy: Math.sin(angle) * WALL_HIT_PARTICLE_SPEED,
+        lifeMs: WALL_HIT_PARTICLE_LIFE_MS,
+        maxLifeMs: WALL_HIT_PARTICLE_LIFE_MS,
+        color: WALL_HIT_PARTICLE_COLOR,
+      });
+    }
+  }
+
+  getWallHitParticles(): readonly WallHitParticle[] {
+    return this.wallHitParticles;
+  }
+
+  private updateWallHitParticles(deltaMs: number): void {
+    const seconds = deltaMs / 1000;
+    for (let i = this.wallHitParticles.length - 1; i >= 0; i--) {
+      const p = this.wallHitParticles[i]!;
+      p.x += p.vx * seconds;
+      p.y += p.vy * seconds;
+      p.lifeMs -= deltaMs;
+      if (p.lifeMs <= 0) this.wallHitParticles.splice(i, 1);
     }
   }
 

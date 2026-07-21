@@ -69,6 +69,8 @@ export interface LootItem {
   readonly spriteKey: string;
   readonly description: string;
   readonly effect: LootEffect | null;
+  // 可选：false 表示不可售卖（如仓库钥匙）；缺省/true 表示可售卖。spec §10.1
+  readonly sellable?: boolean;
 }
 
 function weaponLoot(id: WeaponId, name: string, description: string, spriteKey: string): LootItem {
@@ -549,6 +551,7 @@ export const ALL_LOOT: readonly LootItem[] = [
     spriteKey: 'loot.仓库钥匙',
     description: '杨云红边掉落的钥匙，可开启宝藏房门。',
     effect: null,
+    sellable: false,
   },
 
   // === 白阶 4 件（sanity 750-1500）spec §6.6 ===

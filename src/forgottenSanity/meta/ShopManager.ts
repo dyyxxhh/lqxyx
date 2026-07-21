@@ -20,13 +20,13 @@ export function isBuyable(item: LootItem): boolean {
   return item.type === 'consumable' || item.type === 'weapon';
 }
 
-export function isSellable(_item: LootItem): boolean {
-  return true; // 任意皆可卖
+export function isSellable(item: LootItem): boolean {
+  return item.sellable !== false; // 缺省/true 可卖；false 不可卖（spec §10.1 vaultKey）
 }
 
 export type ShopResult =
   | { readonly ok: true; readonly stash: ForgottenSanityStashState }
-  | { readonly ok: false; readonly reason: 'insufficient-stock' | 'not-buyable'; readonly stash: ForgottenSanityStashState };
+  | { readonly ok: false; readonly reason: 'insufficient-stock' | 'not-buyable' | 'unsellable'; readonly stash: ForgottenSanityStashState };
 
 export function sell(
   stash: ForgottenSanityStashState,
@@ -34,7 +34,7 @@ export function sell(
   quantity: number,
 ): ShopResult {
   if (!isSellable(item)) {
-    return { ok: false, reason: 'not-buyable', stash };
+    return { ok: false, reason: 'unsellable', stash };
   }
   if (quantity <= 0) return { ok: true, stash };
   if (getStashItemQuantity(stash, item.id) < quantity) {

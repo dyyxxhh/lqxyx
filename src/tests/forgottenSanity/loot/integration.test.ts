@@ -65,7 +65,7 @@ describe('integration: silent one drop -> inventory', () => {
 describe('integration: chest decrypt -> loot -> inventory', () => {
   it('pre-roll chest loot, drive ChestDecryptState to completion, add loot to inventory', () => {
     const loot = rollLootTable(NORMAL_CHEST_LOOT_TABLE, mulberry32(2024)) as LootItem[];
-    expect(loot.length).toBeGreaterThanOrEqual(3);
+    expect(loot.length).toBeGreaterThanOrEqual(1);
     expect(loot.length).toBeLessThanOrEqual(5);
 
     const inv = new Inventory();
@@ -92,8 +92,9 @@ describe('integration: chest decrypt -> loot -> inventory', () => {
     const loot = rollLootTable(GILDED_CHEST_LOOT_TABLE, mulberry32(99)) as LootItem[];
     const hasGold = loot.some((it) => it.rarity === 'gold' || it.rarity === 'white');
     expect(hasGold).toBe(true);
-    // spec §7.4：鎏金宝箱掷 4-5 件（with-replacement，允许同名重复）
-    expect(loot.length).toBeGreaterThanOrEqual(4);
+    // spec §7.4：鎏金宝箱掷 1-5 件（with-replacement，允许同名重复）
+    expect(loot.length).toBeGreaterThanOrEqual(1);
+    expect(loot.length).toBeLessThanOrEqual(5);
     const inv = new Inventory();
     for (const item of loot) inv.add(item.id, 1);
     // 入袋条目数 = loot 中不同 itemId 的数量（同名掉落自动堆叠，spec §10 允许宝箱重复掉落）

@@ -122,25 +122,56 @@ describe('rollLootTable independent mode (yangYunRed)', () => {
   });
 });
 
-describe('rollLootTable multiPick mode (chests)', () => {
-  it('normal chest returns 3-5 items', () => {
+describe('#11 rollIndependent per-rarity independent', () => {
+  it('returns 0 items when all entries fail (rng*100 >= weight)', () => {
+    // rng 恒返回 0.9999 → 0.9999*100 = 99.99 > 任何 weight (50/30/8/2)，全失败
+    const failRng = () => 0.9999;
+    const items = rollLootTable(YANG_YUN_RED_LOOT_TABLE, failRng);
+    expect(items).toEqual([]);
+  });
+
+  it('returns 4 items when all entries succeed (rng*100 < weight)', () => {
+    // rng 恒返回 0 → 0*100 = 0 < 任何 weight (50/30/8/2)，全成功
+    const successRng = () => 0;
+    const items = rollLootTable(YANG_YUN_RED_LOOT_TABLE, successRng);
+    expect(items.length).toBe(4); // 4 个稀有度全成功
+    // 每个稀有度至多一件
+    const rarities = items.map((it) => it.rarity);
+    expect(new Set(rarities).size).toBe(rarities.length);
+  });
+});
+
+describe('#11 itemCount min=1', () => {
+  it('NORMAL_CHEST itemCount.min = 1 (not 3)', () => {
+    expect(NORMAL_CHEST_LOOT_TABLE.itemCount?.min).toBe(1);
+    expect(NORMAL_CHEST_LOOT_TABLE.itemCount?.max).toBe(5);
+  });
+
+  it('GILDED_CHEST itemCount.min = 1 (not 4)', () => {
+    expect(GILDED_CHEST_LOOT_TABLE.itemCount?.min).toBe(1);
+    expect(GILDED_CHEST_LOOT_TABLE.itemCount?.max).toBe(5);
+  });
+
+  it('normal chest returns 1-5 items', () => {
     const rng = mulberry32(3);
-    for (let i = 0; i < 50; i++) {
+    for (let i = 0; i < 100; i++) {
       const r = rollLootTable(NORMAL_CHEST_LOOT_TABLE, rng);
-      expect(r.length).toBeGreaterThanOrEqual(3);
+      expect(r.length).toBeGreaterThanOrEqual(1);
       expect(r.length).toBeLessThanOrEqual(5);
     }
   });
 
-  it('gilded chest returns 4-5 items', () => {
+  it('gilded chest returns 1-5 items', () => {
     const rng = mulberry32(5);
-    for (let i = 0; i < 50; i++) {
+    for (let i = 0; i < 100; i++) {
       const r = rollLootTable(GILDED_CHEST_LOOT_TABLE, rng);
-      expect(r.length).toBeGreaterThanOrEqual(4);
+      expect(r.length).toBeGreaterThanOrEqual(1);
       expect(r.length).toBeLessThanOrEqual(5);
     }
   });
+});
 
+describe('rollLootTable multiPick mode (chests)', () => {
   it('normal chest pity guarantees at least one green+ item', () => {
     const greenIdx = LOOT_RARITY_ORDER.indexOf('green');
     const rng = mulberry32(11);

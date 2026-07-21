@@ -80,12 +80,12 @@ export const YANG_YUN_RED_LOOT_TABLE: LootTable = {
 
 /**
  * 普通宝箱掉落表（independent + itemCount + pity，spec §7.4）。
- * itemCount 决定掷 3-5 件；pityRarity='green' 保底至少一件绿阶+。
+ * itemCount 决定掷 1-5 件；pityRarity='green' 保底至少一件绿阶+。
  */
 export const NORMAL_CHEST_LOOT_TABLE: LootTable = {
   id: 'normal-chest',
   rollMode: 'independent',
-  itemCount: { min: 3, max: 5 },
+  itemCount: { min: 1, max: 5 },
   pityRarity: 'green',
   entries: [
     { rarity: 'blue', weight: 30, allowedTypes: ['material'] },
@@ -98,12 +98,12 @@ export const NORMAL_CHEST_LOOT_TABLE: LootTable = {
 
 /**
  * 鎏金宝箱掉落表（independent + itemCount + pity，spec §7.4）。
- * itemCount 决定掷 4-5 件；pityRarity='gold' 保底至少一件金阶+。
+ * itemCount 决定掷 1-5 件；pityRarity='gold' 保底至少一件金阶+。
  */
 export const GILDED_CHEST_LOOT_TABLE: LootTable = {
   id: 'gilded-chest',
   rollMode: 'independent',
-  itemCount: { min: 4, max: 5 },
+  itemCount: { min: 1, max: 5 },
   pityRarity: 'gold',
   entries: [
     { rarity: 'blue', weight: 30, allowedTypes: ['material'] },

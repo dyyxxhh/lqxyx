@@ -246,6 +246,34 @@ export function saveProgressState(state: ForgottenSanityProgressState, storage: 
   storage.setItem(FORGOTTEN_SANITY_PROGRESS_STORAGE_KEY, JSON.stringify(state));
 }
 
+/**
+ * M9: 多 key 事务写入。任一 setItem 抛错时回滚已写入的 key 到原值（原 absent 则 removeItem）。
+ * 回滚失败仅 console.error，不抛。返回 true=全部成功，false=已回滚。
+ */
+export function atomicSaveMulti(
+  entries: ReadonlyArray<{ readonly key: string; readonly value: string }>,
+  storage: Storage = localStorage,
+): boolean {
+  const saved: Array<{ key: string; value: string | null }> = [];
+  try {
+    for (const e of entries) {
+      saved.push({ key: e.key, value: storage.getItem(e.key) });
+      storage.setItem(e.key, e.value);
+    }
+    return true;
+  } catch {
+    for (const s of saved) {
+      try {
+        if (s.value === null) storage.removeItem(s.key);
+        else storage.setItem(s.key, s.value);
+      } catch {
+        console.error(`[forgottenSanity] atomicSaveMulti rollback failed for key ${s.key}`);
+      }
+    }
+    return false;
+  }
+}
+
 function mergeStashItems(
   existing: readonly ForgottenSanityStashItem[],
   additions: readonly ForgottenSanityStashItem[],
@@ -276,7 +304,13 @@ export function grantStarterPackIfNeeded(storage: Storage = localStorage): Grant
     schemaVersion: FORGOTTEN_SANITY_SCHEMA_VERSION,
     starterPackGranted: true,
   };
-  saveStashState(newStash, storage);
-  saveProgressState(newProgress, storage);
+  const ok = atomicSaveMulti([
+    { key: FORGOTTEN_SANITY_STASH_STORAGE_KEY, value: JSON.stringify(newStash) },
+    { key: FORGOTTEN_SANITY_PROGRESS_STORAGE_KEY, value: JSON.stringify(newProgress) },
+  ], storage);
+  if (!ok) {
+    // 原子写入失败已回滚：返回原始 stash/progress，granted=false 表示未发放
+    return { granted: false, stash, progress: progress.state };
+  }
   return { granted: true, stash: newStash, progress: newProgress };
 }

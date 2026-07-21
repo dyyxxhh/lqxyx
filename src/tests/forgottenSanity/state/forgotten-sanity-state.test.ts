@@ -5,8 +5,11 @@ import {
   loadStashState,
   loadUpgradesState,
   loadTyped,
+  atomicSaveMulti,
+  grantStarterPackIfNeeded,
   FORGOTTEN_SANITY_STASH_STORAGE_KEY,
   FORGOTTEN_SANITY_UPGRADES_STORAGE_KEY,
+  FORGOTTEN_SANITY_PROGRESS_STORAGE_KEY,
 } from '../../../forgottenSanity/state/forgottenSanityState';
 
 // 完整 6 tier（用于让现有「要求 6 tier 全到齐」的检查通过，从而把 RED 焦点放到
@@ -172,6 +175,75 @@ describe('H2: schemaVersion migration framework', () => {
       () => ({ schemaVersion: 1 }),
     );
     expect(result.status).toBe('ok');
+    vi.unstubAllGlobals();
+  });
+});
+
+describe('M9: atomicSaveMulti', () => {
+  it('writes all entries and returns true on success', () => {
+    const store: Record<string, string> = { 'key.a': 'old-a', 'key.b': 'old-b' };
+    vi.stubGlobal('localStorage', {
+      getItem: (k: string) => store[k] ?? null,
+      setItem: (k: string, v: string) => { store[k] = v; },
+      removeItem: (k: string) => { delete store[k]; },
+    });
+    const ok = atomicSaveMulti([
+      { key: 'key.a', value: 'new-a' },
+      { key: 'key.b', value: 'new-b' },
+    ]);
+    expect(ok).toBe(true);
+    expect(store['key.a']).toBe('new-a');
+    expect(store['key.b']).toBe('new-b');
+    vi.unstubAllGlobals();
+  });
+
+  it('rolls back all entries when second setItem throws', () => {
+    const store: Record<string, string> = { 'key.a': 'old-a', 'key.b': 'old-b' };
+    let callCount = 0;
+    vi.stubGlobal('localStorage', {
+      getItem: (k: string) => store[k] ?? null,
+      setItem: (k: string, v: string) => {
+        callCount++;
+        if (callCount === 2) throw new Error('QuotaExceededError');
+        store[k] = v;
+      },
+      removeItem: (k: string) => { delete store[k]; },
+    });
+    const ok = atomicSaveMulti([
+      { key: 'key.a', value: 'new-a' },
+      { key: 'key.b', value: 'new-b' },
+    ]);
+    expect(ok).toBe(false);
+    expect(store['key.a']).toBe('old-a'); // 回滚
+    expect(store['key.b']).toBe('old-b');
+    vi.unstubAllGlobals();
+  });
+});
+
+describe('M9: grantStarterPackIfNeeded atomicity', () => {
+  it('returns granted=false and does not mark starterPackGranted when atomic save fails', () => {
+    const store: Record<string, string> = {
+      [FORGOTTEN_SANITY_STASH_STORAGE_KEY]: JSON.stringify({ schemaVersion: 1, sanity: 0, items: [] }),
+      [FORGOTTEN_SANITY_PROGRESS_STORAGE_KEY]: JSON.stringify({ schemaVersion: 1, starterPackGranted: false }),
+    };
+    let callCount = 0;
+    vi.stubGlobal('localStorage', {
+      getItem: (k: string) => store[k] ?? null,
+      setItem: (k: string, v: string) => {
+        callCount++;
+        if (callCount === 2) throw new Error('QuotaExceededError');
+        store[k] = v;
+      },
+      removeItem: (k: string) => { delete store[k]; },
+    });
+    const result = grantStarterPackIfNeeded();
+    expect(result.granted).toBe(false);
+    // progress 仍是 starterPackGranted=false（回滚）
+    const progress = JSON.parse(store[FORGOTTEN_SANITY_PROGRESS_STORAGE_KEY]);
+    expect(progress.starterPackGranted).toBe(false);
+    // stash 仍是空 items（回滚）
+    const stash = JSON.parse(store[FORGOTTEN_SANITY_STASH_STORAGE_KEY]);
+    expect(stash.items).toEqual([]);
     vi.unstubAllGlobals();
   });
 });

@@ -678,6 +678,16 @@ export class ForgottenSanityRunController {
   }
 
   // ───────────────────────────────────────────────────────────────────
+  // 放弃对局（plan 2026-07-19 Task 14 / M8）
+  // 按死亡处理：本局战利品全丢，仓库不变。
+  // 不调用 depositRunInventory / storeStash —— 由 SettlementScreen.showDeath
+  // 决定 UI 表现（"本局战利品全丢"），仓库状态保持不变。
+  // ───────────────────────────────────────────────────────────────────
+  public abandonRun(): void {
+    this.scene.runDeathSettlement();
+  }
+
+  // ───────────────────────────────────────────────────────────────────
   // 宝箱交互
   // ───────────────────────────────────────────────────────────────────
   private createChestInteractions(): void {

@@ -9,6 +9,7 @@ import { GAME_HEIGHT, GAME_WIDTH } from '../game/scaffoldState';
 import { UI_THEME, applyPixelStrokeStyle, applyPixelTextStyle } from '../ui/uiTheme';
 import { ForgottenSanityHUD, type HudSnapshot } from './ui/ForgottenSanityHUD';
 import { Minimap, type MinimapUpdate } from './ui/Minimap';
+import { PauseMenu } from './ui/PauseMenu';
 import { RedEdgeFogOverlay } from './ui/RedEdgeFogOverlay';
 import { SettlementScreen, type SettlementOutcome } from './ui/SettlementScreen';
 import { MobileControls } from './ui/MobileControls';
@@ -64,14 +65,19 @@ export class ForgottenSanityScene extends Phaser.Scene {
   private runController: ForgottenSanityRunController | null = null;
   // Task 6 (#4): 撞墙粒子渲染器（与 CombatManager.wallHitParticles 同步）
   private wallHitRenderer: WallHitRenderer | null = null;
-  // 暂停状态（Task 1 简单实现：仅切换布尔；Task 21 引入 PauseMenu 时扩展）
+  // 暂停状态（Task 1 简单实现：仅切换布尔；Task 14 引入 PauseMenu 时扩展）
   private paused = false;
+  // M8 ESC 暂停菜单（plan 2026-07-19 Task 14）
+  private pauseMenu: PauseMenu | null = null;
 
   public constructor() {
     super('ForgottenSanityScene');
   }
 
   public create(): void {
+    // 显式初始化暂停状态（测试环境通过 Object.create(prototype) 绕过构造器，
+    // 类字段初始化器不会执行，故在此重置以确保 isPaused() 初始返回 false）
+    this.paused = false;
     this.cameras.main.setBackgroundColor(UI_THEME.colors.surface);
     this.cameras.main.setBounds(0, 0, 5000, 4000);
 
@@ -132,12 +138,19 @@ export class ForgottenSanityScene extends Phaser.Scene {
       this.mobile.create();
     }
 
-    // ESC 处理：优先关闭大地图，否则交给上层
+    // ESC 处理：优先关闭大地图，否则切换暂停菜单（plan Task 14 / M8）
     if (this.input.keyboard) {
       this.input.keyboard.on('keydown-ESC', () => {
-        if (this.minimap?.handleEsc()) return; // 大地图开则关闭，消费 ESC
+        this.handleEsc();
       });
     }
+
+    // M8 暂停菜单（plan 2026-07-19 Task 14）
+    this.pauseMenu = new PauseMenu(
+      this,
+      () => this.togglePause(),
+      () => this.runController?.abandonRun(),
+    );
 
     // 装配对局 controller（feature-detection：mock 测试环境无 textures/add.zone 跳过）
     // 用 unknown cast 避免 TS 把 Phaser 类型当作 always-defined。
@@ -209,12 +222,18 @@ export class ForgottenSanityScene extends Phaser.Scene {
   }
 
   /**
-   * 切换对局暂停状态（plan 2026-07-19 Task 1 简单实现）。
-   * Task 21 引入 PauseMenu 时会扩展为：冻结 update + 显示菜单 + ESC 关闭。
-   * 当前仅切换布尔字段，供测试钩子 __testTogglePause 驱动。
+   * 切换对局暂停状态（plan 2026-07-19 Task 14 / M8）。
+   * 暂停时冻结 combatManager + 显示 PauseMenu；恢复时反向。
    */
   public togglePause(): void {
     this.paused = !this.paused;
+    if (this.paused) {
+      this.combatManager?.setFrozen(true);
+      this.pauseMenu?.show();
+    } else {
+      this.combatManager?.setFrozen(false);
+      this.pauseMenu?.hide();
+    }
   }
 
   /** 当前是否处于暂停状态（供测试钩子 / 后续 PauseMenu 读取）。 */
@@ -222,7 +241,22 @@ export class ForgottenSanityScene extends Phaser.Scene {
     return this.paused;
   }
 
+  /**
+   * ESC 行为优先级（plan Task 14 / spec §9.2）：
+   * 1. 大地图可见 → 关闭大地图（不暂停，消费 ESC）
+   * 2. 否则 → togglePause()
+   */
+  public handleEsc(): void {
+    if (this.minimap?.isBigMapOpen()) {
+      this.minimap.toggleBigMap();
+      return;
+    }
+    this.togglePause();
+  }
+
   public update(_time: number, _delta: number): void {
+    // 暂停时跳过所有 update（plan Task 14 / M8）
+    if (this.paused) return;
     this.minimap?.pollKeyboard();
     // 红边雾战跟随玩家
     if (this.fogOverlay?.isRedEdgeFogActive()) {
@@ -238,6 +272,21 @@ export class ForgottenSanityScene extends Phaser.Scene {
     if (this.wallHitRenderer !== null && this.combatManager !== null) {
       this.wallHitRenderer.sync(this.combatManager.getWallHitParticles());
     }
+  }
+
+  /** M8 暂停菜单实例 getter（供测试断言菜单项 / 设置子菜单状态）。 */
+  public getPauseMenu(): PauseMenu | null {
+    return this.pauseMenu;
+  }
+
+  /** M8 设置子菜单 — 音效开关状态（供测试断言）。 */
+  public getAudioEnabled(): boolean {
+    return this.pauseMenu?.isAudioEnabled() ?? true;
+  }
+
+  /** Minimap getter（供测试断言大地图开关状态）。 */
+  public getMinimap(): Minimap | null {
+    return this.minimap;
   }
 
   // ── 普攻路由（unarmed vs 武器）──

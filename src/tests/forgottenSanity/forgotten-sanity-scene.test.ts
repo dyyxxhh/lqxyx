@@ -265,3 +265,141 @@ describe('ForgottenSanityScene test hooks', () => {
     expect(() => hooks!.__testTriggerEliteDefeat!()).not.toThrow();
   });
 });
+
+// ───────────────────────────────────────────────────────────────────────────
+// Plan 2026-07-19 Task 14 (M8)：ESC 暂停菜单
+// ESC 优先级：大地图可见 → 关闭大地图（不暂停）；否则 → togglePause()。
+// 暂停时 combatManager.setFrozen(true) + update 顶部 if(paused) return。
+// 暂停菜单 3 项：继续 / 放弃对局 / 设置（含音效开关 + 像素滤镜开关 + 返回）。
+// ───────────────────────────────────────────────────────────────────────────
+describe('M8 ESC pause menu', () => {
+  beforeEach(() => {
+    (window as unknown as { __YING_ZHONG_JIU_FORGOTTEN_SANITY_SCENE__?: unknown }).__YING_ZHONG_JIU_FORGOTTEN_SANITY_SCENE__ = undefined;
+  });
+
+  it('ESC toggles pause when big map is hidden', () => {
+    const { scene } = createSceneWithMocks();
+    scene.create();
+    expect(scene.isPaused()).toBe(false);
+    scene.handleEsc();
+    expect(scene.isPaused()).toBe(true);
+    scene.handleEsc();
+    expect(scene.isPaused()).toBe(false);
+  });
+
+  it('ESC closes big map without pausing when big map is visible', () => {
+    const { scene } = createSceneWithMocks();
+    scene.create();
+    scene.getMinimap()!.toggleBigMap(); // 打开大地图
+    expect(scene.getMinimap()!.isBigMapOpen()).toBe(true);
+    scene.handleEsc();
+    expect(scene.isPaused()).toBe(false);
+    expect(scene.getMinimap()!.isBigMapOpen()).toBe(false);
+  });
+
+  it('pause menu has 3 items: resume/abandon/settings', () => {
+    const { scene } = createSceneWithMocks();
+    scene.create();
+    scene.handleEsc(); // 打开暂停菜单
+    const menu = scene.getPauseMenu();
+    expect(menu).not.toBeNull();
+    const items = menu!.getItems();
+    expect(items.map((i) => i.id)).toEqual(['resume', 'abandon', 'settings']);
+    expect(items.map((i) => i.label)).toEqual(['继续', '放弃对局', '设置']);
+  });
+
+  it('settings submenu toggles audio', () => {
+    const { scene } = createSceneWithMocks();
+    scene.create();
+    scene.handleEsc(); // 打开暂停菜单
+    const initialAudio = scene.getAudioEnabled();
+    expect(initialAudio).toBe(true);
+    scene.getPauseMenu()!.clickSettings();
+    scene.getPauseMenu()!.clickAudioToggle();
+    expect(scene.getAudioEnabled()).toBe(false);
+    scene.getPauseMenu()!.clickAudioToggle();
+    expect(scene.getAudioEnabled()).toBe(true);
+  });
+
+  it('settings submenu toggles pixel filter', () => {
+    const { scene } = createSceneWithMocks();
+    scene.create();
+    scene.handleEsc();
+    const initial = scene.getPauseMenu()!.isPixelFilterEnabled();
+    expect(initial).toBe(true);
+    scene.getPauseMenu()!.clickSettings();
+    scene.getPauseMenu()!.clickPixelFilterToggle();
+    expect(scene.getPauseMenu()!.isPixelFilterEnabled()).toBe(false);
+  });
+
+  it('togglePause freezes combatManager when set', () => {
+    const { scene } = createSceneWithMocks();
+    scene.create();
+    const fakeCm = {
+      setFrozen: vi.fn(),
+      isFrozen: vi.fn(() => false),
+    };
+    scene.setCombatDeps(
+      fakeCm as unknown as import('../../forgottenSanity/combat/CombatManager').CombatManager,
+      {} as unknown as import('../../forgottenSanity/weapons/WeaponCombatAdapter').WeaponCombatAdapter,
+    );
+    scene.togglePause(); // pause
+    expect(fakeCm.setFrozen).toHaveBeenCalledWith(true);
+    scene.togglePause(); // unpause
+    expect(fakeCm.setFrozen).toHaveBeenCalledWith(false);
+  });
+
+  it('togglePause shows/hides pause menu', () => {
+    const { scene } = createSceneWithMocks();
+    scene.create();
+    expect(scene.getPauseMenu()!.isVisible()).toBe(false);
+    scene.togglePause();
+    expect(scene.getPauseMenu()!.isVisible()).toBe(true);
+    scene.togglePause();
+    expect(scene.getPauseMenu()!.isVisible()).toBe(false);
+  });
+
+  it('update is skipped when paused (runController.update not called)', () => {
+    const { scene } = createSceneWithMocks();
+    scene.create();
+    const updateSpy = vi.fn();
+    (scene as unknown as { runController: { update: typeof updateSpy } | null }).runController = { update: updateSpy };
+    // 注入 mock combatManager 避免 wallHitRenderer.sync 在 mock 环境崩溃
+    // 同时提供 setFrozen/isFrozen 以满足 togglePause 的冻结调用
+    scene.setCombatDeps(
+      {
+        getWallHitParticles: () => [],
+        setFrozen: vi.fn(),
+        isFrozen: vi.fn(() => false),
+      } as unknown as import('../../forgottenSanity/combat/CombatManager').CombatManager,
+      {} as unknown as import('../../forgottenSanity/weapons/WeaponCombatAdapter').WeaponCombatAdapter,
+    );
+    scene.togglePause(); // pause
+    scene.update(0, 16);
+    expect(updateSpy).not.toHaveBeenCalled();
+    scene.togglePause(); // unpause
+    scene.update(0, 16);
+    expect(updateSpy).toHaveBeenCalled();
+  });
+});
+
+describe('M8 abandonRun source contract (plan Task 14)', () => {
+  it('abandonRun calls runDeathSettlement without depositRunInventory', async () => {
+    const fs = await import('fs');
+    const path = await import('path');
+    const ctrlSrc = fs.readFileSync(
+      path.resolve(__dirname, '../../forgottenSanity/ForgottenSanityRunController.ts'),
+      'utf8',
+    );
+    // 匹配 abandonRun 方法体（可见性修饰符可选）
+    const match = ctrlSrc.match(/^[ \t]*(?:private\s+|public\s+)?abandonRun\(\)[^{]*\{([\s\S]*?)\n  \}/m);
+    expect(match).not.toBeNull();
+    const body = match![1]!;
+    // 必须调用 runDeathSettlement（按死亡处理：本局战利品全丢，仓库不变）
+    expect(body).toMatch(/runDeathSettlement\s*\(/);
+    // 不应调用 depositRunInventory（仓库不变）
+    expect(body).not.toMatch(/depositRunInventory\s*\(/);
+    // 不应调用 storeStash（仓库不变）
+    expect(body).not.toMatch(/storeStash\s*\(/);
+  });
+});

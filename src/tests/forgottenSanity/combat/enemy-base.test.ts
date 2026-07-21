@@ -153,6 +153,37 @@ describe('CombatRng (mulberry32)', () => {
   });
 });
 
+describe('Enemy burn debuff — M5 accumulation (Task 12)', () => {
+  it('first burn sets dps and duration', () => {
+    const e = new TestEnemy({ id: 'e1', x: 0, y: 0, maxHp: 1000, speed: 0, contactDamage: 0, contactRadius: 0 });
+    e.applyDebuff({ type: 'burn', dps: 10, remainingMs: 2000 });
+    expect(e.getStatusBurn()?.dps).toBe(10);
+    expect(e.getStatusBurn()?.remainingMs).toBe(2000);
+  });
+
+  it('accumulates DPS from multiple burn sources', () => {
+    const e = new TestEnemy({ id: 'e1', x: 0, y: 0, maxHp: 1000, speed: 0, contactDamage: 0, contactRadius: 0 });
+    e.applyDebuff({ type: 'burn', dps: 10, remainingMs: 2000 });
+    e.applyDebuff({ type: 'burn', dps: 3, remainingMs: 2000 });
+    expect(e.getStatusBurn()?.dps).toBe(13); // 10 + 3
+  });
+
+  it('takes max duration (does not shorten)', () => {
+    const e = new TestEnemy({ id: 'e1', x: 0, y: 0, maxHp: 1000, speed: 0, contactDamage: 0, contactRadius: 0 });
+    e.applyDebuff({ type: 'burn', dps: 10, remainingMs: 2000 });
+    e.applyDebuff({ type: 'burn', dps: 5, remainingMs: 3000 });
+    expect(e.getStatusBurn()?.remainingMs).toBe(3000); // max(2000, 3000)
+  });
+
+  it('accumulates DPS and takes max duration together', () => {
+    const e = new TestEnemy({ id: 'e1', x: 0, y: 0, maxHp: 1000, speed: 0, contactDamage: 0, contactRadius: 0 });
+    e.applyDebuff({ type: 'burn', dps: 10, remainingMs: 2000 });
+    e.applyDebuff({ type: 'burn', dps: 5, remainingMs: 3000 });
+    expect(e.getStatusBurn()?.dps).toBe(15); // 10 + 5
+    expect(e.getStatusBurn()?.remainingMs).toBe(3000); // max(2000, 3000)
+  });
+});
+
 // 静态类型断言（编译期检查）
 const _kindCheck: EnemyKind = 'butYuxuanHead';
 const _procCheck: ProceduralKind = 'danYuxuanOrb';

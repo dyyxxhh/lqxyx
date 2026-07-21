@@ -281,7 +281,13 @@ export abstract class Enemy implements EnemyViewMetadata {
     if (this.dead) return;
     switch (debuff.type) {
       case 'burn':
-        this.statusBurn = { dps: debuff.dps, remainingMs: debuff.remainingMs };
+        // M5: burn DPS 累加（多次 burn 命中 → DPS 相加），duration 取 max（不缩短）
+        if (this.statusBurn === null) {
+          this.statusBurn = { dps: debuff.dps, remainingMs: debuff.remainingMs };
+        } else {
+          this.statusBurn.dps += debuff.dps;
+          this.statusBurn.remainingMs = Math.max(this.statusBurn.remainingMs, debuff.remainingMs);
+        }
         break;
       case 'stun':
         this.statusStunMs = Math.max(this.statusStunMs, debuff.remainingMs);
@@ -325,6 +331,11 @@ export abstract class Enemy implements EnemyViewMetadata {
       this.statusFear.remainingMs -= deltaMs;
       if (this.statusFear.remainingMs <= 0) this.statusFear = null;
     }
+  }
+
+  /** 读取当前 burn 状态（测试与诊断可观察性用）。 */
+  getStatusBurn(): { readonly dps: number; readonly remainingMs: number } | null {
+    return this.statusBurn;
   }
 
   isStunned(): boolean {

@@ -78,7 +78,7 @@ export type AggroState = 'neutral' | 'hostile';
 
 let crackCounter = 0;
 
-function makeFloorCrack(ownerId: string, x: number, y: number, angle: number): ZoneEffect {
+function makeFloorCrack(ownerId: string, x: number, y: number, angle: number, windupMs: number): ZoneEffect {
   const debuff: Debuff = {
     type: 'slow',
     multiplier: CRACK_SLOW_MULTIPLIER,
@@ -97,12 +97,12 @@ function makeFloorCrack(ownerId: string, x: number, y: number, angle: number): Z
     vy: 0,
     expandSpeed: CRACK_SPEED,
     maxRadius: CRACK_MAX_RADIUS,
-    windupMs: CRACK_WINDUP_MS,
+    windupMs,
     burstDamage: CRACK_DAMAGE,
     damagePerSecond: 0,
     category: 'aoe' as DamageCategory,
     debuff,
-    remainingMs: CRACK_WINDUP_MS + 1500,
+    remainingMs: windupMs + 1500,
     applyDebuffOnce: true,
     debuffApplied: false,
     proceduralKind: 'floorCrackWave',
@@ -131,6 +131,16 @@ export class YangYunRedEnemy extends Enemy {
   private crackTimer = CRACK_INTERVAL_MS;
   private cloneTriggered = false;
   private onEliteDefeated: (() => void) | null = null;
+  // spec §5.10 二阶段：所有技能 CD 减半（cdMultiplier=0.5）。phase1=1。
+  private cdMultiplier = 1;
+
+  /** 二阶段 CD 倍率（1=phase1，0.5=phase2）。所有 CD 读取处乘以此值 */
+  getCdMultiplier(): number { return this.cdMultiplier; }
+  getEffectiveChargeIntervalMs(): number { return CHARGE_INTERVAL_MS * this.cdMultiplier; }
+  getEffectiveChargeWindupMs(): number { return CHARGE_WINDUP_MS * this.cdMultiplier; }
+  getEffectiveChargeDurationMs(): number { return CHARGE_DURATION_MS * this.cdMultiplier; }
+  getEffectiveCrackIntervalMs(): number { return CRACK_INTERVAL_MS * this.cdMultiplier; }
+  getEffectiveCrackWindupMs(): number { return CRACK_WINDUP_MS * this.cdMultiplier; }
 
   constructor(id: string, x: number, y: number) {
     super({
@@ -178,6 +188,7 @@ export class YangYunRedEnemy extends Enemy {
     const ratio = this.hp / this.maxHp;
     if (this.phase === 1 && ratio < PHASE2_HP_THRESHOLD) {
       this.phase = 2;
+      this.cdMultiplier = 0.5;
       this.contactBurn = { dps: PHASE2_BURN_DPS, durationMs: PHASE2_BURN_MS };
     }
   }
@@ -190,8 +201,8 @@ export class YangYunRedEnemy extends Enemy {
     }
     // 激怒后使用 spec §5.10 原有攻击模式（不走普通三态机）
     this.tickPhaseTransition();
-    const interval = this.phase === 2 ? PHASE2_CHARGE_INTERVAL_MS : CHARGE_INTERVAL_MS;
-    const crackInterval = this.phase === 2 ? CRACK_INTERVAL_MS / 2 : CRACK_INTERVAL_MS;
+    const interval = this.getEffectiveChargeIntervalMs();
+    const crackInterval = this.getEffectiveCrackIntervalMs();
 
     // 冲撞状态机
     this.updateCharge(deltaMs, ctx, interval);
@@ -249,7 +260,7 @@ export class YangYunRedEnemy extends Enemy {
       // windup 不冲撞
       this.contactDamageOverride = null;
       this.chargeElapsed += deltaMs;
-      if (this.chargeElapsed >= CHARGE_WINDUP_MS) {
+      if (this.chargeElapsed >= this.getEffectiveChargeWindupMs()) {
         this.chargeState = 'charging';
         // spec §5.10 进入 charging 态即激活冲撞伤害 50
         this.contactDamageOverride = 50;
@@ -263,7 +274,7 @@ export class YangYunRedEnemy extends Enemy {
       this.x += this.chargeDirX * speed * seconds;
       this.y += this.chargeDirY * speed * seconds;
       this.chargeElapsed += deltaMs;
-      if (this.chargeElapsed >= CHARGE_DURATION_MS) {
+      if (this.chargeElapsed >= this.getEffectiveChargeDurationMs()) {
         this.chargeState = 'idle';
         this.contactDamageOverride = null;
       }
@@ -283,7 +294,7 @@ export class YangYunRedEnemy extends Enemy {
 
   private fireCrack(ctx: EnemyUpdateContext): void {
     const angle = Math.atan2(ctx.playerPosition.y - this.y, ctx.playerPosition.x - this.x);
-    ctx.spawnZone(makeFloorCrack(this.id, this.x, this.y, angle));
+    ctx.spawnZone(makeFloorCrack(this.id, this.x, this.y, angle, this.getEffectiveCrackWindupMs()));
   }
 
   private spawnPhantoms(ctx: EnemyUpdateContext): void {

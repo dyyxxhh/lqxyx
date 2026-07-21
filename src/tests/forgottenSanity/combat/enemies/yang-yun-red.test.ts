@@ -188,3 +188,69 @@ describe('YangYunRed charge damage override (spec §5.10)', () => {
     expect(knockbackSpy.called).toBe(false);
   });
 });
+
+// spec §5.10 二阶段：所有技能 CD 减半（cdMultiplier=0.5）
+describe('#6 phase2 cdMultiplier halves all CDs', () => {
+  it('phase1 has cdMultiplier=1', () => {
+    const e = new YangYunRedEnemy('elite-cd-1', 0, 0);
+    expect(e.getCdMultiplier()).toBe(1);
+  });
+
+  it('phase2 sets cdMultiplier=0.5', () => {
+    const e = new YangYunRedEnemy('elite-cd-2', 0, 0);
+    e.enrage();
+    (e as unknown as { hp: number }).hp = 100; // < 40% of 320 = 128
+    e.update(1, ctxStub({ playerPos: { x: 0, y: 500 } })); // 触发 phase 转换
+    expect(e.phase).toBe(2);
+    expect(e.getCdMultiplier()).toBe(0.5);
+  });
+
+  it('phase1 effective CDs equal base constants', () => {
+    const e = new YangYunRedEnemy('elite-cd-3', 0, 0);
+    expect(e.getEffectiveChargeIntervalMs()).toBe(3000);
+    expect(e.getEffectiveChargeWindupMs()).toBe(1000);
+    expect(e.getEffectiveChargeDurationMs()).toBe(700);
+    expect(e.getEffectiveCrackIntervalMs()).toBe(8000);
+    expect(e.getEffectiveCrackWindupMs()).toBe(600);
+  });
+
+  it('phase2 halves charge interval (3000→1500)', () => {
+    const e = new YangYunRedEnemy('elite-cd-4', 0, 0);
+    e.enrage();
+    (e as unknown as { hp: number }).hp = 100;
+    e.update(1, ctxStub({ playerPos: { x: 0, y: 500 } }));
+    expect(e.getEffectiveChargeIntervalMs()).toBe(1500);
+  });
+
+  it('phase2 halves charge windup (1000→500)', () => {
+    const e = new YangYunRedEnemy('elite-cd-5', 0, 0);
+    e.enrage();
+    (e as unknown as { hp: number }).hp = 100;
+    e.update(1, ctxStub({ playerPos: { x: 0, y: 500 } }));
+    expect(e.getEffectiveChargeWindupMs()).toBe(500);
+  });
+
+  it('phase2 halves charge duration (700→350)', () => {
+    const e = new YangYunRedEnemy('elite-cd-6', 0, 0);
+    e.enrage();
+    (e as unknown as { hp: number }).hp = 100;
+    e.update(1, ctxStub({ playerPos: { x: 0, y: 500 } }));
+    expect(e.getEffectiveChargeDurationMs()).toBe(350);
+  });
+
+  it('phase2 halves crack interval (8000→4000)', () => {
+    const e = new YangYunRedEnemy('elite-cd-7', 0, 0);
+    e.enrage();
+    (e as unknown as { hp: number }).hp = 100;
+    e.update(1, ctxStub({ playerPos: { x: 0, y: 500 } }));
+    expect(e.getEffectiveCrackIntervalMs()).toBe(4000);
+  });
+
+  it('phase2 halves crack windup (600→300)', () => {
+    const e = new YangYunRedEnemy('elite-cd-8', 0, 0);
+    e.enrage();
+    (e as unknown as { hp: number }).hp = 100;
+    e.update(1, ctxStub({ playerPos: { x: 0, y: 500 } }));
+    expect(e.getEffectiveCrackWindupMs()).toBe(300);
+  });
+});

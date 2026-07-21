@@ -183,6 +183,18 @@ export class CombatManager {
     this.adjacentRooms = map;
   }
 
+  /** spec §5.11.7 远房累计测试 helper：直接写入 enemy 远房累计毫秒，模拟远房 4Hz 降级场景。
+   *  仅供测试使用 — 运行时由 update() 自然累积。 */
+  setFarRoomAccumMs(enemyId: string, ms: number): void {
+    this.farRoomAccumMs.set(enemyId, ms);
+  }
+
+  /** spec §5.11.7 远房累计测试 helper：查询 enemy 是否仍有远房累计条目。
+   *  仅供测试使用 — 用于断言 handleDeadEnemies 是否清理了 dead 敌人的残留条目。 */
+  hasFarRoomAccumMs(enemyId: string): boolean {
+    return this.farRoomAccumMs.has(enemyId);
+  }
+
   /** Task 8 (#7): 设置房间矩形清单，update() 每帧顶部据此更新 enemy.currentRoomId。
    *  与 map/forgottenSanityMapState.ts 的 ForgottenSanityRoom 结构兼容（仅需 id + bounds）。 */
   setRooms(rooms: readonly RoomInfo[]): void {
@@ -1047,6 +1059,8 @@ export class CombatManager {
         this.callbacks.onEliteDefeated?.();
       }
       this.callbacks.onEnemyKilled?.(enemy);
+      // Task 21 (1.2): 清理 dead 敌人的远房累计计时器，避免残留泄漏
+      this.farRoomAccumMs.delete(enemy.id);
       this.enemies.splice(i, 1);
     }
   }

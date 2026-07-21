@@ -648,3 +648,38 @@ describe('M6 setFrozen freezes enemy AI', () => {
     expect(onDamaged).not.toHaveBeenCalled(); // frozen → 不接触伤害
   });
 });
+
+// Task 21 (1.2): handleDeadEnemies 同步 this.farRoomAccumMs.delete(enemy.id)，
+// 避免 dead 敌人的远房累计计时器残留导致内存泄漏。
+// 活着的敌人不应被清理；只有 dead 敌人的条目应被同步删除。
+describe('1.2 farRoomAccumMs cleanup on enemy death (Task 21)', () => {
+  it('deletes enemy from farRoomAccumMs when enemy dies', () => {
+    const cm = makeManager();
+    cm.setPlayerPosition(10000, 10000); // 远离敌人，避免接触伤害干扰
+    const enemy = new DummyEnemy({
+      id: 'e1', x: 0, y: 0,
+      maxHp: 5, speed: 0, contactDamage: 0, contactRadius: 20,
+    });
+    cm.addEnemy(enemy);
+    cm.setFarRoomAccumMs('e1', 250); // 模拟远房累计
+    expect(cm.hasFarRoomAccumMs('e1')).toBe(true);
+    // 杀死敌人
+    enemy.hp = 0;
+    enemy.dead = true;
+    cm.update(0); // update() 末尾会调用 handleDeadEnemies，应同步 delete
+    expect(cm.hasFarRoomAccumMs('e1')).toBe(false);
+  });
+
+  it('does not delete farRoomAccumMs for living enemies', () => {
+    const cm = makeManager();
+    cm.setPlayerPosition(10000, 10000); // 远离敌人，避免接触伤害干扰
+    const enemy = new DummyEnemy({
+      id: 'e1', x: 0, y: 0,
+      maxHp: 100, speed: 0, contactDamage: 0, contactRadius: 20,
+    });
+    cm.addEnemy(enemy);
+    cm.setFarRoomAccumMs('e1', 250);
+    cm.update(16); // 敌人活着，update 不应清理 farRoomAccumMs
+    expect(cm.hasFarRoomAccumMs('e1')).toBe(true);
+  });
+});

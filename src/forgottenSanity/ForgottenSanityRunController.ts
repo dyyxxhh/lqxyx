@@ -288,6 +288,8 @@ export class ForgottenSanityRunController {
 
     // spec §5.11.7: 派生 adjacentRooms 并传入 CombatManager（远房 4Hz 降级判定）
     this.combatManager.setAdjacentRooms(this.deriveAdjacentRooms(this.manifest));
+    // Task 8 (#7) / Task 23 接入：传入房间矩形清单，update() 每帧据此更新 enemy.currentRoomId
+    this.combatManager.setRooms(this.manifest.rooms);
 
     // spec §10.1: vault door 交互 hitArea
     const vaultDoor = this.manifest.doors.find((d) => d.roomId === this.manifest.vaultRoomId);
@@ -846,6 +848,105 @@ export class ForgottenSanityRunController {
       exitY: this.exitY,
     };
     this.scene.updateMinimap(update);
+  }
+
+  // ───────────────────────────────────────────────────────────────────
+  // 测试钩子（plan 2026-07-19 Task 23）
+  // 仅供 DEV / E2E 调用，通过 ForgottenSanityScene.__YING_ZHONG_JIU_FORGOTTEN_SANITY_SCENE__
+  // 暴露给 window。每个方法都对应 ForgottenSanityTestHooks 接口的一项。
+  // ───────────────────────────────────────────────────────────────────
+
+  /** 给玩家加 1 把仓库钥匙（spec §10.1 测试用）。 */
+  public giveVaultKeyForTest(): void {
+    this.inventory.add('material.vaultKey', 1);
+  }
+
+  /** 把玩家瞬移到 vault door 交互点（spec §10.1 测试用）。 */
+  public movePlayerToVaultDoorForTest(): void {
+    this.playerX = this.vaultDoorX;
+    this.playerY = this.vaultDoorY;
+    this.playerSprite?.setPosition(this.playerX, this.playerY);
+  }
+
+  /** 把玩家瞬移到指定房间中心（E2E fog-of-war / 战斗摘要测试用）。
+   *  roomId 支持语义别名 'entrance'/'exit'/'vault'（解析为 manifest 对应房间）。 */
+  public movePlayerToForTest(roomId: string): void {
+    const resolved = this.resolveRoomIdForTest(roomId);
+    const room = this.manifest.rooms.find((r) => r.id === resolved);
+    if (room === undefined) return;
+    this.playerX = room.bounds.x + room.bounds.width / 2;
+    this.playerY = room.bounds.y + room.bounds.height / 2;
+    this.playerSprite?.setPosition(this.playerX, this.playerY);
+  }
+
+  /**
+   * 在指定房间中心生成一个宝箱并立即开始破译（spec §10.1 测试用）。
+   * isVaultChest=true 时房间应 = vaultRoomId，ChestDecrypt 走 forceOpen() 免费开。
+   * 不经过 findNearestChest 距离判定，直接 startChestDecrypt。
+   */
+  public spawnChestForTest(roomId: string, isVaultChest: boolean): void {
+    const targetRoomId = isVaultChest ? this.manifest.vaultRoomId : roomId;
+    const room = this.manifest.rooms.find((r) => r.id === targetRoomId);
+    if (room === undefined) return;
+    const synthetic: ForgottenSanityChestSpawn = {
+      id: `test-chest-${Date.now()}-${Math.floor(Math.random() * 100000)}`,
+      roomId: targetRoomId,
+      kind: 'normal',
+      bounds: {
+        x: room.bounds.x + room.bounds.width / 2 - 16,
+        y: room.bounds.y + room.bounds.height / 2 - 16,
+        width: 32,
+        height: 32,
+      },
+    };
+    this.startChestDecrypt(synthetic);
+  }
+
+  /** 背包摘要：items = { itemId: quantity }，vaultKey = 仓库钥匙数量。 */
+  public getInventorySummaryForTest(): { items: Record<string, number>; vaultKey: number } {
+    const items: Record<string, number> = {};
+    for (const entry of this.inventory.entries()) {
+      items[entry.itemId] = entry.quantity;
+    }
+    return {
+      items,
+      vaultKey: this.inventory.quantity('material.vaultKey'),
+    };
+  }
+
+  /** 战斗摘要：敌人总数 / 复制体数 / 远房（非玩家所在房间）敌人数。 */
+  public getCombatSummaryForTest(): { enemyCount: number; duplicateCount: number; farRoomCount: number } {
+    const enemies = this.combatManager.enemies;
+    const playerRoom = this.manifest.rooms.find(
+      (r) => rectContains(r.bounds, { x: this.playerX, y: this.playerY }),
+    );
+    const playerRoomId = playerRoom?.id ?? null;
+    return {
+      enemyCount: enemies.length,
+      duplicateCount: enemies.filter((e) => e.isDuplicate).length,
+      farRoomCount: enemies.filter((e) => e.currentRoomId !== playerRoomId).length,
+    };
+  }
+
+  /** vault 状态：门是否已解锁 / 已破译宝箱数（含 test spawn 的 vault chest）。 */
+  public getVaultStateForTest(): { doorUnlocked: boolean; chestsOpened: number } {
+    return {
+      doorUnlocked: this.renderer.vaultUnlocked,
+      chestsOpened: this.chestDecrypts.size,
+    };
+  }
+
+  /** 雾战已探索 cell 索引数组（spec §9.2）。 */
+  public getExploredCellsForTest(): number[] {
+    return [...this.exploredCells];
+  }
+
+  /** 将语义别名解析为真实房间 ID（E2E 不知随机 room ID，用 'entrance'/'exit'/'vault'）。 */
+  private resolveRoomIdForTest(roomId: string): string {
+    if (roomId === 'entrance') return this.manifest.entranceRoomId;
+    if (roomId === 'exit') return this.manifest.exitRoomId;
+    if (roomId === 'vault') return this.manifest.vaultRoomId;
+    return roomId;
   }
 
   // ───────────────────────────────────────────────────────────────────

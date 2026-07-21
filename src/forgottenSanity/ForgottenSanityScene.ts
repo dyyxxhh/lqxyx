@@ -5,7 +5,7 @@
 // spec §1.2 / §1.3 / §5.10 / §9.x / §11.x，plan 6 Task 11。
 import Phaser from 'phaser';
 
-import { GAME_HEIGHT, GAME_WIDTH } from '../game/scaffoldState';
+import { GAME_HEIGHT, GAME_WIDTH, getSceneDebugState } from '../game/scaffoldState';
 import { UI_THEME, applyPixelStrokeStyle, applyPixelTextStyle } from '../ui/uiTheme';
 import { ForgottenSanityHUD, type HudSnapshot } from './ui/ForgottenSanityHUD';
 import { Minimap, type MinimapUpdate } from './ui/Minimap';
@@ -223,6 +223,17 @@ export class ForgottenSanityScene extends Phaser.Scene {
         __testTogglePause: () => this.togglePause(),
       };
       window.__YING_ZHONG_JIU_FORGOTTEN_SANITY_SCENE__ = hooks;
+    }
+
+    // Task 23: 标记 forgottenSanity 调试子状态（供 E2E 检测 run 场景就绪）。
+    // 仅写 scene 字段；inventory/combat/exploredCells 等由 *ForTest 测试钩子按需读取。
+    getSceneDebugState().forgottenSanity = { scene: 'run' };
+    // feature-detection：mock 测试环境（Object.create 绕过构造器）无 events.once
+    if (typeof this.events?.once === 'function') {
+      this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+        const state = getSceneDebugState();
+        state.forgottenSanity = { scene: 'none' };
+      });
     }
   }
 

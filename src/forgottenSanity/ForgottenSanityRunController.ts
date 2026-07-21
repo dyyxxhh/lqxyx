@@ -211,6 +211,13 @@ export class ForgottenSanityRunController {
           args[4] as number, args[5] as number,
           args[6] as DamageInstance,
         ),
+      damageClosestEnemyInFanWithHit: (...args: readonly unknown[]) =>
+        this.combatManager.damageClosestEnemyInFanWithHit(
+          args[0] as number, args[1] as number,
+          args[2] as number, args[3] as number,
+          args[4] as number, args[5] as number,
+          args[6] as DamageInstance,
+        ),
       damageEnemiesInFan: (...args: readonly unknown[]) =>
         this.combatManager.damageEnemiesInFan(
           args[0] as number, args[1] as number,
@@ -221,6 +228,7 @@ export class ForgottenSanityRunController {
       damageEnemiesInCircle: (...args: readonly unknown[]) =>
         this.combatManager.damageEnemiesInCircle(
           args[0] as number, args[1] as number, args[2] as number, args[3] as DamageInstance,
+          args[4] as { excludeIds?: Set<string>; source?: string } | undefined,
         ),
       spawnPlayerProjectile: (p: PlayerProjectile) => this.combatManager.spawnPlayerProjectile(p),
       spawnPlayerZone: (z: PlayerZone) => this.combatManager.spawnPlayerZone(z),

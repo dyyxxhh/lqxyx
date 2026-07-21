@@ -264,3 +264,35 @@ describe('fistDash 路径伤害与末端伤害 (spec §4.7/§3.2)', () => {
     expect(e.hp).toBe(100);
   });
 });
+
+describe('#3 fistDash hitSet 去重 — 路径+末端同敌只算一次', () => {
+  it('路径+末端命中同一敌人 → 仅 40 伤害（非 80）', () => {
+    const { adapter, manager, player } = makeAdapter();
+    player.weaponId = 'weapon.fistGauntlet';
+    manager.setPlayerPosition(0, 0);
+    // 冲刺方向 (1,0)：路径扇形从 (0,0) range=250 半角 22.5°；末端圆心 (250,0) r=60
+    // 敌人 (200,0)：
+    //   - 距原点 200 ≤ 274 (250+contactRadius24)，角度 0 ≤ 22.5° → 路径命中
+    //   - 距终点 (250,0) 50 ≤ 84 (60+24)              → 末端命中
+    // → 路径+末端均命中同一敌人；去重后应仅扣 40
+    const e = makeEnemy(200, 0, 1000);
+    manager.addEnemy(e);
+    adapter.performUltimate({ x: 1, y: 0 }, 0);
+    expect(e.hp).toBe(960); // 1000 - 40（非 920 = 1000 - 80）
+  });
+
+  it('路径命中 enemyA + 末端命中 enemyB → A 仅 40（去重），B 40', () => {
+    const { adapter, manager, player } = makeAdapter();
+    player.weaponId = 'weapon.fistGauntlet';
+    manager.setPlayerPosition(0, 0);
+    // enemyA (200,0)：路径+末端均命中（去重 → 仅 40）
+    // enemyB (310,0)：距原点 310 > 274（路径外），距终点 60 ≤ 84（末端内）→ 仅末端 40
+    const a = makeEnemy(200, 0, 1000);
+    const b = makeEnemy(310, 0, 1000);
+    manager.addEnemy(a);
+    manager.addEnemy(b);
+    adapter.performUltimate({ x: 1, y: 0 }, 0);
+    expect(a.hp).toBe(960); // 路径 40（末端被 excludeIds 排除）
+    expect(b.hp).toBe(960); // 末端 40
+  });
+});

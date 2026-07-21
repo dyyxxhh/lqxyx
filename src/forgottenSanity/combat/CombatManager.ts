@@ -215,9 +215,21 @@ export class CombatManager {
     range: number, halfAngle: number,
     instance: DamageInstance,
   ): number {
-    if (this.player.isDead) return 0;
+    return this.damageClosestEnemyInFanWithHit(
+      originX, originY, dirX, dirY, range, halfAngle, instance,
+    ).damage;
+  }
+
+  /** #3 fistDash 去重：返回命中敌人 id（未命中返回 null），供路径+末端同敌去重使用。 */
+  damageClosestEnemyInFanWithHit(
+    originX: number, originY: number,
+    dirX: number, dirY: number,
+    range: number, halfAngle: number,
+    instance: DamageInstance,
+  ): { damage: number; enemyId: string | null } {
+    if (this.player.isDead) return { damage: 0, enemyId: null };
     const len = Math.sqrt(dirX * dirX + dirY * dirY);
-    if (len === 0) return 0;
+    if (len === 0) return { damage: 0, enemyId: null };
     const ux = dirX / len;
     const uy = dirY / len;
     let closest: Enemy | null = null;
@@ -242,21 +254,26 @@ export class CombatManager {
         closestDist = dist;
       }
     }
-    if (closest === null) return 0;
+    if (closest === null) return { damage: 0, enemyId: null };
     const dealt = this.applyDamageInstanceToEnemy(closest, instance);
     this.handleDeadEnemies();
-    return dealt;
+    return { damage: dealt, enemyId: closest.id };
   }
 
-  /** 对圆形范围内敌人造成伤害 + 可选 debuff。返回实际总扣血。 */
+  /** 对圆形范围内敌人造成伤害 + 可选 debuff。返回实际总扣血。
+   *  options.excludeIds：跳过已命中敌人 id（#3 fistDash 路径+末端去重）。
+   *  options.source：调试/日志标识（当前实现未使用，保留以备将来扩展）。 */
   damageEnemiesInCircle(
     cx: number, cy: number, radius: number,
     instance: DamageInstance,
+    options?: { excludeIds?: Set<string>; source?: string },
   ): number {
     if (this.player.isDead) return 0;
+    const excludeIds = options?.excludeIds;
     let totalDealt = 0;
     for (const enemy of this.enemies) {
       if (enemy.dead) continue;
+      if (excludeIds !== undefined && excludeIds.has(enemy.id)) continue;
       const dist = Math.hypot(enemy.x - cx, enemy.y - cy);
       if (dist <= radius + enemy.contactRadius) {
         totalDealt += this.applyDamageInstanceToEnemy(enemy, instance);

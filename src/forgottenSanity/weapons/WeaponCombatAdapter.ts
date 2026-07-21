@@ -34,11 +34,19 @@ export interface CombatPort {
     originX: number, originY: number, dirX: number, dirY: number,
     range: number, halfAngle: number, instance: DamageInstance,
   ): number;
+  /** #3 fistDash 去重：返回命中敌人 id（未命中返回 null）。 */
+  damageClosestEnemyInFanWithHit(
+    originX: number, originY: number, dirX: number, dirY: number,
+    range: number, halfAngle: number, instance: DamageInstance,
+  ): { damage: number; enemyId: string | null };
   damageEnemiesInFan(
     originX: number, originY: number, dirX: number, dirY: number,
     range: number, halfAngle: number, instance: DamageInstance,
   ): number;
-  damageEnemiesInCircle(cx: number, cy: number, radius: number, instance: DamageInstance): number;
+  damageEnemiesInCircle(
+    cx: number, cy: number, radius: number, instance: DamageInstance,
+    options?: { excludeIds?: Set<string>; source?: string },
+  ): number;
   spawnPlayerProjectile(p: PlayerProjectile): void;
   spawnPlayerZone(z: PlayerZone): void;
   pullEnemiesToward(cx: number, cy: number, radius: number, pullDistance: number): void;
@@ -254,22 +262,29 @@ export class WeaponCombatAdapter {
   }
 
   // -- 拳套：无敌冲拳（实际冲刺 + 路径首敌 + 末端命中）(grill §4.7/§3.2: 0.3s / 250px / 无敌 / 锁定向) --
+  // #3 hitSet 去重：路径与末端若命中同一敌人，仅造成一次 40 伤害。
   private ultFistDash(ult: FistDashUlt, pos: Vec2): void {
     // 1. 玩家无敌 300ms
     this.combat.player.setInvincible(ult.invincibleMs);
     // 2. 锁定向 + 实际冲刺由 ForgottenSanityRunController 监听 ultimateFired 事件后设置 dashLockState
     //    （performUltimate 已 emit ultimateFired，此处不重复 emit）
-    // 3. 路径伤害 40（沿冲刺方向直线 250px 内最近敌，半角 22.5° 扇形）
+    // 3. 路径伤害 40（沿冲刺方向直线 250px 内最近敌，半角 22.5° 扇形）；记录命中 id
     const dir = this.lastDir;
-    this.combat.damageClosestEnemyInFan(
+    const hitSet = new Set<string>();
+    const pathHit = this.combat.damageClosestEnemyInFanWithHit(
       pos.x, pos.y, dir.x, dir.y,
       250, Math.PI / 8,
       { amount: 40, category: 'melee' },
     );
-    // 4. 末端伤害 40（冲刺结束点 r=60 内圆形 AOE）
+    if (pathHit.enemyId !== null) hitSet.add(pathHit.enemyId);
+    // 4. 末端伤害 40（冲刺结束点 r=60 内圆形 AOE，排除路径已命中敌人）
     const endX = pos.x + dir.x * 250;
     const endY = pos.y + dir.y * 250;
-    this.combat.damageEnemiesInCircle(endX, endY, 60, { amount: 40, category: 'melee' });
+    this.combat.damageEnemiesInCircle(
+      endX, endY, 60,
+      { amount: 40, category: 'melee' },
+      { excludeIds: hitSet, source: 'fistDash' },
+    );
   }
 
   // -- 锁链：群拉 + root + burn DoT 区域 (grill §4.7: 拉扯≤200px / root2s / burn10/s×3s) --

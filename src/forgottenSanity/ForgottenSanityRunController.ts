@@ -632,8 +632,9 @@ export class ForgottenSanityRunController {
     }
   }
 
-  private handleEliteDefeated(): void {
-    // spec §5.10：杨云红边击杀奖励
+  // spec §5.10：杨云红边击杀奖励。Task 1 暂由 ForgottenSanityScene 测试钩子直接调用，
+  // Task 23 会正式实现完整 *ForTest 方法包装器。
+  handleEliteDefeated(): void {
     // 1. 碎片掷骰（独立掷骰）
     const loot = rollLootTable(YANG_YUN_RED_LOOT_TABLE, this.rng.next.bind(this.rng));
     for (const item of loot) {

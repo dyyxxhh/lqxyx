@@ -39,6 +39,26 @@ export interface SceneSizingDebugState {
   readonly aspectRatio: number;
 }
 
+/**
+ * 被遗忘的理智 子状态（plan 2026-07-19 Task 1）。
+ * 由 ForgottenSanityScene / ForgottenSanityRunController 通过测试钩子聚合，
+ * 供 E2E 与手动 QA 通过 window.__YING_ZHONG_JIU_SCENE_STATE__.forgottenSanity 断言。
+ */
+export interface ForgottenSanityDebugState {
+  scene: 'hub' | 'run' | 'none';
+  inventory?: { items: Record<string, number>; vaultKey: number };
+  combat?: {
+    enemyCount: number;
+    duplicateCount: number;
+    farRoomCount: number;
+    playerRoomId: string | null;
+  };
+  exploredCells?: number[];
+  vaultDoorUnlocked?: boolean;
+  vaultChestsOpened?: number;
+  paused?: boolean;
+}
+
 export interface SceneDebugState {
   sceneOrder: GameSceneName[];
   currentScene: GameSceneName | null;
@@ -57,6 +77,8 @@ export interface SceneDebugState {
   ui: NarrativeUiDebugState;
   character: CharacterDebugState;
   map: MapDebugState;
+  /** 被遗忘的理智 子状态（仅在 ForgottenSanityScene/Hub 活跃时填充）。 */
+  forgottenSanity?: ForgottenSanityDebugState;
 }
 
 declare global {

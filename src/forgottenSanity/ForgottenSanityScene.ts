@@ -21,6 +21,32 @@ import { ForgottenSanityRunController } from './ForgottenSanityRunController';
 
 const ABORT_BUTTON_Y = GAME_HEIGHT / 2 + 120;
 
+/**
+ * ForgottenSanityScene 测试钩子接口（plan 2026-07-19 Task 1）。
+ * 仅在 DEV / test 环境挂载到 window.__YING_ZHONG_JIU_FORGOTTEN_SANITY_SCENE__，
+ * 供 E2E 与手动 QA 驱动对局状态（精英怪击败、暂停、仓库钥匙、宝箱 spawn 等）。
+ *
+ * 当前 task 仅暴露钩子壳并返回占位值；完整 *ForTest 实现见 Task 23。
+ */
+export interface ForgottenSanityTestHooks {
+  __testTriggerEliteDefeat(): void;
+  __testGiveVaultKey(): void;
+  __testMovePlayerToVaultDoor(): void;
+  __testSpawnChest(roomId: string, isVaultChest: boolean): void;
+  __testGetInventorySummary(): { items: Record<string, number>; vaultKey: number };
+  __testGetCombatSummary(): { enemyCount: number; duplicateCount: number; farRoomCount: number };
+  __testGetVaultState(): { doorUnlocked: boolean; chestsOpened: number };
+  __testGetExploredCells(): number[];
+  __testMovePlayerTo(roomId: string): void;
+  __testTogglePause(): void;
+}
+
+declare global {
+  interface Window {
+    __YING_ZHONG_JIU_FORGOTTEN_SANITY_SCENE__?: ForgottenSanityTestHooks;
+  }
+}
+
 export class ForgottenSanityScene extends Phaser.Scene {
   private hud: ForgottenSanityHUD | null = null;
   private minimap: Minimap | null = null;
@@ -35,6 +61,8 @@ export class ForgottenSanityScene extends Phaser.Scene {
   private pendingBodyMarkers: MinimapUpdate['bodyMarkers'][number][] = [];
   // 对局装配器（create 时若真实 Phaser API 可用则实例化；mock 测试环境跳过）
   private runController: ForgottenSanityRunController | null = null;
+  // 暂停状态（Task 1 简单实现：仅切换布尔；Task 21 引入 PauseMenu 时扩展）
+  private paused = false;
 
   public constructor() {
     super('ForgottenSanityScene');
@@ -115,6 +143,74 @@ export class ForgottenSanityScene extends Phaser.Scene {
     if (typeof addZone === 'function' && textures?.exists?.('floor.tile') === true) {
       this.runController = new ForgottenSanityRunController(this);
     }
+
+    // ── 测试钩子（仅 DEV / test 环境挂载到 window）──
+    // plan 2026-07-19 Task 1：当前仅暴露壳 + 占位返回值。
+    // __testTriggerEliteDefeat 直接调用 runController.handleEliteDefeated()（已改 public）。
+    // __testTogglePause 调用 this.togglePause()（简单布尔切换）。
+    // 其他钩子通过 duck-typing 探测 runController.*ForTest 方法（Task 23 实现），
+    //   方法不存在时返回占位值。
+    if (import.meta.env.DEV || process.env.NODE_ENV === 'test') {
+      const hooks: ForgottenSanityTestHooks = {
+        __testTriggerEliteDefeat: () => this.runController?.handleEliteDefeated(),
+        __testGiveVaultKey: () => {
+          const ctrl = this.runController as unknown as { giveVaultKeyForTest?: () => void } | null;
+          ctrl?.giveVaultKeyForTest?.();
+        },
+        __testMovePlayerToVaultDoor: () => {
+          const ctrl = this.runController as unknown as { movePlayerToVaultDoorForTest?: () => void } | null;
+          ctrl?.movePlayerToVaultDoorForTest?.();
+        },
+        __testSpawnChest: (roomId, isVaultChest) => {
+          const ctrl = this.runController as unknown as {
+            spawnChestForTest?: (rId: string, isVault: boolean) => void;
+          } | null;
+          ctrl?.spawnChestForTest?.(roomId, isVaultChest);
+        },
+        __testGetInventorySummary: () => {
+          const ctrl = this.runController as unknown as {
+            getInventorySummaryForTest?: () => { items: Record<string, number>; vaultKey: number };
+          } | null;
+          return ctrl?.getInventorySummaryForTest?.() ?? { items: {}, vaultKey: 0 };
+        },
+        __testGetCombatSummary: () => {
+          const ctrl = this.runController as unknown as {
+            getCombatSummaryForTest?: () => { enemyCount: number; duplicateCount: number; farRoomCount: number };
+          } | null;
+          return ctrl?.getCombatSummaryForTest?.() ?? { enemyCount: 0, duplicateCount: 0, farRoomCount: 0 };
+        },
+        __testGetVaultState: () => {
+          const ctrl = this.runController as unknown as {
+            getVaultStateForTest?: () => { doorUnlocked: boolean; chestsOpened: number };
+          } | null;
+          return ctrl?.getVaultStateForTest?.() ?? { doorUnlocked: false, chestsOpened: 0 };
+        },
+        __testGetExploredCells: () => {
+          const ctrl = this.runController as unknown as { getExploredCellsForTest?: () => number[] } | null;
+          return ctrl?.getExploredCellsForTest?.() ?? [];
+        },
+        __testMovePlayerTo: (roomId) => {
+          const ctrl = this.runController as unknown as { movePlayerToForTest?: (rId: string) => void } | null;
+          ctrl?.movePlayerToForTest?.(roomId);
+        },
+        __testTogglePause: () => this.togglePause(),
+      };
+      window.__YING_ZHONG_JIU_FORGOTTEN_SANITY_SCENE__ = hooks;
+    }
+  }
+
+  /**
+   * 切换对局暂停状态（plan 2026-07-19 Task 1 简单实现）。
+   * Task 21 引入 PauseMenu 时会扩展为：冻结 update + 显示菜单 + ESC 关闭。
+   * 当前仅切换布尔字段，供测试钩子 __testTogglePause 驱动。
+   */
+  public togglePause(): void {
+    this.paused = !this.paused;
+  }
+
+  /** 当前是否处于暂停状态（供测试钩子 / 后续 PauseMenu 读取）。 */
+  public isPaused(): boolean {
+    return this.paused;
   }
 
   public update(_time: number, _delta: number): void {

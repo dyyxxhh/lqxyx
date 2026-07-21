@@ -116,7 +116,10 @@ describe('handleEliteDefeated source contract (spec §5.10 + §9.3 + §10.1)', (
       path.resolve(__dirname, '../../forgottenSanity/ForgottenSanityRunController.ts'),
       'utf8',
     );
-    const match = ctrlSrc.match(/private handleEliteDefeated\(\)[^{]*\{([\s\S]*?)\n  \}/);
+    // Task 1 将 handleEliteDefeated 从 private 改为 public（无修饰符），
+    // 以便 ForgottenSanityScene 测试钩子直接调用。regex 可见性修饰符可选，
+    // 并用 ^[ \t]* + m flag 锚定行首，避免匹配 this.handleEliteDefeated() 调用处。
+    const match = ctrlSrc.match(/^[ \t]*(?:private\s+|public\s+)?handleEliteDefeated\(\)[^{]*\{([\s\S]*?)\n  \}/m);
     expect(match).not.toBeNull();
     const body = match![1]!;
     // 必须添加仓库钥匙

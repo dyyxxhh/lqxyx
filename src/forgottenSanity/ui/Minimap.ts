@@ -173,7 +173,10 @@ export class Minimap {
       const oy = GAME_HEIGHT / 2 - (MINIMAP_HEIGHT * scale) / 2;
       this.bigMapMarkers.push(this.scene.add.circle(ox + px * scale, oy + py * scale, 6, COLOR_PLAYER, 1)
         .setScrollFactor(0).setDepth(BIG_MAP_TEXT_DEPTH));
+      // spec §9.2: 大地图复用小地图雾战过滤——未探索 cell 内的 chest/exit/body 不绘制。
       for (const c of u.chestMarkers) {
+        const cellIdx = cellIndexOf(c.x, c.y);
+        if (!exploredSet.has(cellIdx)) continue;
         const cx = this.worldToMinimapX(c.x);
         const cy = this.worldToMinimapY(c.y);
         const color = c.opened
@@ -183,12 +186,17 @@ export class Minimap {
           .setScrollFactor(0).setDepth(BIG_MAP_TEXT_DEPTH));
       }
       if (u.exitDiscovered) {
-        const ex = this.worldToMinimapX(u.exitX);
-        const ey = this.worldToMinimapY(u.exitY);
-        this.bigMapMarkers.push(this.scene.add.circle(ox + ex * scale, oy + ey * scale, 6, COLOR_EXIT, 1)
-          .setScrollFactor(0).setDepth(BIG_MAP_TEXT_DEPTH));
+        const exitCell = cellIndexOf(u.exitX, u.exitY);
+        if (exploredSet.has(exitCell)) {
+          const ex = this.worldToMinimapX(u.exitX);
+          const ey = this.worldToMinimapY(u.exitY);
+          this.bigMapMarkers.push(this.scene.add.circle(ox + ex * scale, oy + ey * scale, 6, COLOR_EXIT, 1)
+            .setScrollFactor(0).setDepth(BIG_MAP_TEXT_DEPTH));
+        }
       }
       for (const b of u.bodyMarkers) {
+        const cellIdx = cellIndexOf(b.x, b.y);
+        if (!exploredSet.has(cellIdx)) continue;
         const bx = this.worldToMinimapX(b.x);
         const by = this.worldToMinimapY(b.y);
         this.bigMapMarkers.push(this.scene.add.circle(ox + bx * scale, oy + by * scale, 5, COLOR_BODY, 1)

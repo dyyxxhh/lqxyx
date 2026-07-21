@@ -38,7 +38,7 @@ describe('ForgottenSanityRunController.runEvacuation (spec §1.3 — stash uncha
 });
 
 import type Phaser from 'phaser';
-import { Minimap } from '../../forgottenSanity/ui/Minimap';
+import { Minimap, BIG_MAP_TEXT_DEPTH } from '../../forgottenSanity/ui/Minimap';
 
 describe('Minimap fog of war (spec §9.2)', () => {
   it('does not render chest marker in unexplored cell', () => {
@@ -174,5 +174,108 @@ describe('tryUnlockVaultDoor source contract (spec §10.1)', () => {
     expect(vaultIdx).toBeGreaterThan(-1);
     expect(exitIdx).toBeGreaterThan(-1);
     expect(vaultIdx).toBeLessThan(exitIdx);
+  });
+});
+
+describe('#10 bigMap fog-of-war filtering', () => {
+  // 大地图 circle 调用通过 setDepth(BIG_MAP_TEXT_DEPTH) 与小地图区分。
+  // cell 计算：row * 5 + col；col = floor(x/1000)，row = floor(y/1000)。
+  function createTrackedMinimap(): {
+    minimap: Minimap;
+    bigMapCalls: Array<{ x: number; y: number; r: number; color: number }>;
+  } {
+    const bigMapCalls: Array<{ x: number; y: number; r: number; color: number }> = [];
+    const fakeScene = {
+      add: {
+        rectangle: () => ({
+          setOrigin: () => ({ setScrollFactor: () => ({ setDepth: () => ({ setInteractive: () => ({ on: () => ({}) }) }) }) }),
+          setScrollFactor: () => ({ setDepth: () => ({ setInteractive: () => ({ on: () => ({}) }) }) }),
+        }),
+        circle: vi.fn((x: number, y: number, r: number, color: number) => ({
+          setScrollFactor: () => ({
+            setDepth: (d: number) => {
+              if (d === BIG_MAP_TEXT_DEPTH) bigMapCalls.push({ x, y, r, color });
+              return {};
+            },
+          }),
+          destroy: () => {},
+        })),
+      },
+      cameras: { main: { width: 200, height: 200 } },
+      input: { keyboard: { addKey: () => ({ on: () => {} }) } },
+    } as unknown as Phaser.Scene;
+    const minimap = new Minimap(fakeScene);
+    return { minimap, bigMapCalls };
+  }
+
+  it('does not render chest/exit/body markers on big map when their cells are unexplored', () => {
+    const { minimap, bigMapCalls } = createTrackedMinimap();
+    minimap.toggleBigMap(); // 打开大地图
+
+    // 玩家 (500,500) → cell 0（已探索）
+    // chest (2000,2000) → cell 12，未探索
+    // body (2500,1500) → cell 7，未探索
+    // exit (3000,3000) → cell 18，未探索
+    minimap.update({
+      playerX: 500, playerY: 500,
+      exploredCells: [0],
+      chestMarkers: [{ id: 'c1', x: 2000, y: 2000, opened: false, kind: 'normal' }],
+      bodyMarkers: [{ bodyId: 'b1', x: 2500, y: 1500 }],
+      exitDiscovered: true, exitX: 3000, exitY: 3000,
+    });
+
+    // 大地图上应只有玩家点（cell 0），chest/exit/body 全部被过滤
+    expect(bigMapCalls.length).toBe(1);
+  });
+
+  it('renders chest/exit/body markers on big map when their cells are explored', () => {
+    const { minimap, bigMapCalls } = createTrackedMinimap();
+    minimap.toggleBigMap();
+
+    // 玩家 cell 0；chest cell 12；body cell 7；exit cell 18 — 全部已探索
+    minimap.update({
+      playerX: 500, playerY: 500,
+      exploredCells: [0, 7, 12, 18],
+      chestMarkers: [{ id: 'c1', x: 2000, y: 2000, opened: false, kind: 'normal' }],
+      bodyMarkers: [{ bodyId: 'b1', x: 2500, y: 1500 }],
+      exitDiscovered: true, exitX: 3000, exitY: 3000,
+    });
+
+    // 大地图上应有：玩家 + chest + exit + body = 4 个
+    expect(bigMapCalls.length).toBe(4);
+  });
+
+  it('does not show chest in unexplored cell on big map (single chest case)', () => {
+    const { minimap, bigMapCalls } = createTrackedMinimap();
+    minimap.toggleBigMap();
+
+    // 仅 cell 0 探索；远房 cell 12 有宝箱
+    minimap.update({
+      playerX: 500, playerY: 500,
+      exploredCells: [0],
+      chestMarkers: [{ id: 'c1', x: 2000, y: 2000, opened: false, kind: 'normal' }],
+      bodyMarkers: [],
+      exitDiscovered: false, exitX: 0, exitY: 0,
+    });
+
+    // 仅玩家点；chest 不显示
+    expect(bigMapCalls.length).toBe(1);
+  });
+
+  it('shows chest in explored cell on big map (single chest case)', () => {
+    const { minimap, bigMapCalls } = createTrackedMinimap();
+    minimap.toggleBigMap();
+
+    // cell 0 + cell 12 探索；chest 在 cell 12
+    minimap.update({
+      playerX: 500, playerY: 500,
+      exploredCells: [0, 12],
+      chestMarkers: [{ id: 'c1', x: 2000, y: 2000, opened: false, kind: 'normal' }],
+      bodyMarkers: [],
+      exitDiscovered: false, exitX: 0, exitY: 0,
+    });
+
+    // 玩家点 + chest = 2 个
+    expect(bigMapCalls.length).toBe(2);
   });
 });

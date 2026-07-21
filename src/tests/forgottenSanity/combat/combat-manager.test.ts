@@ -584,3 +584,67 @@ describe('#7 enemy currentRoomId per-frame point-in-rect assignment (Task 8)', (
     }
   });
 });
+
+// M6: 雾战遮罩激活期间（红边击杀后 2s），敌人 AI 冻结（不移动、不攻击），
+// 仅更新视觉特效（wallHitParticles）。ForgottenSanityRunController.handleEliteDefeated
+// 触发复制 ×2 后立即 setFrozen(true)，RED_EDGE_MASK_DURATION_MS 后 setFrozen(false)。
+describe('M6 setFrozen freezes enemy AI', () => {
+  it('isFrozen returns false by default', () => {
+    const cm = makeManager();
+    expect(cm.isFrozen()).toBe(false);
+  });
+
+  it('setFrozen(true) makes isFrozen() return true', () => {
+    const cm = makeManager();
+    cm.setFrozen(true);
+    expect(cm.isFrozen()).toBe(true);
+  });
+
+  it('does not advance enemy AI when frozen (updateCalls empty)', () => {
+    const cm = makeManager();
+    cm.setPlayerPosition(10000, 10000); // 避免接触伤害/激怒机制干扰
+    const enemy = new FakeRoomEnemy('e1', 100, 100, 'butYuxuanHead');
+    cm.addEnemy(enemy);
+    cm.setFrozen(true);
+    cm.update(1000);
+    expect(enemy.updateCalls.length).toBe(0); // frozen → enemy.update 未被调用
+  });
+
+  it('resumes enemy AI when unfrozen', () => {
+    const cm = makeManager();
+    cm.setPlayerPosition(10000, 10000);
+    const enemy = new FakeRoomEnemy('e1', 100, 100, 'butYuxuanHead');
+    cm.addEnemy(enemy);
+    cm.setFrozen(true);
+    cm.update(1000);
+    expect(enemy.updateCalls.length).toBe(0);
+    cm.setFrozen(false);
+    expect(cm.isFrozen()).toBe(false);
+    cm.update(16);
+    expect(enemy.updateCalls.length).toBe(1); // 解冻后 AI 推进
+    expect(enemy.updateCalls[0]).toBe(16);
+  });
+
+  it('still updates wall hit particles when frozen (visual fx not frozen)', () => {
+    const cm = makeManager();
+    cm.spawnWallHitFx(100, 100);
+    expect(cm.getWallHitParticles().length).toBe(3);
+    cm.setFrozen(true);
+    cm.update(200); // 200ms 后粒子应消失（视觉特效仍推进）
+    expect(cm.getWallHitParticles().length).toBe(0);
+  });
+
+  it('does not apply contact damage when frozen', () => {
+    const onDamaged = vi.fn();
+    const cm = makeManager({ onPlayerDamaged: onDamaged });
+    const enemy = new DummyEnemy({
+      id: 'e1', x: 0, y: 0,
+      maxHp: 100, speed: 0, contactDamage: 8, contactRadius: 30,
+    });
+    cm.addEnemy(enemy);
+    cm.setPlayerPosition(10, 0); // 玩家在接触范围内
+    cm.setFrozen(true);
+    cm.update(1000);
+    expect(onDamaged).not.toHaveBeenCalled(); // frozen → 不接触伤害
+  });
+});

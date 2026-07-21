@@ -144,6 +144,9 @@ export class CombatManager {
   private rooms: readonly RoomInfo[] = [];
   // Task 6 (#4): 撞墙粒子池（spawnWallHitFx 生成，updateWallHitParticles 推进）
   private readonly wallHitParticles: WallHitParticle[] = [];
+  // M6: 雾战遮罩冻结敌人 AI — frozen=true 时 update 仅更新视觉特效（wallHitParticles 等），
+  //     不推进敌人 AI/移动/攻击。handleEliteDefeated 触发后激活 RED_EDGE_MASK_DURATION_MS。
+  private frozen = false;
 
   constructor(
     player: PlayerCombat,
@@ -184,6 +187,17 @@ export class CombatManager {
    *  与 map/forgottenSanityMapState.ts 的 ForgottenSanityRoom 结构兼容（仅需 id + bounds）。 */
   setRooms(rooms: readonly RoomInfo[]): void {
     this.rooms = rooms;
+  }
+
+  /** M6: 冻结/解冻敌人 AI。frozen=true 时 update() 仅推进视觉特效（wallHitParticles），
+   *  跳过敌人 AI、弹幕、区域、接触伤害等。视觉特效不冻结以避免粒子卡死屏幕。 */
+  setFrozen(frozen: boolean): void {
+    this.frozen = frozen;
+  }
+
+  /** M6: 当前是否处于冻结状态。 */
+  isFrozen(): boolean {
+    return this.frozen;
   }
 
   addEnemy(enemy: Enemy): void {
@@ -577,6 +591,14 @@ export class CombatManager {
       }
     }
 
+    // M6: 雾战遮罩冻结敌人 AI — frozen=true 时仅更新视觉特效，跳过敌人 AI/弹幕/区域/接触伤害。
+    // 放在 currentRoomId 更新之后（Task 8 逻辑保留），敌人 AI 推进之前。
+    // 视觉特效（wallHitParticles）不冻结，避免粒子卡死屏幕。
+    if (this.frozen) {
+      this.updateVisualEffects(deltaMs);
+      return;
+    }
+
     // 1. 玩家 debuff tick
     this.player.tick(deltaMs);
     if (this.player.isDead) return;
@@ -869,6 +891,11 @@ export class CombatManager {
       p.lifeMs -= deltaMs;
       if (p.lifeMs <= 0) this.wallHitParticles.splice(i, 1);
     }
+  }
+
+  /** M6: frozen 时仅推进视觉特效（不冻结粒子，避免屏幕残留）。 */
+  private updateVisualEffects(deltaMs: number): void {
+    this.updateWallHitParticles(deltaMs);
   }
 
   private updateZones(deltaMs: number): void {

@@ -66,6 +66,8 @@ import {
 import type { ForgottenSanityScene } from './ForgottenSanityScene';
 import type { HudSnapshot } from './ui/ForgottenSanityHUD';
 import type { MinimapUpdate } from './ui/Minimap';
+// M6: 红边击杀后雾战遮罩激活期间冻结敌人 AI（2s）
+import { RED_EDGE_MASK_DURATION_MS } from './ui/RedEdgeFogOverlay';
 
 const PLAYER_SPRITE_DEPTH = 10;
 const CHEST_INTERACT_DISTANCE = 80;
@@ -658,6 +660,13 @@ export class ForgottenSanityRunController {
       y: this.playerY - 360,
       width: 1280,
       height: 720,
+    });
+    // 5. M6: 雾战遮罩激活期间冻结敌人 AI（2s）— 玩家视野缩减为 220px，
+    //    期间敌人不移动、不攻击，仅视觉特效（wallHitParticles）推进。
+    //    2s 后自动解冻，恢复敌人正常 AI。
+    this.combatManager.setFrozen(true);
+    this.scene.time.delayedCall(RED_EDGE_MASK_DURATION_MS, () => {
+      this.combatManager.setFrozen(false);
     });
   }
 

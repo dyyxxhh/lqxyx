@@ -52,6 +52,9 @@ function createCapturingAdd() {
     obj.setBlendMode = () => obj;
     obj.setStyle = () => obj;
     obj.disableInteractive = () => obj;
+    // 4.4 toast auto-dismiss：text.destroy() 是 Phaser GameObject 公开 API，
+    // mock 中提供 no-op 实现，使 showToast 的 delayedCall 回调可在测试环境执行。
+    obj.destroy = () => { /* no-op */ };
     obj.on = (event: string, cb: () => void) => {
       (handlers[event] ??= []).push(cb);
       return obj;
@@ -401,5 +404,77 @@ describe('M8 abandonRun source contract (plan Task 14)', () => {
     expect(body).not.toMatch(/depositRunInventory\s*\(/);
     // 不应调用 storeStash（仓库不变）
     expect(body).not.toMatch(/storeStash\s*\(/);
+  });
+});
+
+// ───────────────────────────────────────────────────────────────────────────
+// Plan 2026-07-19 Task 19 (4.4)：vault door toast 自动消失
+// showToast(message, durationMs=2000) 在屏幕上方显示一条文本，durationMs 后自动移除。
+// 默认 2000ms；支持自定义 durationMs。供 ForgottenSanityRunController.tryUnlockVaultDoor
+// 在「已解锁」/「需要仓库钥匙」分支调用。
+//
+// 测试策略：queue-based delayedCall mock —— 回调不立即执行，而是排队等待 advanceTime(ms)
+// 推进虚拟时钟后再触发；这样可精确验证 1999ms 仍可见、2000ms 才消失的边界。
+// ───────────────────────────────────────────────────────────────────────────
+
+interface ToastMockScene extends ForgottenSanityScene {
+  time: { delayedCall: (ms: number, cb: () => void) => { remove: () => void } };
+}
+
+function createSceneWithToastMocks(): {
+  scene: ToastMockScene;
+  advanceTime: (ms: number) => void;
+} {
+  const { scene: baseScene } = createSceneWithMocks();
+  const scene = baseScene as ToastMockScene;
+  // queue-based delayedCall：回调入队，advanceTime 推进虚拟时钟后才触发
+  const pendingTimers: Array<{ fireAt: number; callback: () => void; fired: boolean }> = [];
+  let virtualTime = 0;
+  scene.time = {
+    delayedCall: (durationMs: number, cb: () => void) => {
+      const entry = { fireAt: virtualTime + durationMs, callback: cb, fired: false };
+      pendingTimers.push(entry);
+      return { remove: () => { entry.fired = true; } };
+    },
+  };
+  const advanceTime = (ms: number): void => {
+    virtualTime += ms;
+    for (const t of pendingTimers) {
+      if (!t.fired && t.fireAt <= virtualTime) {
+        t.fired = true;
+        t.callback();
+      }
+    }
+  };
+  return { scene, advanceTime };
+}
+
+describe('4.4 toast auto-dismiss', () => {
+  it('showToast removes toast after 2000ms', () => {
+    const { scene, advanceTime } = createSceneWithToastMocks();
+    scene.create();
+    scene.showToast('test message');
+    expect(scene.getVisibleToasts().length).toBe(1);
+    advanceTime(2000);
+    expect(scene.getVisibleToasts().length).toBe(0);
+  });
+
+  it('showToast accepts custom durationMs', () => {
+    const { scene, advanceTime } = createSceneWithToastMocks();
+    scene.create();
+    scene.showToast('test', 500);
+    expect(scene.getVisibleToasts().length).toBe(1);
+    advanceTime(500);
+    expect(scene.getVisibleToasts().length).toBe(0);
+  });
+
+  it('showToast default durationMs is 2000', () => {
+    const { scene, advanceTime } = createSceneWithToastMocks();
+    scene.create();
+    scene.showToast('test');
+    advanceTime(1999);
+    expect(scene.getVisibleToasts().length).toBe(1); // 还未消失
+    advanceTime(1);
+    expect(scene.getVisibleToasts().length).toBe(0);
   });
 });

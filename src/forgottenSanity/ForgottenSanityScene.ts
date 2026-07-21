@@ -61,6 +61,8 @@ export class ForgottenSanityScene extends Phaser.Scene {
   private weaponAdapter: WeaponCombatAdapter | null = null;
   private currentLoadout: Loadout | null = null;
   private pendingBodyMarkers: MinimapUpdate['bodyMarkers'][number][] = [];
+  // 4.4: 当前可见的 toast 文本（durationMs 到期后从数组中移除并 destroy）
+  private toasts: Phaser.GameObjects.Text[] = [];
   // 对局装配器（create 时若真实 Phaser API 可用则实例化；mock 测试环境跳过）
   private runController: ForgottenSanityRunController | null = null;
   // Task 6 (#4): 撞墙粒子渲染器（与 CombatManager.wallHitParticles 同步）
@@ -78,6 +80,9 @@ export class ForgottenSanityScene extends Phaser.Scene {
     // 显式初始化暂停状态（测试环境通过 Object.create(prototype) 绕过构造器，
     // 类字段初始化器不会执行，故在此重置以确保 isPaused() 初始返回 false）
     this.paused = false;
+    // 4.4: 同理，toasts 字段初始化器在 Object.create 绕过构造器时不执行，
+    // 需在 create() 显式重置，否则 showToast 调用会因 this.toasts 为 undefined 而崩溃。
+    this.toasts = [];
     this.cameras.main.setBackgroundColor(UI_THEME.colors.surface);
     this.cameras.main.setBounds(0, 0, 5000, 4000);
 
@@ -336,6 +341,37 @@ export class ForgottenSanityScene extends Phaser.Scene {
     const out = this.pendingBodyMarkers;
     this.pendingBodyMarkers = [];
     return out;
+  }
+
+  /**
+   * 4.4 vault door toast：在屏幕上方显示一条消息，durationMs 后自动 destroy。
+   * 默认 2000ms。供 ForgottenSanityRunController.tryUnlockVaultDoor 在「已解锁」/
+   * 「需要仓库钥匙」分支调用。多个 toast 可同时存在并各自计时移除。
+   */
+  public showToast(message: string, durationMs: number = 2000): void {
+    const text = applyPixelTextStyle(
+      this.add.text(GAME_WIDTH / 2, 100, message, {
+        align: 'center',
+        color: UI_THEME.colors.text,
+        fontFamily: UI_THEME.font.ui,
+        fontSize: '16px',
+      }),
+    )
+      .setOrigin(0.5)
+      .setDepth(2000);
+    this.toasts.push(text);
+    this.time.delayedCall(durationMs, () => {
+      text.destroy();
+      const idx = this.toasts.indexOf(text);
+      if (idx >= 0) {
+        this.toasts.splice(idx, 1);
+      }
+    });
+  }
+
+  /** 当前可见的 toast 列表（供测试断言 auto-dismiss 行为）。 */
+  public getVisibleToasts(): readonly Phaser.GameObjects.Text[] {
+    return this.toasts;
   }
 
   public triggerRedEdgeKill(playerX: number, playerY: number): void {

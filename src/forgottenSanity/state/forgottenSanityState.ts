@@ -65,20 +65,36 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
 }
 
-function isStashState(value: unknown): value is ForgottenSanityStashState {
+export function isStashState(value: unknown): value is ForgottenSanityStashState {
   if (!isRecord(value)) return false;
   if (typeof value.sanity !== 'number') return false;
   if (!Array.isArray(value.items)) return false;
-  return value.items.every(
-    (item) => isRecord(item) && typeof item.itemId === 'string' && typeof item.quantity === 'number',
-  );
+  for (const item of value.items) {
+    if (!isRecord(item)) return false;
+    if (typeof item.itemId !== 'string') return false;
+    const quantity = item.quantity;
+    if (typeof quantity !== 'number') return false;
+    if (!Number.isFinite(quantity)) return false;
+    if (quantity < 0) return false;
+    if (!Number.isInteger(quantity)) return false;
+  }
+  return true;
 }
 
-function isUpgradesState(value: unknown): value is ForgottenSanityUpgradesState {
+export function isUpgradesState(value: unknown): value is ForgottenSanityUpgradesState {
   if (!isRecord(value)) return false;
   const tiers = value.tiers;
   if (!isRecord(tiers)) return false;
-  return UPGRADE_IDS.every((id) => typeof tiers[id] === 'number');
+  for (const id of UPGRADE_IDS) {
+    const v = tiers[id];
+    if (v === undefined) continue; // 允许缺失，默认 0
+    if (typeof v !== 'number') return false;
+    if (!Number.isFinite(v)) return false;
+    if (!Number.isInteger(v)) return false;
+    const max = id === 'armory' ? 3 : 5;
+    if (v < 0 || v > max) return false;
+  }
+  return true;
 }
 
 function isBestState(value: unknown): value is ForgottenSanityBestState {

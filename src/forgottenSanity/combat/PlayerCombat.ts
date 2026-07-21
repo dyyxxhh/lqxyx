@@ -85,15 +85,17 @@ export class PlayerCombat {
   }
 
   takeDamage(instance: DamageInstance): void {
-    if (this.invincibleMs > 0) return; // plan 4: 无敌态守卫
-    if (this._isDead || instance.amount <= 0) return;
-    this.hp = Math.max(0, this.hp - instance.amount);
-    if (this.onDamaged !== null) this.onDamaged(instance);
-    if (this.onHpChanged !== null) this.onHpChanged(this.hp);
+    if (this._isDead) return;
+    // M4 (plan Task 11): 无敌期免疫伤害数值，但 debuff 仍应用
     if (instance.debuff !== undefined) {
       this.debuffs.apply(instance.debuff);
       if (this.onDebuffApplied !== null) this.onDebuffApplied(instance.debuff);
     }
+    if (this.invincibleMs > 0) return; // plan 4: 无敌态守卫伤害数值
+    if (instance.amount <= 0) return;
+    this.hp = Math.max(0, this.hp - instance.amount);
+    if (this.onDamaged !== null) this.onDamaged(instance);
+    if (this.onHpChanged !== null) this.onHpChanged(this.hp);
     if (this.hp <= 0) {
       this._isDead = true;
       if (this.onDied !== null) this.onDied();

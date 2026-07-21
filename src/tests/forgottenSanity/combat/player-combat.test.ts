@@ -175,3 +175,67 @@ describe('PlayerCombat 噪声暴露 (grill 2026-07-17，供 CombatManager 三态
     expect(p.lastNoiseRadius).toBe(0);
   });
 });
+
+describe('PlayerCombat M4 无敌期应用 debuff (plan Task 11)', () => {
+  it('invincibleMs>0 时 takeDamage 不扣 HP', () => {
+    const p = new PlayerCombat();
+    p.setInvincible(300);
+    const initialHp = p.hp;
+    p.takeDamage({
+      amount: 50,
+      category: 'melee',
+      debuff: { type: 'slow', multiplier: 0.5, remainingMs: 1000 },
+    });
+    expect(p.hp).toBe(initialHp);
+  });
+
+  it('invincibleMs>0 时 takeDamage 仍应用 slow debuff', () => {
+    const p = new PlayerCombat();
+    p.setInvincible(300);
+    p.takeDamage({
+      amount: 50,
+      category: 'melee',
+      debuff: { type: 'slow', multiplier: 0.5, remainingMs: 1000 },
+    });
+    expect(p.activeDebuffs.some((d) => d.type === 'slow')).toBe(true);
+  });
+
+  it('invincibleMs>0 时 takeDamage 仍应用 burn debuff', () => {
+    const p = new PlayerCombat();
+    p.setInvincible(300);
+    p.takeDamage({
+      amount: 50,
+      category: 'melee',
+      debuff: { type: 'burn', dps: 10, remainingMs: 2000 },
+    });
+    expect(p.activeDebuffs.some((d) => d.type === 'burn')).toBe(true);
+  });
+
+  it('invincibleMs>0 时 takeDamage 触发 onDebuffApplied 但不触发 onDamaged', () => {
+    const p = new PlayerCombat();
+    p.setInvincible(300);
+    const onDebuff = vi.fn();
+    const onDamaged = vi.fn();
+    p.onDebuffApplied = onDebuff;
+    p.onDamaged = onDamaged;
+    p.takeDamage({
+      amount: 50,
+      category: 'melee',
+      debuff: { type: 'slow', multiplier: 0.5, remainingMs: 1000 },
+    });
+    expect(onDebuff).toHaveBeenCalledOnce();
+    expect(onDamaged).not.toHaveBeenCalled();
+  });
+
+  it('invincibleMs=0 时 takeDamage 扣 HP 且应用 debuff（无回归）', () => {
+    const p = new PlayerCombat();
+    const initialHp = p.hp;
+    p.takeDamage({
+      amount: 50,
+      category: 'melee',
+      debuff: { type: 'slow', multiplier: 0.5, remainingMs: 1000 },
+    });
+    expect(p.hp).toBe(initialHp - 50);
+    expect(p.activeDebuffs.some((d) => d.type === 'slow')).toBe(true);
+  });
+});

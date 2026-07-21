@@ -111,7 +111,7 @@ export class ChestDecrypt {
 
     if (config.isVaultChest === true) {
       // spec §10.1: vault chest 免费破译 — 跳过 decrypting 阶段，直接进入 opened 态
-      (this.state as unknown as { phase: 'idle' | 'decrypting' | 'opened' | 'completed' }).phase = 'opened';
+      this.state.forceOpen();
       this.handleOpenStart();
       return; // 不调用 wireInput（无需 F 键）
     }

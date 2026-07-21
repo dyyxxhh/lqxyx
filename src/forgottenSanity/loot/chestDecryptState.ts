@@ -87,6 +87,22 @@ export class ChestDecryptState {
     this.redFlashRemainingMs = 0;
   }
 
+  /**
+   * spec §10.1: vault chest 免费破译 — 跳过 decrypting 阶段，直接进入 opened 态。
+   * 不触发 onOpenStart 回调（由调用方显式处理开盖副作用，避免双重触发）。
+   * 重置 openElapsedMs 与红闪状态，确保 opened 态从干净基线开始。
+   */
+  forceOpen(): void {
+    this.phase = 'opened';
+    this.openElapsedMs = 0;
+    this.redFlashRemainingMs = 0;
+    this.progressArcColor = CHEST_DECRYPT_GOLD_COLOR;
+  }
+
+  getOpenElapsedMs(): number {
+    return this.openElapsedMs;
+  }
+
   snapshot(): ChestDecryptSnapshot {
     return {
       phase: this.phase,

@@ -260,6 +260,55 @@ describe('ChestDecryptState decay red flash (spec §4.3)', () => {
   });
 });
 
+describe('2.6 forceOpen()', () => {
+  it('sets phase to opened', () => {
+    const state = new ChestDecryptState();
+    state.forceOpen();
+    expect(state.snapshot().phase).toBe('opened');
+  });
+
+  it('resets openElapsedMs to 0', () => {
+    const state = new ChestDecryptState();
+    state.forceOpen();
+    expect(state.getOpenElapsedMs()).toBe(0);
+  });
+
+  it('forceOpen works from any phase', () => {
+    const state = new ChestDecryptState();
+    state.start();
+    state.advance(500); // decrypting, progress ~0.2
+    state.forceOpen();
+    expect(state.snapshot().phase).toBe('opened');
+    expect(state.getOpenElapsedMs()).toBe(0);
+  });
+
+  it('does not fire onOpenStart callback (caller handles side effects)', () => {
+    const onOpenStart = vi.fn();
+    const state = new ChestDecryptState({ onOpenStart });
+    state.forceOpen();
+    expect(onOpenStart).not.toHaveBeenCalled();
+  });
+
+  it('resets openElapsedMs to 0 even after opening progress', () => {
+    const state = new ChestDecryptState();
+    state.start();
+    state.advance(CHEST_DECRYPT_TOTAL_MS); // decrypting -> opened, openElapsedMs=0
+    state.advance(300); // opened, openElapsedMs=300
+    expect(state.getOpenElapsedMs()).toBe(300);
+    state.forceOpen();
+    expect(state.getOpenElapsedMs()).toBe(0);
+  });
+
+  it('after forceOpen, advance transitions opened -> completed after OPEN_DURATION_MS', () => {
+    const onCompleted = vi.fn();
+    const state = new ChestDecryptState({ onCompleted });
+    state.forceOpen();
+    state.advance(CHEST_DECRYPT_OPEN_DURATION_MS);
+    expect(state.snapshot().phase).toBe('completed');
+    expect(onCompleted).toHaveBeenCalledTimes(1);
+  });
+});
+
 // Static type asserts
 function _compileTimeAssert(phase: ChestDecryptPhase): void {
   void phase;

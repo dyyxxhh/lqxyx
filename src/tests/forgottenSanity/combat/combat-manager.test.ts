@@ -505,3 +505,82 @@ describe('#4 enemy projectile wall collision + spawnWallHitFx (Task 6)', () => {
     expect(cm.getWallHitParticles().length).toBe(0);
   });
 });
+
+// Task 8 (#7): CombatManager 每帧顶部根据敌人坐标点在哪个房间矩形内更新 enemy.currentRoomId。
+// 走廊（无房间匹配）保持上次值；dead 敌人跳过。
+describe('#7 enemy currentRoomId per-frame point-in-rect assignment (Task 8)', () => {
+  function makeRoomCm(): CombatManager {
+    const cm = makeManager();
+    cm.setRooms([
+      { id: 'room-A', bounds: { x: 0, y: 0, width: 200, height: 200 } },
+      { id: 'room-B', bounds: { x: 300, y: 0, width: 200, height: 200 } },
+    ]);
+    // 把玩家放到地图外，避免接触伤害/激怒机制干扰 currentRoomId 断言
+    cm.setPlayerPosition(10000, 10000);
+    return cm;
+  }
+
+  it('updates currentRoomId based on point-in-rect (enemy starts inside room-A)', () => {
+    const cm = makeRoomCm();
+    const enemy = new DummyEnemy({ id: 'e1', x: 100, y: 100, maxHp: 100, speed: 0, contactDamage: 0, contactRadius: 20 });
+    enemy.currentRoomId = null;
+    cm.addEnemy(enemy);
+    cm.update(16);
+    expect(enemy.currentRoomId).toBe('room-A');
+  });
+
+  it('updates currentRoomId when enemy moves to another room', () => {
+    const cm = makeRoomCm();
+    const enemy = new DummyEnemy({ id: 'e1', x: 100, y: 100, maxHp: 100, speed: 0, contactDamage: 0, contactRadius: 20 });
+    enemy.currentRoomId = null;
+    cm.addEnemy(enemy);
+    cm.update(16);
+    expect(enemy.currentRoomId).toBe('room-A');
+    enemy.x = 350; enemy.y = 50;
+    cm.update(16);
+    expect(enemy.currentRoomId).toBe('room-B');
+  });
+
+  it('keeps last currentRoomId when enemy is in corridor (no room matches)', () => {
+    const cm = makeManager();
+    cm.setRooms([{ id: 'room-A', bounds: { x: 0, y: 0, width: 200, height: 200 } }]);
+    cm.setPlayerPosition(10000, 10000);
+    const enemy = new DummyEnemy({ id: 'e1', x: 100, y: 100, maxHp: 100, speed: 0, contactDamage: 0, contactRadius: 20 });
+    enemy.currentRoomId = null;
+    cm.addEnemy(enemy);
+    cm.update(16);
+    expect(enemy.currentRoomId).toBe('room-A');
+    enemy.x = 500; enemy.y = 500; // 走廊（无房间匹配）
+    cm.update(16);
+    expect(enemy.currentRoomId).toBe('room-A'); // 保持上次值不变
+  });
+
+  it('skips dead enemies (stale currentRoomId preserved)', () => {
+    const cm = makeManager();
+    cm.setRooms([{ id: 'room-A', bounds: { x: 0, y: 0, width: 200, height: 200 } }]);
+    cm.setPlayerPosition(10000, 10000);
+    const enemy = new DummyEnemy({ id: 'e1', x: 100, y: 100, maxHp: 100, speed: 0, contactDamage: 0, contactRadius: 20 });
+    enemy.currentRoomId = 'old-room';
+    enemy.dead = true;
+    cm.addEnemy(enemy);
+    cm.update(16);
+    expect(enemy.currentRoomId).toBe('old-room'); // dead 敌人不更新
+  });
+
+  it('treats boundary points as inside the room (inclusive)', () => {
+    const cm = makeManager();
+    cm.setRooms([{ id: 'room-A', bounds: { x: 0, y: 0, width: 200, height: 200 } }]);
+    cm.setPlayerPosition(10000, 10000);
+    // 4 个角点（含边界）
+    const corners: Array<[number, number]> = [[0, 0], [200, 0], [0, 200], [200, 200]];
+    for (const [x, y] of corners) {
+      const enemy = new DummyEnemy({ id: `e-${x}-${y}`, x, y, maxHp: 100, speed: 0, contactDamage: 0, contactRadius: 20 });
+      enemy.currentRoomId = null;
+      cm.addEnemy(enemy);
+    }
+    cm.update(16);
+    for (const enemy of cm.enemies) {
+      expect(enemy.currentRoomId).toBe('room-A');
+    }
+  });
+});

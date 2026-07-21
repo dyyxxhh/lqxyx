@@ -24,6 +24,23 @@ import { PlayerCombat } from './PlayerCombat';
 
 export type IsWalkableFn = (x: number, y: number) => boolean;
 
+/** Task 8 (#7): 房间矩形 — 用于每帧点在矩形内更新 enemy.currentRoomId。
+ *  与 map/forgottenSanityMapState.ts 的 ForgottenSanityRect/ForgottenSanityRoom 结构兼容，
+ *  但本模块不引入 map/ 依赖（保持 combat 核心独立）。ForgottenSanityRunController 调用
+ *  setRooms 时会传入 manifest.rooms 的子集（结构兼容）。 */
+export interface RoomBounds {
+  readonly x: number;
+  readonly y: number;
+  readonly width: number;
+  readonly height: number;
+}
+
+/** Task 8 (#7): 房间信息 — 仅 id + bounds，最小必需字段。 */
+export interface RoomInfo {
+  readonly id: string;
+  readonly bounds: RoomBounds;
+}
+
 export interface CombatCallbacks {
   onPlayerDamaged?: (instance: DamageInstance) => void;
   onPlayerDebuffApplied?: (debuff: Debuff) => void;
@@ -122,6 +139,9 @@ export class CombatManager {
   private playerRoomId: string | null = null;
   private adjacentRooms: Map<string, Set<string>> = new Map();
   private readonly farRoomAccumMs = new Map<string, number>();
+  // Task 8 (#7): 房间矩形清单 — 用于每帧点在矩形内更新 enemy.currentRoomId。
+  // 默认空数组；setRooms 未调用时 enemy.currentRoomId 永不更新（向后兼容现有测试与未集成场景）。
+  private rooms: readonly RoomInfo[] = [];
   // Task 6 (#4): 撞墙粒子池（spawnWallHitFx 生成，updateWallHitParticles 推进）
   private readonly wallHitParticles: WallHitParticle[] = [];
 
@@ -158,6 +178,12 @@ export class CombatManager {
   /** spec §5.11.7: 设置房间邻接表（key=房间 ID，value=邻接房间 ID 集合，双向）。 */
   setAdjacentRooms(map: Map<string, Set<string>>): void {
     this.adjacentRooms = map;
+  }
+
+  /** Task 8 (#7): 设置房间矩形清单，update() 每帧顶部据此更新 enemy.currentRoomId。
+   *  与 map/forgottenSanityMapState.ts 的 ForgottenSanityRoom 结构兼容（仅需 id + bounds）。 */
+  setRooms(rooms: readonly RoomInfo[]): void {
+    this.rooms = rooms;
   }
 
   addEnemy(enemy: Enemy): void {
@@ -536,6 +562,20 @@ export class CombatManager {
   update(deltaMs: number): void {
     this.timeMs += deltaMs;
     if (this.player.isDead) return;
+
+    // Task 8 (#7): 更新所有敌人的 currentRoomId — 每帧根据坐标点在哪个房间矩形内
+    // 走廊（无房间匹配）保持上次值；dead 敌人跳过；含边界（>= / <=）
+    for (const enemy of this.enemies) {
+      if (enemy.dead) continue;
+      for (const room of this.rooms) {
+        const b = room.bounds;
+        if (enemy.x >= b.x && enemy.x <= b.x + b.width
+          && enemy.y >= b.y && enemy.y <= b.y + b.height) {
+          enemy.currentRoomId = room.id;
+          break;
+        }
+      }
+    }
 
     // 1. 玩家 debuff tick
     this.player.tick(deltaMs);

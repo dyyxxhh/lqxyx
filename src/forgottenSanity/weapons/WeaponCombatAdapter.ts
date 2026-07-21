@@ -52,7 +52,6 @@ export interface CombatPort {
   pullEnemiesToward(cx: number, cy: number, radius: number, pullDistance: number): void;
   killRandomEnemyInRadiusExcluding(
     cx: number, cy: number, radius: number, excludeKinds: readonly EnemyKind[],
-    excludeHpLe?: number,
   ): Enemy | null;
   getTimeMs(): number;
 }
@@ -318,10 +317,10 @@ export class WeaponCombatAdapter {
     this.emit({ kind: 'zoneSpawned', x: pos.x, y: pos.y, radius: ult.radius, proceduralKind: ult.effectKind });
   }
 
-  // -- 万魂幡：屏幕范围内即死一个非精英 (grill §4.7: screenViewport + excludeHpLe=1) --
+  // -- 万魂幡：屏幕范围内即死一个非精英/非召唤核心 (M11: excludeKinds + 复制体保守排除) --
   private ultSoulCapture(ult: SoulCaptureUlt, pos: Vec2): void {
     this.combat.killRandomEnemyInRadiusExcluding(
-      pos.x, pos.y, SOUL_CAPTURE_SCREEN_RADIUS, ult.excludeKinds, ult.excludeHpLe,
+      pos.x, pos.y, SOUL_CAPTURE_SCREEN_RADIUS, ult.excludeKinds,
     );
   }
 

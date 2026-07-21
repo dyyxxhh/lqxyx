@@ -358,17 +358,17 @@ export class CombatManager {
   }
 
   /** 秒杀范围内一个随机非排除种类敌人。返回被杀敌人或 null。
-   *  grill §4.7: excludeHpLe 排除 HP ≤ 该值的敌人（万魂幡拘魂排除召唤核心 HP=1）。 */
+   *  M11: excludeKinds 排除指定种类（万魂幡排除 yangYunRed + danYuxuanBody）；
+   *       isDuplicate=true 的复制体也被保守排除（防止秒杀复制体绕过递归保护语义）。 */
   killRandomEnemyInRadiusExcluding(
     cx: number, cy: number, radius: number,
     excludeKinds: readonly EnemyKind[],
-    excludeHpLe?: number,
   ): Enemy | null {
     const eligible = this.enemies.filter(
       (e) => !e.dead
+        && !e.isDuplicate
         && !excludeKinds.includes(e.kind)
-        && Math.hypot(e.x - cx, e.y - cy) <= radius + e.contactRadius
-        && (excludeHpLe === undefined || e.hp > excludeHpLe),
+        && Math.hypot(e.x - cx, e.y - cy) <= radius + e.contactRadius,
     );
     if (eligible.length === 0) return null;
     const idx = Math.floor(this.rng.next() * eligible.length);

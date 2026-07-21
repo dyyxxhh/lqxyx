@@ -238,8 +238,8 @@ export class ForgottenSanityRunController {
         this.combatManager.pullEnemiesToward(cx, cy, radius, pullDistance),
       killRandomEnemyInRadiusExcluding: (
         cx: number, cy: number, radius: number,
-        excludeKinds: readonly EnemyKind[], excludeHpLe?: number,
-      ) => this.combatManager.killRandomEnemyInRadiusExcluding(cx, cy, radius, excludeKinds, excludeHpLe),
+        excludeKinds: readonly EnemyKind[],
+      ) => this.combatManager.killRandomEnemyInRadiusExcluding(cx, cy, radius, excludeKinds),
       getTimeMs: () => this.combatManager.getTimeMs(),
     };
     this.weaponAdapter = new WeaponCombatAdapter(combatPort, this.weaponCooldowns, null);

@@ -139,7 +139,8 @@ export interface SoulCaptureUlt {
   readonly kind: 'soulCapture';      // 万魂幡拘魂
   readonly cooldownMs: number;
   readonly captureMode: 'screenViewport';  // grill §4.7: 屏幕可视范围（1280×720 视口）
-  readonly excludeHpLe: number;            // grill §4.7: 1（排除 HP≤1 的但宇轩身体）
+  // M11: 排除种类（含 yangYunRed 精英 + danYuxuanBody 召唤核心）。
+  //   复制体（isDuplicate=true）由 CombatManager.killRandomEnemyInRadiusExcluding 保守排除。
   readonly excludeKinds: readonly EnemyKind[];
   readonly effectKind: WeaponZoneKind;
 }
@@ -321,9 +322,9 @@ export const ALL_WEAPONS: readonly WeaponDef[] = [
       fearDurationMs: 2000, effectKind: 'soulBannerSlash',
     },
     ultimate: {
-      // grill §4.7: screenViewport + excludeHpLe=1
-      kind: 'soulCapture', cooldownMs: 120000, captureMode: 'screenViewport', excludeHpLe: 1,
-      excludeKinds: ['yangYunRed'], effectKind: 'soulCapture',
+      // M11: excludeKinds=['yangYunRed','danYuxuanBody']；复制体由 CombatManager 保守排除。
+      kind: 'soulCapture', cooldownMs: 120000, captureMode: 'screenViewport',
+      excludeKinds: ['yangYunRed', 'danYuxuanBody'], effectKind: 'soulCapture',
     },
     description: '万魂幡挥斩，20% 概率恐惧。大招拘魂秒杀一敌。',
   },

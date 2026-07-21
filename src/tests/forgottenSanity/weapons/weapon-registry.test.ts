@@ -177,10 +177,10 @@ describe('WeaponRegistry — 8 把武器 (spec §4)', () => {
     expect(w.basic.range).toBe(120);
     expect(w.ultimate.kind).toBe('soulCapture');
     expect(w.ultimate.cooldownMs).toBe(120000);
-    // grill §4.7: captureMode='screenViewport' + excludeHpLe=1
+    // M11: captureMode='screenViewport' + excludeKinds=['yangYunRed','danYuxuanBody']（移除 excludeHpLe）
     expect(w.ultimate.captureMode).toBe('screenViewport');
-    expect(w.ultimate.excludeHpLe).toBe(1);
     expect(w.ultimate.excludeKinds).toContain('yangYunRed');
+    expect(w.ultimate.excludeKinds).toContain('danYuxuanBody');
   });
 
   it('所有武器 id 唯一', () => {

@@ -296,3 +296,49 @@ describe('#3 fistDash hitSet 去重 — 路径+末端同敌只算一次', () => 
     expect(b.hp).toBe(960); // 末端 40
   });
 });
+
+describe('M11 soulCapture excludeKinds + isDuplicate', () => {
+  it('does not target yangYunRed', () => {
+    const { adapter, manager, player } = makeAdapter();
+    player.weaponId = 'weapon.soulBanner';
+    manager.setPlayerPosition(0, 0);
+    const elite = makeEnemy(50, 50, 100, 'yangYunRed');
+    manager.addEnemy(elite);
+    adapter.performUltimate({ x: 1, y: 0 }, 0);
+    expect(elite.dead).toBe(false);
+  });
+
+  it('does not target danYuxuanBody', () => {
+    const { adapter, manager, player } = makeAdapter();
+    player.weaponId = 'weapon.soulBanner';
+    manager.setPlayerPosition(0, 0);
+    // HP > 1 to ensure it would have been killed by old excludeHpLe=1 logic;
+    // now must be excluded by excludeKinds=['danYuxuanBody'] instead.
+    const body = makeEnemy(50, 50, 50, 'danYuxuanBody');
+    manager.addEnemy(body);
+    adapter.performUltimate({ x: 1, y: 0 }, 0);
+    expect(body.dead).toBe(false);
+  });
+
+  it('does not target isDuplicate', () => {
+    const { adapter, manager, player } = makeAdapter();
+    player.weaponId = 'weapon.soulBanner';
+    manager.setPlayerPosition(0, 0);
+    const dup = makeEnemy(50, 50, 100, 'butYuxuanHead');
+    dup.isDuplicate = true;
+    manager.addEnemy(dup);
+    adapter.performUltimate({ x: 1, y: 0 }, 0);
+    expect(dup.dead).toBe(false);
+  });
+
+  it('targets normal enemy', () => {
+    const { adapter, manager, player } = makeAdapter();
+    player.weaponId = 'weapon.soulBanner';
+    manager.setPlayerPosition(0, 0);
+    const e = makeEnemy(50, 50, 100, 'butYuxuanHead');
+    e.isDuplicate = false;
+    manager.addEnemy(e);
+    adapter.performUltimate({ x: 1, y: 0 }, 0);
+    expect(e.dead).toBe(true);
+  });
+});

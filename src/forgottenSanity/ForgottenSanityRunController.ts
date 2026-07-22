@@ -35,6 +35,7 @@ import {
 import type {
   ForgottenSanityMapManifest,
   ForgottenSanityChestSpawn,
+  ForgottenSanityNoteSpawn,
 } from './map/forgottenSanityMapState';
 import { rectContains } from './map/forgottenSanityMapState';
 import { WeaponCombatAdapter } from './weapons/WeaponCombatAdapter';
@@ -56,7 +57,13 @@ import {
 } from './meta/StashManager';
 import {
   loadUpgradesState,
+  loadNotesState,
+  saveNotesState,
+  type ForgottenSanityNotesState,
 } from './state/forgottenSanityState';
+import { NOTE_CONTENTS } from './notes/noteContent';
+import { assignNoteContent } from './notes/assignNoteContent';
+import { NoteOverlay } from './ui/NoteOverlay';
 import { getUpgradeEffects } from './meta/UpgradeManager';
 import {
   consumeLoadoutFromStash,
@@ -72,6 +79,7 @@ import { RED_EDGE_MASK_DURATION_MS } from './ui/RedEdgeFogOverlay';
 const PLAYER_SPRITE_DEPTH = 10;
 const CHEST_INTERACT_DISTANCE = 80;
 const EXIT_INTERACT_DISTANCE = 60;
+const NOTE_INTERACT_DISTANCE = 80;
 const ENEMY_SPAWN_PER_ROOM_MIN = 1;
 const ENEMY_SPAWN_PER_ROOM_MAX = 3;
 
@@ -116,6 +124,13 @@ export class ForgottenSanityRunController {
   private readonly chestDecrypts = new Map<string, ChestDecrypt>();
   private readonly openedChests = new Set<string>();
   private activeChestId: string | null = null;
+
+  // 遗落的纸条交互（spec §6 / §7）
+  private readonly noteHitAreas = new Map<string, Phaser.GameObjects.Zone>();
+  private readonly readNoteInstancesThisRun = new Map<string, number>();
+  private noteOverlay: NoteOverlay | null = null;
+  private noteOverlayActive = false;
+  private notesState: ForgottenSanityNotesState;
 
   // 撤离点
   private exitX: number;
@@ -267,6 +282,12 @@ export class ForgottenSanityRunController {
     // 13. 宝箱交互 hitArea
     this.createChestInteractions();
 
+    // 13b. 遗落的纸条交互 hitArea + overlay（spec §6 / §7）
+    this.notesState = loadNotesState().state;
+    this.createNoteInteractions();
+    this.noteOverlay = new NoteOverlay(this.scene, { onClose: () => this.closeNoteOverlay() });
+    this.noteOverlay.create();
+
     // 14. 撤离点 hitArea
     this.createExitInteraction();
 
@@ -395,6 +416,7 @@ export class ForgottenSanityRunController {
   // 移动
   // ───────────────────────────────────────────────────────────────────
   private handleMovement(deltaMs: number): void {
+    if (this.noteOverlayActive) return;
     // spec §3.2: fistDash 冲刺期间忽略键盘输入，按锁定方向推进（250px / 0.3s = 833 px/s）
     if (this.dashLockState !== null) {
       const dash = this.dashLockState;
@@ -522,6 +544,7 @@ export class ForgottenSanityRunController {
   // 攻击输入
   // ───────────────────────────────────────────────────────────────────
   private onAttackPressed(): void {
+    if (this.noteOverlayActive) return;
     if (this.player.isDead) return;
     const dir = { x: this.facingX, y: this.facingY };
     const timeMs = this.combatManager.getTimeMs();
@@ -529,6 +552,7 @@ export class ForgottenSanityRunController {
   }
 
   private onUltimatePressed(): void {
+    if (this.noteOverlayActive) return;
     if (this.player.isDead) return;
     const dir = { x: this.facingX, y: this.facingY };
     const timeMs = this.combatManager.getTimeMs();
@@ -541,6 +565,8 @@ export class ForgottenSanityRunController {
 
   private onInteractPressed(): void {
     if (this.player.isDead) return;
+    // 0. 阅读中再按 H 关闭（spec §6）
+    if (this.noteOverlayActive) { this.closeNoteOverlay(); return; }
     // 优先：正在破译的宝箱 → 推进；否则：附近宝箱 → 开始破译；否则：vault door；否则：撤离点
     if (this.activeChestId !== null) {
       // ChestDecrypt 自带 F 键 wiring，这里不重复处理
@@ -552,6 +578,9 @@ export class ForgottenSanityRunController {
       this.startChestDecrypt(chest);
       return;
     }
+    // 3. 最近纸条（spec §6）
+    const note = this.findNearestNote();
+    if (note !== null) { this.startReadNote(note); return; }
     // spec §10.1: vault door
     if (this.distanceToVaultDoor() <= EXIT_INTERACT_DISTANCE) {
       this.tryUnlockVaultDoor();
@@ -700,6 +729,65 @@ export class ForgottenSanityRunController {
       zone.setInteractive();
       this.chestHitAreas.set(chest.id, zone);
     }
+  }
+
+  // ───────────────────────────────────────────────────────────────────
+  // 遗落的纸条交互（spec §6）
+  // ───────────────────────────────────────────────────────────────────
+  private createNoteInteractions(): void {
+    for (const note of this.manifest.notes) {
+      const cx = note.bounds.x + note.bounds.width / 2;
+      const cy = note.bounds.y + note.bounds.height / 2;
+      const zone = this.scene.add.zone(cx, cy, NOTE_INTERACT_DISTANCE * 2, NOTE_INTERACT_DISTANCE * 2);
+      zone.setInteractive();
+      this.noteHitAreas.set(note.id, zone);
+    }
+  }
+
+  private findNearestNote(): ForgottenSanityNoteSpawn | null {
+    let nearest: ForgottenSanityNoteSpawn | null = null;
+    let nearestDist = Infinity;
+    for (const note of this.manifest.notes) {
+      const cx = note.bounds.x + note.bounds.width / 2;
+      const cy = note.bounds.y + note.bounds.height / 2;
+      const dist = Math.sqrt((cx - this.playerX) ** 2 + (cy - this.playerY) ** 2);
+      if (dist < NOTE_INTERACT_DISTANCE && dist < nearestDist) {
+        nearest = note;
+        nearestDist = dist;
+      }
+    }
+    return nearest;
+  }
+
+  private startReadNote(note: ForgottenSanityNoteSpawn): void {
+    if (this.noteOverlayActive) return;
+    const result = assignNoteContent({
+      nextSequentialIndex: this.notesState.nextSequentialIndex,
+      readThisRun: this.readNoteInstancesThisRun,
+      instanceId: note.id,
+      rng: this.rng.next.bind(this.rng),
+    });
+    this.readNoteInstancesThisRun.set(note.id, result.contentIndex);
+    if (result.persisted) {
+      this.notesState = { schemaVersion: this.notesState.schemaVersion, nextSequentialIndex: result.newNextSequentialIndex };
+      saveNotesState(this.notesState);
+    }
+    const content = NOTE_CONTENTS[result.contentIndex]!;
+    this.combatManager.setFrozen(true);
+    this.noteOverlayActive = true;
+    this.noteOverlay?.show(content.body);
+  }
+
+  private closeNoteOverlay(): void {
+    if (!this.noteOverlayActive) return;
+    this.noteOverlay?.hide();
+    this.noteOverlayActive = false;
+    this.combatManager.setFrozen(false);
+  }
+
+  /** spec §11 测试钩子：返回当前 note overlay 是否可见。 */
+  public isNoteOverlayActiveForTest(): boolean {
+    return this.noteOverlayActive;
   }
 
   private findNearestChest(): ForgottenSanityChestSpawn | null {
@@ -957,6 +1045,8 @@ export class ForgottenSanityRunController {
       (decrypt as unknown as { destroy?: () => void }).destroy?.();
     }
     this.chestDecrypts.clear();
+    this.noteOverlay?.destroy();
+    this.noteOverlay = null;
     this.renderer.clear();
   }
 }

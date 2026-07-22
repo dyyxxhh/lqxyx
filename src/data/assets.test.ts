@@ -144,6 +144,7 @@ const expectedFinalAssetPaths = [
   "最终素材/记忆碎片/黄铜书签.png",
   "最终素材/记忆碎片/黑色毕业照.png",
   "最终素材/记忆碎片/仓库钥匙.png",
+  "最终素材/被遗忘的理智-记忆碎片/遗落的纸条.png",
 ];
 
 describe("asset manifest", () => {
@@ -151,7 +152,14 @@ describe("asset manifest", () => {
     const manifestPaths = assetManifest.map((asset) => asset.path).sort();
 
     expect(manifestPaths).toEqual([...expectedFinalAssetPaths].sort());
-    expect(assetManifest).toHaveLength(135);
+    expect(assetManifest).toHaveLength(136);
+  });
+
+  it("has exactly 1 note.* entry", () => {
+    const noteEntries = assetManifest.filter((a) => a.key.startsWith("note."));
+    expect(noteEntries).toHaveLength(1);
+    expect(noteEntries[0]!.key).toBe("note.遗落的纸条");
+    expect(noteEntries[0]!.path).toBe("最终素材/被遗忘的理智-记忆碎片/遗落的纸条.png");
   });
 
   it("allows only final production asset roots and rejects forbidden roots", () => {

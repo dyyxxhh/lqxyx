@@ -1093,6 +1093,16 @@ export const assetManifest = [
     productionStatus: "FINAL_ASSET",
   },
   {
+    key: "note.遗落的纸条",
+    path: "最终素材/被遗忘的理智-记忆碎片/遗落的纸条.png",
+    kind: "image",
+    mimeType: "image/png",
+    width: 512,
+    height: 512,
+    usage: "Forgotten Sanity mode lost note map sprite.",
+    productionStatus: "FINAL_ASSET",
+  },
+  {
     key: "sprite.forgottenSanity.漂浮眼球",
     path: "最终素材/缄默者/漂浮眼球.png",
     kind: "image",

@@ -6,6 +6,7 @@ export const FORGOTTEN_SANITY_STASH_STORAGE_KEY = 'ying-zhong-jiu.forgotten-sani
 export const FORGOTTEN_SANITY_UPGRADES_STORAGE_KEY = 'ying-zhong-jiu.forgotten-sanity.upgrades.v1';
 export const FORGOTTEN_SANITY_BEST_STORAGE_KEY = 'ying-zhong-jiu.forgotten-sanity.best.v1';
 export const FORGOTTEN_SANITY_PROGRESS_STORAGE_KEY = 'ying-zhong-jiu.forgotten-sanity.progress.v1';
+export const FORGOTTEN_SANITY_NOTES_STORAGE_KEY = 'ying-zhong-jiu.forgotten-sanity.notes.v1';
 export const FORGOTTEN_SANITY_SCHEMA_VERSION = 1;
 
 export type ForgottenSanityUpgradeId = 'physique' | 'swift' | 'pickup' | 'sharp' | 'lucky' | 'armory';
@@ -43,6 +44,11 @@ export interface ForgottenSanityBestState {
 export interface ForgottenSanityProgressState {
   readonly schemaVersion: number;
   readonly starterPackGranted: boolean;
+}
+
+export interface ForgottenSanityNotesState {
+  readonly schemaVersion: number;
+  readonly nextSequentialIndex: number;
 }
 
 export type ForgottenSanityInvalidReason = 'corrupt-json' | 'version-mismatch' | 'invalid-shape';
@@ -116,6 +122,16 @@ function isBestState(value: unknown): value is ForgottenSanityBestState {
 
 function isProgressState(value: unknown): value is ForgottenSanityProgressState {
   return isRecord(value) && typeof value.starterPackGranted === 'boolean';
+}
+
+export function isNotesState(value: unknown): value is ForgottenSanityNotesState {
+  if (!isRecord(value)) return false;
+  if (value.schemaVersion !== FORGOTTEN_SANITY_SCHEMA_VERSION) return false;
+  if (typeof value.nextSequentialIndex !== 'number') return false;
+  if (!Number.isFinite(value.nextSequentialIndex)) return false;
+  if (!Number.isInteger(value.nextSequentialIndex)) return false;
+  if (value.nextSequentialIndex < 0) return false;
+  return true;
 }
 
 function loadTypedInternal<T>(
@@ -214,6 +230,10 @@ export function createDefaultProgressState(): ForgottenSanityProgressState {
   return { schemaVersion: FORGOTTEN_SANITY_SCHEMA_VERSION, starterPackGranted: false };
 }
 
+export function createDefaultNotesState(): ForgottenSanityNotesState {
+  return { schemaVersion: FORGOTTEN_SANITY_SCHEMA_VERSION, nextSequentialIndex: 0 };
+}
+
 export function loadStashState(storage: Storage = localStorage): ForgottenSanityLoadResult<ForgottenSanityStashState> {
   return loadTypedInternal(storage, FORGOTTEN_SANITY_STASH_STORAGE_KEY, isStashState, createDefaultStashState);
 }
@@ -230,6 +250,10 @@ export function loadProgressState(storage: Storage = localStorage): ForgottenSan
   return loadTypedInternal(storage, FORGOTTEN_SANITY_PROGRESS_STORAGE_KEY, isProgressState, createDefaultProgressState);
 }
 
+export function loadNotesState(storage: Storage = localStorage): ForgottenSanityLoadResult<ForgottenSanityNotesState> {
+  return loadTypedInternal(storage, FORGOTTEN_SANITY_NOTES_STORAGE_KEY, isNotesState, createDefaultNotesState);
+}
+
 export function saveStashState(state: ForgottenSanityStashState, storage: Storage = localStorage): void {
   storage.setItem(FORGOTTEN_SANITY_STASH_STORAGE_KEY, JSON.stringify(state));
 }
@@ -244,6 +268,10 @@ export function saveBestState(state: ForgottenSanityBestState, storage: Storage 
 
 export function saveProgressState(state: ForgottenSanityProgressState, storage: Storage = localStorage): void {
   storage.setItem(FORGOTTEN_SANITY_PROGRESS_STORAGE_KEY, JSON.stringify(state));
+}
+
+export function saveNotesState(state: ForgottenSanityNotesState, storage: Storage = localStorage): void {
+  storage.setItem(FORGOTTEN_SANITY_NOTES_STORAGE_KEY, JSON.stringify(state));
 }
 
 /**

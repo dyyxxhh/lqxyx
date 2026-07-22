@@ -41,6 +41,12 @@ export interface ForgottenSanityTestHooks {
   __testGetExploredCells(): number[];
   __testMovePlayerTo(roomId: string): void;
   __testTogglePause(): void;
+  __testSpawnNote(roomId: string): void;
+  __testGetNoteState(): { nextSequentialIndex: number; readThisRun: string[] };
+  __testReadNearestNote(): boolean;
+  __testIsNoteOverlayVisible(): boolean;
+  __testMovePlayerToNote(): void;
+  __testForceNotesState(nextSequentialIndex: number): void;
 }
 
 declare global {
@@ -220,6 +226,32 @@ export class ForgottenSanityScene extends Phaser.Scene {
           const ctrl = this.runController as unknown as { movePlayerToForTest?: (rId: string) => void } | null;
           ctrl?.movePlayerToForTest?.(roomId);
         },
+        __testSpawnNote: (roomId) => {
+          const ctrl = this.runController as unknown as { spawnNoteForTest?: (rId: string) => void } | null;
+          ctrl?.spawnNoteForTest?.(roomId);
+        },
+        __testGetNoteState: () => {
+          const ctrl = this.runController as unknown as {
+            getNoteStateForTest?: () => { nextSequentialIndex: number; readThisRun: string[] };
+          } | null;
+          return ctrl?.getNoteStateForTest?.() ?? { nextSequentialIndex: 0, readThisRun: [] };
+        },
+        __testReadNearestNote: () => {
+          const ctrl = this.runController as unknown as { readNearestNoteForTest?: () => boolean } | null;
+          return ctrl?.readNearestNoteForTest?.() ?? false;
+        },
+        __testIsNoteOverlayVisible: () => {
+          const ctrl = this.runController as unknown as { isNoteOverlayActiveForTest?: () => boolean } | null;
+          return ctrl?.isNoteOverlayActiveForTest?.() ?? false;
+        },
+        __testMovePlayerToNote: () => {
+          const ctrl = this.runController as unknown as { movePlayerToNoteForTest?: () => void } | null;
+          ctrl?.movePlayerToNoteForTest?.();
+        },
+        __testForceNotesState: (nextSequentialIndex) => {
+          const ctrl = this.runController as unknown as { forceNotesStateForTest?: (n: number) => void } | null;
+          ctrl?.forceNotesStateForTest?.(nextSequentialIndex);
+        },
         __testTogglePause: () => this.togglePause(),
       };
       window.__YING_ZHONG_JIU_FORGOTTEN_SANITY_SCENE__ = hooks;
@@ -258,11 +290,17 @@ export class ForgottenSanityScene extends Phaser.Scene {
   }
 
   /**
-   * ESC 行为优先级（plan Task 14 / spec §9.2）：
-   * 1. 大地图可见 → 关闭大地图（不暂停，消费 ESC）
-   * 2. 否则 → togglePause()
+   * ESC 行为优先级（plan Task 14 / spec §9.2 / spec §6）：
+   * 1. note overlay 打开时 ESC 优先关闭，不落入 PauseMenu（spec §6）
+   * 2. 大地图可见 → 关闭大地图（不暂停，消费 ESC）
+   * 3. 否则 → togglePause()
    */
   public handleEsc(): void {
+    // spec §6: note overlay 打开时 ESC 优先关闭，不落入 PauseMenu
+    if (this.runController?.isNoteOverlayActiveForTest() === true) {
+      this.runController.closeNoteOverlayForTest();
+      return;
+    }
     if (this.minimap?.isBigMapOpen()) {
       this.minimap.toggleBigMap();
       return;

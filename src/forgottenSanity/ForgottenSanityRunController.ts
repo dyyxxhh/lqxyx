@@ -790,6 +790,11 @@ export class ForgottenSanityRunController {
     return this.noteOverlayActive;
   }
 
+  /** spec §11 测试钩子 / handleEsc 用：关闭 note overlay。 */
+  public closeNoteOverlayForTest(): void {
+    this.closeNoteOverlay();
+  }
+
   private findNearestChest(): ForgottenSanityChestSpawn | null {
     let nearest: ForgottenSanityChestSpawn | null = null;
     let nearestDist = Infinity;
@@ -1027,6 +1032,65 @@ export class ForgottenSanityRunController {
   /** 雾战已探索 cell 索引数组（spec §9.2）。 */
   public getExploredCellsForTest(): number[] {
     return [...this.exploredCells];
+  }
+
+  /** spec §11 测试钩子：强制在某房间生成一张纸条实例（覆盖本局 manifest.notes）。 */
+  public spawnNoteForTest(roomId: string): void {
+    const room = this.manifest.rooms.find((r) => r.id === roomId);
+    if (room === undefined) return;
+    const noteId = `note-test-${this.noteHitAreas.size}`;
+    const fakeNote: ForgottenSanityNoteSpawn = {
+      id: noteId,
+      roomId,
+      bounds: {
+        x: room.spawnPoint.x - 24,
+        y: room.spawnPoint.y - 24,
+        width: 48,
+        height: 48,
+      },
+    };
+    // 注入到 manifest.notes（cast off readonly for test-only mutation）
+    (this.manifest as unknown as { notes: ForgottenSanityNoteSpawn[] }).notes = [
+      ...this.manifest.notes,
+      fakeNote,
+    ];
+    const cx = fakeNote.bounds.x + 24;
+    const cy = fakeNote.bounds.y + 24;
+    const zone = this.scene.add.zone(cx, cy, NOTE_INTERACT_DISTANCE * 2, NOTE_INTERACT_DISTANCE * 2);
+    zone.setInteractive();
+    this.noteHitAreas.set(noteId, zone);
+  }
+
+  /** spec §11 测试钩子：返回当前 note 阅读进度。 */
+  public getNoteStateForTest(): { nextSequentialIndex: number; readThisRun: string[] } {
+    return {
+      nextSequentialIndex: this.notesState.nextSequentialIndex,
+      readThisRun: [...this.readNoteInstancesThisRun.keys()],
+    };
+  }
+
+  /** spec §11 测试钩子：模拟按 H 读最近纸条。返回是否成功打开 overlay。 */
+  public readNearestNoteForTest(): boolean {
+    if (this.noteOverlayActive) return false;
+    const note = this.findNearestNote();
+    if (note === null) return false;
+    this.startReadNote(note);
+    return this.noteOverlayActive;
+  }
+
+  /** spec §11 测试钩子：把玩家瞬移到最近的纸条旁。 */
+  public movePlayerToNoteForTest(): void {
+    if (this.manifest.notes.length === 0) return;
+    const note = this.manifest.notes[0]!;
+    this.playerX = note.bounds.x + 24;
+    this.playerY = note.bounds.y + 24;
+    this.playerSprite?.setPosition(this.playerX, this.playerY);
+  }
+
+  /** spec §11 测试钩子：直接覆盖持久化 notesState（仅测试用）。 */
+  public forceNotesStateForTest(nextSequentialIndex: number): void {
+    this.notesState = { schemaVersion: this.notesState.schemaVersion, nextSequentialIndex };
+    saveNotesState(this.notesState);
   }
 
   /** 将语义别名解析为真实房间 ID（E2E 不知随机 room ID，用 'entrance'/'exit'/'vault'）。 */

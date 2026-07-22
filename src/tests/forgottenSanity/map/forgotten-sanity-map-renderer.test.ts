@@ -156,6 +156,7 @@ function makeMiniManifest(overrides: Partial<ForgottenSanityMapManifest> = {}): 
     corridors: [],
     doors: [],
     chests: [],
+    notes: [],
     entranceRoomId: 'room-0',
     exitRoomId: 'room-0',
     vaultRoomId: 'room-0',

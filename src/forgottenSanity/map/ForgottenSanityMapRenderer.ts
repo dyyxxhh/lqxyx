@@ -26,12 +26,17 @@ const DOOR_STROKE_WIDTH = 2;
 const DOOR_LOCKED_COLOR = 0x8a2f2f;
 const CHEST_NORMAL_COLOR = 0x6b4a1f;
 const CHEST_GILDED_COLOR = 0xd4a017;
+const NOTE_SPRITE_KEY = 'note.遗落的纸条';
+const NOTE_FILL_COLOR = 0xf5f0e1;
+const NOTE_STROKE_COLOR = 0x3a2f25;
+const NOTE_STROKE_WIDTH = 2;
 const LABEL_COLOR = '#c9b89a';
 
 // 深度层级（沿用剧情模式 MapRenderer）
 const DEPTH_FLOOR = 0;
 const DEPTH_WALL = 1;
 const DEPTH_CHEST = 3;
+const DEPTH_NOTE = 3;
 const DEPTH_DOOR = 6;
 const DEPTH_LABEL = 7;
 // DEPTH_HITAREA = 8; // 预留，本 plan 暂不渲染 hitArea
@@ -82,6 +87,7 @@ export class ForgottenSanityMapRenderer {
     this.renderWalls(manifest);
     this.renderDoors(manifest);
     this.renderChests(manifest);
+    this.renderNotes(manifest);
     this.renderLabels(manifest);
   }
 
@@ -197,6 +203,30 @@ export class ForgottenSanityMapRenderer {
       rect.setDepth(DEPTH_CHEST);
       rect.setStrokeStyle(2, chest.kind === 'gilded' ? CHEST_GILDED_COLOR : CHEST_NORMAL_COLOR);
       this.objects.push(rect as unknown as RenderedObject);
+    }
+  }
+
+  private renderNotes(manifest: ForgottenSanityMapManifest): void {
+    for (const note of manifest.notes) {
+      const b = note.bounds;
+      const cx = b.x + b.width / 2;
+      const cy = b.y + b.height / 2;
+      if (this.scene.textures.exists(NOTE_SPRITE_KEY)) {
+        const sprite = this.scene.add.image(cx, cy, NOTE_SPRITE_KEY);
+        sprite.setOrigin(0.5, 0.5);
+        sprite.setDisplaySize(b.width, b.height);
+        sprite.setDepth(DEPTH_NOTE);
+        this.objects.push(sprite as unknown as RenderedObject);
+      } else {
+        // fallback: 米色 48x48 矩形 + 暗边
+        const gfx = this.scene.add.graphics();
+        gfx.fillStyle(NOTE_FILL_COLOR, 1);
+        gfx.fillRect(b.x, b.y, b.width, b.height);
+        gfx.lineStyle(NOTE_STROKE_WIDTH, NOTE_STROKE_COLOR, 1);
+        gfx.strokeRect(b.x, b.y, b.width, b.height);
+        gfx.setDepth(DEPTH_NOTE);
+        this.objects.push(gfx as unknown as RenderedObject);
+      }
     }
   }
 

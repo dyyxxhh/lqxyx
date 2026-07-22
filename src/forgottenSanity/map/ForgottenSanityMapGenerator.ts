@@ -20,6 +20,7 @@ import {
   type ForgottenSanityCorridor,
   type ForgottenSanityDoorSpawn,
   type ForgottenSanityMapManifest,
+  type ForgottenSanityNoteSpawn,
   type ForgottenSanityRect,
   type ForgottenSanityRoom,
   type ForgottenSanityRoomKind,
@@ -605,6 +606,74 @@ export function distributeChests(
 }
 
 // ---------------------------------------------------------------------------
+// distributeNotes (spec §2 — 遗落的纸条)
+// 每局纯随机 2-5 张，排除 entrance/exit/vault，spawnPoint ± 80px 抖动，
+// 与宝箱 60px / 纸条之间 120px 间距，落在 walkableBounds 内。
+// 容错：合法位置不足时少放，可为 0，不抛错。
+// ---------------------------------------------------------------------------
+const NOTE_SIZE = 48;
+const NOTE_JITTER = 80;
+const NOTE_MIN_DIST = 120;
+const NOTE_CHEST_MIN_DIST = 60;
+const NOTE_RETRY_LIMIT = 8;
+const ALLOWED_NOTE_ROOM_KINDS: readonly ForgottenSanityRoomKind[] = [
+  'classroom', 'trap', 'dark', 'switchRoom', 'hall',
+];
+
+export function distributeNotes(
+  rng: Rng,
+  rooms: readonly ForgottenSanityRoom[],
+  chests: readonly ForgottenSanityChestSpawn[],
+): readonly ForgottenSanityNoteSpawn[] {
+  const notes: ForgottenSanityNoteSpawn[] = [];
+  const count = 2 + Math.floor(rng.next() * 4); // 纯随机 2-5
+
+  const eligible = rooms.filter((r) => ALLOWED_NOTE_ROOM_KINDS.includes(r.kind));
+  if (eligible.length === 0) return notes;
+
+  let placedIdx = 0;
+  for (let i = 0; i < count; i += 1) {
+    let placed = false;
+    for (let attempt = 0; attempt < NOTE_RETRY_LIMIT && !placed; attempt += 1) {
+      const room = rng.pick(eligible);
+      const wb = room.walkableBounds;
+      const cx = room.spawnPoint.x + (rng.next() * 2 - 1) * NOTE_JITTER;
+      const cy = room.spawnPoint.y + (rng.next() * 2 - 1) * NOTE_JITTER;
+      const minX = wb.x + NOTE_SIZE / 2;
+      const maxX = wb.x + wb.width - NOTE_SIZE / 2;
+      const minY = wb.y + NOTE_SIZE / 2;
+      const maxY = wb.y + wb.height - NOTE_SIZE / 2;
+      if (cx < minX || cx > maxX || cy < minY || cy > maxY) continue;
+
+      let tooClose = false;
+      for (const n of notes) {
+        const nx = n.bounds.x + NOTE_SIZE / 2;
+        const ny = n.bounds.y + NOTE_SIZE / 2;
+        if (Math.hypot(nx - cx, ny - cy) < NOTE_MIN_DIST) { tooClose = true; break; }
+      }
+      if (tooClose) continue;
+
+      for (const c of chests) {
+        const ccx = c.bounds.x + c.bounds.width / 2;
+        const ccy = c.bounds.y + c.bounds.height / 2;
+        if (Math.hypot(ccx - cx, ccy - cy) < NOTE_CHEST_MIN_DIST) { tooClose = true; break; }
+      }
+      if (tooClose) continue;
+
+      notes.push({
+        id: `note-${placedIdx}`,
+        roomId: room.id,
+        bounds: { x: cx - NOTE_SIZE / 2, y: cy - NOTE_SIZE / 2, width: NOTE_SIZE, height: NOTE_SIZE },
+      });
+      placedIdx += 1;
+      placed = true;
+    }
+  }
+
+  return notes;
+}
+
+// ---------------------------------------------------------------------------
 // generateForgottenSanityMap — 顶层组合
 // ---------------------------------------------------------------------------
 export function generateForgottenSanityMap(seed: number): ForgottenSanityMapManifest {
@@ -622,6 +691,7 @@ export function generateForgottenSanityMap(seed: number): ForgottenSanityMapMani
   const roomById = new Map(rooms.map((r) => [r.id, r] as const));
   const { corridors, doors } = buildCorridorsAndDoors(rooms, edges, roomById);
   const chests = distributeChests(rng, rooms, vaultRoomId, hallRoomId);
+  const notes = distributeNotes(rng, rooms, chests);
   const baselineSanity = computeBaselineSanity(roomCount);
 
   // 出口可达性断言（基于 corridors 邻接）
@@ -657,6 +727,7 @@ export function generateForgottenSanityMap(seed: number): ForgottenSanityMapMani
     corridors,
     doors,
     chests,
+    notes,
     entranceRoomId,
     exitRoomId,
     vaultRoomId,

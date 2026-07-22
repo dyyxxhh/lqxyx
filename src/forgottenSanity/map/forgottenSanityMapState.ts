@@ -92,6 +92,12 @@ export interface ForgottenSanityChestSpawn {
   readonly bounds: ForgottenSanityRect;
 }
 
+export interface ForgottenSanityNoteSpawn {
+  readonly id: string;          // 如 "note-0", "note-1"
+  readonly roomId: string;
+  readonly bounds: ForgottenSanityRect; // { x, y, width: 48, height: 48 }，中心点为放置坐标
+}
+
 export interface ForgottenSanityFloorTile {
   readonly tileWidth: number;
   readonly tileHeight: number;
@@ -112,6 +118,7 @@ export interface ForgottenSanityMapManifest {
   readonly corridors: readonly ForgottenSanityCorridor[];
   readonly doors: readonly ForgottenSanityDoorSpawn[];
   readonly chests: readonly ForgottenSanityChestSpawn[];
+  readonly notes: readonly ForgottenSanityNoteSpawn[];
   readonly entranceRoomId: string;
   readonly exitRoomId: string;
   readonly vaultRoomId: string;

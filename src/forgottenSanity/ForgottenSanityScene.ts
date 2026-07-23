@@ -77,9 +77,21 @@ export class ForgottenSanityScene extends Phaser.Scene {
   private paused = false;
   // M8 ESC 暂停菜单（plan 2026-07-19 Task 14）
   private pauseMenu: PauseMenu | null = null;
+  // 音频管理器（由外部场景注入，用于播放BGM/SFX）
+  private audioManager: import('../audio/AudioManager').AudioManager | null = null;
 
   public constructor() {
     super('ForgottenSanityScene');
+  }
+
+  /** Inject the AudioManager for BGM/SFX playback. */
+  public setAudioManager(manager: import('../audio/AudioManager').AudioManager): void {
+    this.audioManager = manager;
+  }
+
+  /** Get the injected AudioManager (may be null if not yet wired). */
+  public getAudioManager(): import('../audio/AudioManager').AudioManager | null {
+    return this.audioManager;
   }
 
   public create(): void {

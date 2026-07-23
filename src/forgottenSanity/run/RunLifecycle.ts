@@ -146,6 +146,14 @@ export class RunLifecycle implements RunSharedState {
   public readonly interaction: RunInteractionHandler;
   public readonly testHooks: RunTestHooks;
 
+  // ── Combat SFX hook (wired by the scene) ──
+  private onCombatSfx: ((event: string) => void) | null = null;
+
+  /** Register a callback for combat SFX events (playerHit, enemyHit, enemyKilled, etc.). */
+  public setOnCombatSfxCallback(cb: (event: string) => void): void {
+    this.onCombatSfx = cb;
+  }
+
   constructor(scene: ForgottenSanityScene & Phaser.Scene) {
     this.scene = scene;
 
@@ -204,6 +212,7 @@ export class RunLifecycle implements RunSharedState {
     const isWalkable: IsWalkableFn = (x, y) => this.interaction.checkWalkable(x, y);
     const callbacks: CombatCallbacks = {
       onPlayerDied: () => this.handlePlayerDeath(),
+      onPlayerDamaged: (_instance) => this.onCombatSfx?.('playerDamaged'),
       onEnemyKilled: (enemy) => this.handleEnemyKilled(enemy),
       onEliteDefeated: () => this.handleEliteDefeated(),
       onMarkBodyOnMinimap: (bodyId, x, y) => this.scene.markBodyOnMinimap(bodyId, x, y),
@@ -423,6 +432,7 @@ export class RunLifecycle implements RunSharedState {
   // 怪物死亡 → 掉落
   // ───────────────────────────────────────────────────────────────────
   private handleEnemyKilled(enemy: Enemy): void {
+    this.onCombatSfx?.('enemyKilled');
     // spec §10：普通缄默者掉落 SILENT_ONE_LOOT_TABLE
     if (enemy.kind === 'yangYunRed' || enemy.kind === 'yangYunRedPhantom') return; // 红边走 onEliteDefeated
     if (enemy.kind === 'danYuxuanBody') return; // 身体不掉落
@@ -435,6 +445,7 @@ export class RunLifecycle implements RunSharedState {
   // spec §5.10：杨云红边击杀奖励。Task 1 暂由 ForgottenSanityScene 测试钩子直接调用，
   // Task 23 会正式实现完整 *ForTest 方法包装器。
   handleEliteDefeated(): void {
+    this.onCombatSfx?.('enemyKilled');
     // 1. 碎片掷骰（独立掷骰）
     const loot = rollLootTable(YANG_YUN_RED_LOOT_TABLE, this.rng.next.bind(this.rng));
     for (const item of loot) {

@@ -84,6 +84,11 @@ export class EventEngine {
   private pendingInteractionPhysicalTarget: StoryPhysicalTargetRequirement | null = null;
   private pendingInteractionFlagMap: Extract<StoryCommand, { type: 'interaction' }>['physicalTargetFlagMap'] | null = null;
   private pendingInteractionCompleteFlags: readonly string[] | null = null;
+
+  // ── SFX hooks (wired by the scene) ───────────────────────────
+  private onFadeSfx: ((direction: 'in' | 'out') => void) | null = null;
+  private onBlackScreenSfx: ((asset: string | undefined) => void) | null = null;
+  private onSwitchViewSfx: (() => void) | null = null;
   private pendingProximityTarget: StoryProximityTarget | null = null;
   private pendingProximityArmedPosition: StoryPoint | null = null;
   private pendingVisibilityTargetId: string | null = null;
@@ -149,6 +154,23 @@ export class EventEngine {
     this.checkpointSnapshots.set(saveState.checkpointId, { ...saveState, position: { ...saveState.position } });
 
     this.syncDebugState();
+  }
+
+  // ── SFX hook setters (wired by the scene) ────────────────────
+
+  /** Register a callback for fade SFX (direction: 'in' | 'out'). */
+  public setOnFadeSfxCallback(cb: (direction: 'in' | 'out') => void): void {
+    this.onFadeSfx = cb;
+  }
+
+  /** Register a callback for blackScreen SFX (asset: optional string like '血迹黑屏'). */
+  public setOnBlackScreenSfxCallback(cb: (asset: string | undefined) => void): void {
+    this.onBlackScreenSfx = cb;
+  }
+
+  /** Register a callback for switchView SFX (reality tear on character switch). */
+  public setOnSwitchViewSfxCallback(cb: () => void): void {
+    this.onSwitchViewSfx = cb;
   }
 
   // ── Public API ───────────────────────────────────────────────
@@ -535,6 +557,7 @@ export class EventEngine {
         return true;
 
       case 'fade':
+        this.onFadeSfx?.(command.direction);
         this.onFade?.(command.direction, command.durationMs);
         this.startWait(command.durationMs);
         return true;
@@ -692,6 +715,7 @@ export class EventEngine {
     this.inputManager.lock('blackScreen');
     const bloodTexture = command.asset === '血迹黑屏' ? 'transition.bloodBlackScreen' : undefined;
     this.narrativeUI.setCurtain(true, '', '', bloodTexture);
+    this.onBlackScreenSfx?.(command.asset);
     this.startWait(command.durationMs);
   }
 
@@ -906,6 +930,7 @@ export class EventEngine {
       'position' in command ? (command as StoryCommand & { position?: StoryPoint }).position : undefined,
       'facing' in command ? (command as StoryCommand & { facing?: 'up' | 'down' | 'left' | 'right' }).facing : undefined,
     );
+    this.onSwitchViewSfx?.();
     this.syncDebugState();
   }
 

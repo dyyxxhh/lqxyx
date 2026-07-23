@@ -24,8 +24,22 @@ export class DeathFlashManager {
   private frameLog: DeathFlashFrameLogEntry[] = [];
   private active = false;
 
+  // Callbacks wired by the scene for SFX and screen shake per frame
+  private onFrameSfx: ((frameType: string, frameIndex: number) => void) | null = null;
+  private onFrameShake: ((intensityPx: number) => void) | null = null;
+
   public constructor(scene: Phaser.Scene) {
     this.scene = scene;
+  }
+
+  /** Register a callback for per-frame SFX. frameType is 'bloodBlack' | 'whiteSilhouette' | 'blackSilhouette' | 'finalBloodBlack'. */
+  public setOnFrameSfxCallback(cb: (frameType: string, frameIndex: number) => void): void {
+    this.onFrameSfx = cb;
+  }
+
+  /** Register a callback for per-frame screen shake. intensityPx is the shake intensity in pixels. */
+  public setOnFrameShakeCallback(cb: (intensityPx: number) => void): void {
+    this.onFrameShake = cb;
   }
 
   public play(id: 'celery' | 'ruler', sequence: readonly DeathFlashFrame[]): void {
@@ -79,6 +93,13 @@ export class DeathFlashManager {
       textureKey,
       durationMs: frame.durationMs,
     });
+
+    // Trigger SFX and shake callbacks for this frame
+    const frameType = this.getFrameType(frame, index, sequence.length);
+    this.onFrameSfx?.(frameType, index);
+    // Shake intensity escalates: first frame 4px -> last frame 16px
+    const shakeIntensity = 4 + Math.floor((index / sequence.length) * 12);
+    this.onFrameShake?.(shakeIntensity);
 
     this.timer = this.scene.time.delayedCall(frame.durationMs, () => {
       this.timer = null;
@@ -138,6 +159,14 @@ export class DeathFlashManager {
       object.destroy();
     }
     this.objects = [];
+  }
+
+  /** Determine the frame type for SFX mapping. */
+  private getFrameType(frame: DeathFlashFrame, index: number, total: number): string {
+    if (index === 0 || index === total - 1) return 'bloodBlack';
+    if (frame.background === 'white') return 'whiteSilhouette';
+    if (frame.background === 'black') return 'blackSilhouette';
+    return 'bloodBlack';
   }
 }
 

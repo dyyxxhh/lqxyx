@@ -55,6 +55,10 @@ const CURTAIN_TEXT_DEPTH = 2001;
 export class NarrativeUIManager {
   private scene: Phaser.Scene;
 
+  // SFX callback (wired to AudioManager by the scene)
+  private onSfxCallback: ((sfxName: string) => void) | null = null;
+  private currentSpeaker = '';
+
   // Task UI elements
   private taskBg: Phaser.GameObjects.Rectangle;
   private taskText: Phaser.GameObjects.Text;
@@ -361,6 +365,15 @@ export class NarrativeUIManager {
 
   // ---- Public API ----
 
+  /** Register a callback for SFX events (wired to AudioManager by the scene). */
+  public setOnSfxCallback(cb: (sfxName: string) => void): void {
+    this.onSfxCallback = cb;
+  }
+
+  private emitSfx(name: string): void {
+    this.onSfxCallback?.(name);
+  }
+
   public setTask(text: string): void {
     const isEmpty = text === '' || text === '无';
     const visible = !isEmpty;
@@ -385,6 +398,13 @@ export class NarrativeUIManager {
     this.dialoguePortrait.setVisible(visible && this.dialogueHasPortrait);
 
     if (visible) {
+      // Emit SFX: speaker change on new speaker, dialogue advance on every call
+      if (speaker !== this.currentSpeaker) {
+        this.emitSfx('speakerChange');
+        this.currentSpeaker = speaker;
+      }
+      this.emitSfx('dialogueAdvance');
+
       this.dialogueSpeakerText.setText(speaker);
       const bodyActionPrefix = bodyAction ? `（${bodyAction}）\n` : '';
       const toneSuffix = tone ? `\n（${tone}）` : '';
@@ -422,6 +442,9 @@ export class NarrativeUIManager {
     this.rolePromptText.setVisible(visible);
 
     if (visible) {
+      // Reality tear SFX on role prompt appearance (grill-me: 现实撕裂)
+      this.emitSfx('realityTear');
+
       const portraitKey = getPortraitKey(characterId);
       this.rolePromptHasPortrait = portraitKey !== undefined;
       this.rolePromptText.setText(name);

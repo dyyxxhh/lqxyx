@@ -90,7 +90,7 @@
 - **死亡闪屏**: `DeathFlashManager` 按剧本定义的顺序快速切换血黑/白底/黑底 + 芹菜/尺子贴图。
 - **Debug 全局状态**: 全量调试状态挂在 `window.__YING_ZHONG_JIU_SCENE_STATE__`，E2E 与手动 QA 依赖此状态断言。`SceneDebugState` 聚合 save/input/story/ui/character/map/preload 7 个子状态。
 - **窗口暴露**: 多个核心对象挂在 `window`（`__YING_ZHONG_JIU_INPUT_MANAGER__`、`__YING_ZHONG_JIU_EVENT_ENGINE__` 等），仅供 E2E 和调试。
-- **`as unknown as` 模式**: 代码中使用 `as unknown as` 进行 window 全局挂载和 duck-typing（如 `EventEngine.ts:544` 探测 `isRolePromptBlocking`），是项目特有的 E2E 可观察性模式。spec#5 §4.2 已消除 forgotten sanity `CombatManager` 的 enemy duck-typing cast（改用基类可选钩子），但 `EnemySystem.ts:453` 仍有 1 处残留（chargeState），`ForgottenSanityScene.ts:189-254` 的测试钩子探测仍用此模式（门面已类型化，属冗余）。
+- **`as unknown as` 模式**: 代码中使用 `as unknown as` 进行 window 全局挂载和 duck-typing（如 `EventEngine.ts:544` 探测 `isRolePromptBlocking`），是项目特有的 E2E 可观察性模式。spec#5 §4.2 + 审核 N1/N2 已消除 forgotten sanity 全部 enemy duck-typing cast（`CombatManager`/`EnemySystem`/`ForgottenSanityScene` 测试钩子探测），改用 Enemy 基类可选钩子（`aggroState`/`enrage`/`tickSummonTimer`/`tickHeadRevive`/`onBodyDied`/`onBoundHeadDied`/`getChargeKnockback`）+ 门面类型化直接调用。残留的 `as unknown as` 仅限 `EventEngine` 主线可观察性与测试反射设置 private 字段。
 
 ## COMMANDS
 ```bash

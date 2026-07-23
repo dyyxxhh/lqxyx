@@ -1,0 +1,94 @@
+<h2>美术与音效优化方案对比</h2>
+<p class="subtitle">基于你的需求：保持暗黑像素恐怖风格、增强氛围、寂静岭式压抑感、混合音效方案</p>
+
+<div class="cards">
+  <div class="card" data-choice="lightweight" onclick="toggleSelect(this)">
+    <div class="card-image" style="background: linear-gradient(135deg, #08070a 0%, #141018 100%); padding: 24px; display: flex; flex-direction: column; gap: 12px; align-items: center; justify-content: center; min-height: 200px;">
+      <div style="width: 80%; height: 8px; background: #211821; border: 2px solid #49313a; margin-bottom: 8px;"></div>
+      <div style="width: 60%; height: 6px; background: #6b1f2c; opacity: 0.6;"></div>
+      <div style="display: flex; gap: 8px; margin-top: 12px;">
+        <div style="width: 12px; height: 12px; background: #b01724; border-radius: 50%; opacity: 0.8;"></div>
+        <div style="width: 8px; height: 8px; background: #b01724; border-radius: 50%; opacity: 0.5;"></div>
+        <div style="width: 6px; height: 6px; background: #b01724; border-radius: 50%; opacity: 0.3;"></div>
+      </div>
+      <p style="color: #c9b9a6; font-size: 12px; margin-top: 16px; text-align: center;">基础粒子 + 简单过渡<br>无外部音频文件</p>
+    </div>
+    <div class="card-body">
+      <h3>方案A：轻量增强</h3>
+      <p><strong>美术：</strong>Canvas后处理滤镜（暗角+噪点）+ 基础粒子系统 + CSS过渡动画</p>
+      <p><strong>音效：</strong>全部程序化生成（Web Audio API合成BGM+音效），零外部文件</p>
+      <div class="pros-cons">
+        <div class="pros"><h4>优点</h4><ul><li>零外部依赖，加载最快</li><li>实现周期短（约2-3天）</li><li>包体几乎不增加</li></ul></div>
+        <div class="cons"><h4>缺点</h4><ul><li>BGM为合成电子音，氛围有限</li><li>粒子和特效层次较简单</li><li>寂静岭式工业氛围难以还原</li></ul></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card" data-choice="balanced" onclick="toggleSelect(this)">
+    <div class="card-image" style="background: linear-gradient(135deg, #08070a 0%, #1a0a0f 50%, #08070a 100%); padding: 24px; display: flex; flex-direction: column; gap: 12px; align-items: center; justify-content: center; min-height: 200px; position: relative;">
+      <div style="position: absolute; inset: 0; background: radial-gradient(ellipse at center, transparent 40%, rgba(0,0,0,0.7) 100%);"></div>
+      <div style="width: 80%; height: 10px; background: #211821; border: 2px solid #6b1f2c; position: relative; z-index: 1;">
+        <div style="width: 65%; height: 100%; background: linear-gradient(90deg, #b01724, #d12a3a);"></div>
+      </div>
+      <div style="display: flex; gap: 4px; margin-top: 8px; position: relative; z-index: 1;">
+        <div style="width: 4px; height: 4px; background: #b01724; opacity: 0.9; box-shadow: 0 0 4px #b01724;"></div>
+        <div style="width: 6px; height: 6px; background: #d12a3a; opacity: 0.7; box-shadow: 0 0 6px #d12a3a;"></div>
+        <div style="width: 3px; height: 3px; background: #ff7a72; opacity: 0.8; box-shadow: 0 0 3px #ff7a72;"></div>
+        <div style="width: 5px; height: 5px; background: #b01724; opacity: 0.6; box-shadow: 0 0 5px #b01724;"></div>
+        <div style="width: 4px; height: 4px; background: #d7b15c; opacity: 0.5; box-shadow: 0 0 4px #d7b15c;"></div>
+      </div>
+      <div style="position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); width: 60%; height: 20px; background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(255,255,255,0.02) 2px, rgba(255,255,255,0.02) 4px); z-index: 1;"></div>
+      <p style="color: #d7b15c; font-size: 12px; margin-top: 12px; text-align: center; position: relative; z-index: 1;">★ 推荐 ★<br>分层后处理 + 音频管线</p>
+    </div>
+    <div class="card-body">
+      <h3>方案B：分阶段管线（推荐）</h3>
+      <p><strong>美术：</strong>ScreenEffectManager后处理管线 + 增强粒子（击中血迹/尘雾/拾取光效）+ UI动效系统 + 追逐红边/理智低视觉扭曲</p>
+      <p><strong>音效：</strong>AudioManager音频管线，程序化生成UI/战斗音效，CC0免费素材用于BGM/环境音（低频嗡鸣/风声/心跳/工业噪音）</p>
+      <div class="pros-cons">
+        <div class="pros"><h4>优点</h4><ul><li>架构清晰可扩展</li><li>氛围质量接近寂静岭风格</li><li>性能可控，文件增量适中（~2-3MB）</li><li>后续加内容只需注册新音效/特效</li></ul></div>
+        <div class="cons"><h4>缺点</h4><ul><li>需要筛选和处理免费音频素材</li><li>实现周期中等（约4-5天）</li></ul></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card" data-choice="maximal" onclick="toggleSelect(this)">
+    <div class="card-image" style="background: linear-gradient(180deg, #0a0508 0%, #1a0508 30%, #050305 100%); padding: 24px; display: flex; flex-direction: column; gap: 12px; align-items: center; justify-content: center; min-height: 200px; position: relative; overflow: hidden;">
+      <div style="position: absolute; inset: 0; background: radial-gradient(ellipse at 30% 50%, rgba(176,23,36,0.15) 0%, transparent 50%), radial-gradient(ellipse at 70% 60%, rgba(107,31,44,0.1) 0%, transparent 40%);"></div>
+      <div style="position: absolute; top: 0; left: 0; right: 0; height: 100%; background: repeating-linear-gradient(0deg, rgba(0,0,0,0.15) 0px, rgba(0,0,0,0.15) 1px, transparent 1px, transparent 3px);"></div>
+      <div style="position: absolute; inset: 0; box-shadow: inset 0 0 60px rgba(0,0,0,0.9), inset 0 0 120px rgba(176,23,36,0.1);"></div>
+      <div style="position: relative; z-index: 1; width: 70%; height: 12px; background: #211821; border: 2px solid #6b1f2c; overflow: hidden;">
+        <div style="width: 45%; height: 100%; background: linear-gradient(90deg, #7f101a, #b01724, #d12a3a); box-shadow: 0 0 8px #b01724;"></div>
+      </div>
+      <div style="position: relative; z-index: 1; display: flex; gap: 3px; margin-top: 10px; flex-wrap: wrap; justify-content: center; max-width: 80%;">
+        <div style="width: 5px; height: 5px; background: #b01724; border-radius: 50%; box-shadow: 0 0 6px #b01724, 0 0 12px #b01724;"></div>
+        <div style="width: 7px; height: 7px; background: #d12a3a; border-radius: 50%; box-shadow: 0 0 8px #d12a3a;"></div>
+        <div style="width: 4px; height: 4px; background: #ff7a72; border-radius: 50%; box-shadow: 0 0 5px #ff7a72;"></div>
+        <div style="width: 6px; height: 6px; background: #b01724; border-radius: 50%; opacity: 0.7; box-shadow: 0 0 6px #b01724;"></div>
+        <div style="width: 3px; height: 3px; background: #d7b15c; border-radius: 50%; box-shadow: 0 0 4px #d7b15c;"></div>
+        <div style="width: 5px; height: 5px; background: #d12a3a; border-radius: 50%; opacity: 0.5; box-shadow: 0 0 5px #d12a3a;"></div>
+        <div style="width: 4px; height: 4px; background: #ff7a72; border-radius: 50%; opacity: 0.6;"></div>
+        <div style="width: 6px; height: 6px; background: #6b1f2c; border-radius: 50%;"></div>
+      </div>
+      <div style="position: absolute; bottom: 15px; left: 10%; right: 10%; height: 30px; background: linear-gradient(0deg, rgba(176,23,36,0.08) 0%, transparent 100%); z-index: 1;"></div>
+      <p style="color: #ff7a72; font-size: 11px; margin-top: 8px; text-align: center; position: relative; z-index: 1; text-shadow: 0 0 10px rgba(255,122,114,0.5);">全后处理 + 动态音景<br>CRT/色差/Bloom/空间音频</p>
+    </div>
+    <div class="card-body">
+      <h3>方案C：最大化沉浸</h3>
+      <p><strong>美术：</strong>全后处理栈（CRT扫描线+色差+胶片颗粒+Bloom辉光+动态暗角+理智低屏幕扭曲）+ 高级粒子系统（血迹飞溅/雾气/粉尘/灰烬）+ 动态光照/阴影 + 屏幕震动</p>
+      <p><strong>音效：</strong>全音景设计（分层动态BGM+空间3D音频+理智系统联动音效+音频混音器+环境音随机化）</p>
+      <div class="pros-cons">
+        <div class="pros"><h4>优点</h4><ul><li>最沉浸的恐怖氛围</li><li>接近AAA恐怖游戏体验</li><li>视觉听觉冲击力最强</li></ul></div>
+        <div class="cons"><h4>缺点</h4><ul><li>实现复杂度高（约7-10天）</li><li>可能影响移动端性能</li><li>音频素材量大（~10-15MB）</li><li>部分Phaser 4高级特性需验证</li></ul></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section" style="margin-top: 24px; padding: 16px; background: rgba(215,177,92,0.08); border: 1px solid rgba(215,177,92,0.2); border-radius: 4px;">
+  <h3 style="color: #d7b15c; margin: 0 0 8px 0;">我的推荐：方案B（分阶段管线）</h3>
+  <p style="color: #c9b9a6; margin: 0; font-size: 14px; line-height: 1.6;">
+    方案B在氛围质量、实现复杂度和性能之间取得了最佳平衡。它搭建了清晰的后处理和音频管线架构，
+    既能达到寂静岭式的压抑工业恐怖氛围，又保持了可扩展性——后续想加更多特效/音效只需在管线上注册，
+    不需要重构。方案A太弱，方案C过度且有性能风险。
+  </p>
+</div>

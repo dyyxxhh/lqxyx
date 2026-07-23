@@ -34,6 +34,8 @@ export class PauseMenu {
   private pixelFilterEnabled = true;
   private visible = false;
   private currentView: 'main' | 'settings' = 'main';
+  private onAudioToggle: ((enabled: boolean) => void) | null = null;
+  private onPixelFilterToggle: ((enabled: boolean) => void) | null = null;
 
   constructor(scene: Phaser.Scene, onResume: () => void, onAbandon: () => void) {
     this.scene = scene;
@@ -71,6 +73,16 @@ export class PauseMenu {
     return this.pixelFilterEnabled;
   }
 
+  /** Wire audio toggle to AudioManager (called by scene on init). */
+  setAudioToggleCallback(cb: (enabled: boolean) => void): void {
+    this.onAudioToggle = cb;
+  }
+
+  /** Wire pixel filter toggle to ScreenEffectManager (called by scene on init). */
+  setPixelFilterToggleCallback(cb: (enabled: boolean) => void): void {
+    this.onPixelFilterToggle = cb;
+  }
+
   // ── 测试用：程序化触发按钮（绕过 Phaser 输入事件）──
   clickSettings(): void {
     this.openSettings();
@@ -78,6 +90,7 @@ export class PauseMenu {
 
   clickAudioToggle(): void {
     this.audioEnabled = !this.audioEnabled;
+    this.onAudioToggle?.(this.audioEnabled);
     if (this.currentView === 'settings') {
       this.openSettings();
     }
@@ -85,6 +98,7 @@ export class PauseMenu {
 
   clickPixelFilterToggle(): void {
     this.pixelFilterEnabled = !this.pixelFilterEnabled;
+    this.onPixelFilterToggle?.(this.pixelFilterEnabled);
     if (this.currentView === 'settings') {
       this.openSettings();
     }
@@ -170,6 +184,7 @@ export class PauseMenu {
     audioBtn.setInteractive({ useHandCursor: true });
     audioBtn.on('pointerdown', () => {
       this.audioEnabled = !this.audioEnabled;
+      this.onAudioToggle?.(this.audioEnabled);
       this.openSettings();
     });
 
@@ -185,6 +200,7 @@ export class PauseMenu {
     pixelBtn.setInteractive({ useHandCursor: true });
     pixelBtn.on('pointerdown', () => {
       this.pixelFilterEnabled = !this.pixelFilterEnabled;
+      this.onPixelFilterToggle?.(this.pixelFilterEnabled);
       this.openSettings();
     });
 

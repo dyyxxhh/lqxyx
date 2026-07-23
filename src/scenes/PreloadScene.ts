@@ -11,6 +11,7 @@ import {
 } from './preloadState';
 import { getForcedPreloadFailureKey } from './preloadDebugGate';
 import { UI_THEME, applyPixelStrokeStyle, applyPixelTextStyle } from '../ui/uiTheme';
+import { AUDIO_KEYS, AUDIO_FILE_PATHS } from '../audio/AudioManager';
 
 export class PreloadScene extends Phaser.Scene {
   private preloadState: PreloadDebugState | null = null;
@@ -51,6 +52,12 @@ export class PreloadScene extends Phaser.Scene {
       this.load.image(entry.key, entry.url);
     }
 
+    // Load CC0 audio assets (BGM + ambient). Missing files are handled
+    // gracefully by the existing loaderror handler.
+    for (const key of AUDIO_KEYS) {
+      this.load.audio(key, AUDIO_FILE_PATHS[key]);
+    }
+
     this.load.on('progress', (progress: number) => {
       this.setPreloadState(markPreloadProgress(this.requirePreloadState(), progress));
       this.renderProgress();
@@ -79,6 +86,31 @@ export class PreloadScene extends Phaser.Scene {
     this.setPreloadState(markPreloadComplete(state));
     markPreloadReady();
     this.renderProgress();
+
+    // Initialize AudioContext on first user interaction (browser autoplay policy).
+    // Phaser scenes run after user clicks "start" so the gesture context is available.
+    if (typeof window !== 'undefined' && !(window as unknown as Record<string, unknown>).__YING_ZHONG_JIU_AUDIO_CONTEXT__) {
+      const initAudio = (): void => {
+        try {
+          const Ctor = (window as unknown as { AudioContext?: typeof AudioContext; webkitAudioContext?: typeof AudioContext }).AudioContext
+            ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+          if (Ctor) {
+            const ctx = new Ctor();
+            if (ctx.state === 'suspended') {
+              ctx.resume();
+            }
+            (window as unknown as Record<string, unknown>).__YING_ZHONG_JIU_AUDIO_CONTEXT__ = ctx;
+          }
+        } catch {
+          // AudioContext creation can fail in restricted environments — silently skip
+        }
+      };
+      document.addEventListener('pointerdown', initAudio, { once: true });
+      document.addEventListener('keydown', initAudio, { once: true });
+      // Attempt immediate creation (may work if within user gesture)
+      initAudio();
+    }
+
     this.scene.start('GameScene');
   }
 

@@ -38,9 +38,27 @@ export class ScreenEffectManager {
   private scene: Phaser.Scene;
   private params: PostProcessingParams = { ...BASELINE_PARAMS };
   private activePreset: 'none' | 'sanity' | 'chase' = 'none';
+  private enabled = true;
 
   constructor(scene: Phaser.Scene) {
     this.scene = scene;
+  }
+
+  /** Toggle post-processing on/off (wired to PauseMenu pixel filter toggle). */
+  setEnabled(enabled: boolean): void {
+    this.enabled = enabled;
+    if (!enabled) {
+      // Reset to no-effect baseline when disabled
+      this.params = { ...BASELINE_PARAMS, crtIntensity: 0, grainIntensity: 0, vignetteAmount: 0, chromaticAberration: 0 };
+    } else {
+      this.params = { ...BASELINE_PARAMS };
+      if (this.activePreset === 'sanity') this.activateSanityPreset();
+      else if (this.activePreset === 'chase') this.activateChasePreset();
+    }
+  }
+
+  isEnabled(): boolean {
+    return this.enabled;
   }
 
   getParams(): PostProcessingParams {
@@ -95,8 +113,9 @@ export class ScreenEffectManager {
     });
   }
 
-  triggerChaseRedPulse(): void {
+  triggerChaseRedPulse(durationMs = 300): void {
     // Red pulse overlay for countdown <= 10s
+    this.triggerBloom(durationMs);
   }
 
   destroy(): void {

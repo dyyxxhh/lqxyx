@@ -20,6 +20,11 @@ import type { Vec2 } from './combat/Enemy';                              // 共�
 import { WallHitRenderer } from './combat/WallHitRenderer';              // Task 6 (#4)：撞墙粒子渲染
 import { UNARMED_ID, type Loadout } from './meta/LoadoutManager';        // unarmed 路由常量 + loadout 类型
 import { ForgottenSanityRunController } from './ForgottenSanityRunController';
+import { AudioManager, type SfxName } from '../audio/AudioManager';
+import { ScreenEffectManager } from '../effects/ScreenEffectManager';
+import { ScreenShake } from '../effects/ScreenShake';
+import { ParticleFactory } from '../effects/ParticleFactory';
+import { SceneFX } from '../effects/SceneFX';
 
 const ABORT_BUTTON_Y = GAME_HEIGHT / 2 + 120;
 
@@ -79,6 +84,11 @@ export class ForgottenSanityScene extends Phaser.Scene {
   private pauseMenu: PauseMenu | null = null;
   // 音频管理器（由外部场景注入，用于播放BGM/SFX）
   private audioManager: import('../audio/AudioManager').AudioManager | null = null;
+  // Visual effect systems (art-audio-enhancement Task 14)
+  private screenEffect: ScreenEffectManager | null = null;
+  private screenShake: ScreenShake | null = null;
+  private particleFactory: ParticleFactory | null = null;
+  private sceneFX: SceneFX | null = null;
 
   public constructor() {
     super('ForgottenSanityScene');
@@ -92,6 +102,16 @@ export class ForgottenSanityScene extends Phaser.Scene {
   /** Get the injected AudioManager (may be null if not yet wired). */
   public getAudioManager(): import('../audio/AudioManager').AudioManager | null {
     return this.audioManager;
+  }
+
+  /** Get the SceneFX coordinator (may be null if not yet wired). */
+  public getSceneFX(): SceneFX | null {
+    return this.sceneFX;
+  }
+
+  /** Get the ScreenEffectManager (may be null if not yet wired). */
+  public getScreenEffect(): ScreenEffectManager | null {
+    return this.screenEffect;
   }
 
   public create(): void {
@@ -187,6 +207,46 @@ export class ForgottenSanityScene extends Phaser.Scene {
     const addRectangle = (this.add as unknown as { rectangle?: unknown }).rectangle;
     if (typeof addRectangle === 'function') {
       this.wallHitRenderer = new WallHitRenderer(this);
+    }
+
+    // ── Audio & effect system initialization (art-audio-enhancement Task 14) ──
+    // Feature-detect: in mock test environments (Object.create bypass), skip
+    // full manager instantiation to avoid Phaser canvas/audio dependency.
+    const hasTextures = (this as unknown as { textures?: { exists?: (k: string) => boolean } }).textures?.exists?.('floor.tile') === true;
+    if (hasTextures) {
+      const audioCtx = (typeof window !== 'undefined' && (window as unknown as Record<string, unknown>).__YING_ZHONG_JIU_AUDIO_CONTEXT__)
+        ? (window as unknown as { __YING_ZHONG_JIU_AUDIO_CONTEXT__: AudioContext }).__YING_ZHONG_JIU_AUDIO_CONTEXT__
+        : null;
+      this.audioManager = new AudioManager(this, audioCtx);
+      this.screenEffect = new ScreenEffectManager(this);
+      this.screenShake = new ScreenShake(this);
+      this.particleFactory = new ParticleFactory(this);
+      this.sceneFX = new SceneFX(this.screenEffect, this.screenShake, this.particleFactory, this.audioManager);
+
+      // Wire PauseMenu audio toggle → AudioManager
+      this.pauseMenu?.setAudioToggleCallback((enabled) => {
+        this.audioManager?.setEnabled(enabled);
+      });
+      // Wire PauseMenu pixel filter toggle → ScreenEffectManager
+      this.pauseMenu?.setPixelFilterToggleCallback((enabled) => {
+        this.screenEffect?.setEnabled(enabled);
+      });
+
+      // Wire combat SFX via runController → RunLifecycle
+      this.runController?.setCombatSfxCallback((event) => {
+        switch (event) {
+          case 'playerDamaged': this.audioManager?.playSfx('hurt' as SfxName); break;
+          case 'enemyHit': this.audioManager?.playSfx('hit' as SfxName); break;
+          case 'enemyKilled': this.audioManager?.playSfx('kill' as SfxName); break;
+          case 'projectile': this.audioManager?.playSfx('projectile' as SfxName); break;
+          case 'wallBounce': this.audioManager?.playSfx('wallBounce' as SfxName); break;
+        }
+      });
+
+      // Start exploration BGM + ambient + ash particles
+      this.audioManager.playBgm('explore_fs_bgm', 0.25);
+      this.audioManager.startAmbient();
+      this.particleFactory.startAmbientAsh();
     }
 
     // ── 测试钩子（仅 DEV / test 环境挂载到 window）──
@@ -417,6 +477,15 @@ export class ForgottenSanityScene extends Phaser.Scene {
     this.fogOverlay?.destroy();
     this.settlement?.destroy();
     this.mobile?.destroy();
+    // Cleanup audio & effect systems
+    this.audioManager?.stopBgm();
+    this.audioManager?.stopAmbient();
+    this.particleFactory?.destroy();
+    this.particleFactory = null;
+    this.screenEffect?.destroy();
+    this.screenEffect = null;
+    this.screenShake = null;
+    this.sceneFX = null;
   }
 
   private emitCombatAction(action: string): void {

@@ -109,4 +109,11 @@ export class ForgottenSanityRunController {
   forceNotesStateForTest(nextSequentialIndex: number): void {
     this.lifecycle.testHooks.forceNotesStateForTest(nextSequentialIndex);
   }
+
+  // ───────────────────────────────────────────────────────────────────
+  // Audio & effects wiring (art-audio-enhancement Task 14)
+  // ───────────────────────────────────────────────────────────────────
+  setCombatSfxCallback(cb: (event: string) => void): void {
+    this.lifecycle.setOnCombatSfxCallback(cb);
+  }
 }

@@ -29,6 +29,11 @@ import { DeathFlashManager } from './DeathFlashManager';
 import { isRectInCameraView } from './cameraView';
 import { buildStoryEntityDebugEntries, type StoryEntityDebugEntry } from './storyEntities';
 import { YangYunReplayManager } from './YangYunReplayManager';
+import { AudioManager, type SfxName } from '../audio/AudioManager';
+import { ScreenEffectManager } from '../effects/ScreenEffectManager';
+import { ScreenShake } from '../effects/ScreenShake';
+import { ParticleFactory } from '../effects/ParticleFactory';
+import { SceneFX } from '../effects/SceneFX';
 
 const PLAYER_SPEED = 200; // px/s
 const MAX_MOVEMENT_DELTA_MS = 50;
@@ -55,6 +60,14 @@ export class PlayScene extends Phaser.Scene {
   private scriptedMovementActive = false;
   private deathFlashManager!: DeathFlashManager;
   private replayManager!: YangYunReplayManager;
+
+  // Audio & effect systems
+  private audioManager!: AudioManager;
+  private screenEffect!: ScreenEffectManager;
+  private screenShake!: ScreenShake;
+  private particleFactory!: ParticleFactory;
+  private sceneFX!: SceneFX;
+
   private replayChaseFlagPrev = false;
   private replayActiveFlagPrev = false;
   private replayRecordingFlagPrev = false;
@@ -186,6 +199,46 @@ export class PlayScene extends Phaser.Scene {
     this.eventEngine.startFromCheckpoint(saveState.checkpointId);
     this.eventEngine.updateLocation(this.currentFloor, this.currentRoom);
 
+    // ── Initialize audio & effect systems ──────────────────────
+    const audioCtx = (typeof window !== 'undefined' && (window as any).__YING_ZHONG_JIU_AUDIO_CONTEXT__)
+      ? (window as any).__YING_ZHONG_JIU_AUDIO_CONTEXT__
+      : null;
+    this.audioManager = new AudioManager(this, audioCtx);
+    this.screenEffect = new ScreenEffectManager(this);
+    this.screenShake = new ScreenShake(this);
+    this.particleFactory = new ParticleFactory(this);
+    this.sceneFX = new SceneFX(this.screenEffect, this.screenShake, this.particleFactory, this.audioManager);
+
+    // Wire dialogue SFX
+    this.narrativeUI.setOnSfxCallback((sfxName: string) => {
+      this.audioManager.playSfx(sfxName as SfxName);
+    });
+
+    // Wire death flash SFX + shake
+    this.deathFlashManager.setOnFrameSfxCallback((frameType: string) => {
+      this.sceneFX.triggerDeathFlashSfx(frameType as 'bloodBlack' | 'whiteSilhouette' | 'blackSilhouette' | 'finalBloodBlack');
+    });
+    this.deathFlashManager.setOnFrameShakeCallback((intensity: number) => {
+      this.screenShake.shakeCustom(intensity, 100);
+    });
+
+    // Wire EventEngine SFX hooks
+    this.eventEngine.setOnFadeSfxCallback((_direction) => {
+      // Fade SFX handled by ambient/visual systems
+    });
+    this.eventEngine.setOnBlackScreenSfxCallback((asset) => {
+      if (asset === '血迹黑屏') {
+        this.audioManager.playSfx('bloodBlackFrame');
+      }
+    });
+    this.eventEngine.setOnSwitchViewSfxCallback(() => {
+      this.sceneFX.triggerRealityTear();
+    });
+
+    // Start exploration BGM + ambient
+    this.audioManager.playBgm('explore_act1_bgm', 0.25);
+    this.audioManager.startAmbient();
+
     // ── Expose on window for e2e ───────────────────────────────
     if (typeof window !== 'undefined') {
       (window as unknown as Record<string, unknown>).__YING_ZHONG_JIU_INPUT_MANAGER__ = this.inputManager;
@@ -214,6 +267,11 @@ export class PlayScene extends Phaser.Scene {
         getDeathFlashActiveObjectCount: () => this.deathFlashManager.getActiveObjectCount(),
         getStoryEntities: () => this.storyEntityDebugEntries.map((entry) => ({ ...entry })),
         getBranchVisualDebugState: () => this.getBranchVisualDebugState(),
+        getAudioManager: () => this.audioManager,
+        getSceneFX: () => this.sceneFX,
+        getScreenEffect: () => this.screenEffect,
+        getScreenShake: () => this.screenShake,
+        getParticleFactory: () => this.particleFactory,
       };
     }
 
@@ -876,6 +934,19 @@ export class PlayScene extends Phaser.Scene {
     const act = storyManifest.acts.find((a) => a.status === 'playable');
     const ending = act?.endings.find((e) => e.id === endingId);
 
+    // Trigger SceneFX ending effects
+    switch (endingId) {
+      case 'split-in-two':
+        this.sceneFX?.triggerMinorEnding('split');
+        break;
+      case 'saozi':
+        this.sceneFX?.triggerMinorEnding('chase_catch');
+        break;
+      case 'survival-false-report':
+        this.sceneFX?.triggerMajorEnding();
+        break;
+    }
+
     if (ending && !ending.returnsToCheckpoint) {
       this.endingActive = true;
       this.inputManager.lock('ending');
@@ -1056,6 +1127,12 @@ export class PlayScene extends Phaser.Scene {
   shutdown(): void {
     this.deathFlashManager?.cleanup();
     this.replayManager?.destroy();
+    // Clean up audio & effect systems
+    this.audioManager?.stopBgm();
+    this.audioManager?.stopAmbient();
+    this.audioManager?.stopHeartbeat();
+    this.particleFactory?.destroy();
+    this.screenEffect?.destroy();
     for (const sprite of this.storyEntitySprites) {
       sprite.destroy();
     }

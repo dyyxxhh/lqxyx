@@ -9,6 +9,21 @@
 
 对"影中咎"进行美术与音效优化。美术采用最大化沉浸方案（全后处理栈+增强粒子+UI动效），音效采用分阶段管线方案（程序化合成SFX+CC0免费素材BGM/环境音），参考寂静岭式西式心理恐怖氛围。理智消散时美术与音效深度联动。
 
+### 核心设计决策（grill-me确认）
+
+- **后处理基调**：明显风格化——CRT/颗粒/暗角/色差在平常状态即清晰可见，一眼可辨"老旧恐怖"风格
+- **BGM情绪**：寂静岭式空旷——低频嗡鸣drone + 偶尔钢琴单音，旋律极简
+- **氛围粒度**：仅区分"平常"与"追逐战"两种状态，不按楼层区分
+- **追逐压迫**：全程高压——进入追逐战即刻全力压迫（红屏脉冲+强震动+急促心跳BGM），维持到结束
+- **理智幻听**：剧情台词碎片——角色名+关键台词（"但宇轩""杨云""让我尝尝""我干了什么"），叙事性恐怖
+- **角色切换**：现实撕裂——色差激增+颗粒爆发+低频冲击音，模拟"现实撕裂"感
+- **拾取反馈**：仅粒子无声——拾取碎片/道具时只有视觉粒子，无音效，最大化探索时的孤独感
+- **对话音效**：每次推进都播——每次点击/按键都播放轻微纸张翻动音
+- **环境音密度**：稀疏氛围——风声常驻，电流/低语每30-60s随机触发一次
+- **暂停BGM**：完全停止——清晰的"现实中断"感
+- **战斗叠层**：不限制——所有触发的SFX都播放，最大化混乱压迫感
+- **Hub区**：持续不安——Hub保持与Run内相同的后处理强度+BGM持续，无明确"安全"感
+
 ### 当前现状
 
 - 美术：已有135个PNG素材（角色动作、敌人、道具、UI、场景），暗黑像素恐怖风格（`dark-pixel-horror`）已建立，无后处理、无粒子系统、无UI动效
@@ -26,7 +41,7 @@
 
 - ParticleFactory 增强粒子系统（血迹/碎片/光效/尘雾/灰烬/死亡爆裂）
 - HUD 动效增强（条动画/面板过渡/受击反馈/大招释放）
-- SanityFX 理智消散深度联动
+- SceneFX 场景效果协调器（理智消散 + 追逐压力的预设系统）
 - 战斗音效（攻击/命中/受击/击杀/投射物/墙壁反弹）
 
 ### 第一幕主线专属
@@ -34,14 +49,17 @@
 - 对话音效（说话人切换、对话推进、分支选择）
 - 死亡闪屏增强（芹菜/尺子闪屏动画配合音效与后处理）
 - 追逐战特效（倒计时压力视觉、杨云追踪红边提示、被追上时的屏幕效果）
-- 场景过渡氛围（黑屏渐变、角色切换立绘过渡、楼层氛围差异）
-- 角色切换"你现在是"提示动效增强
+- 场景过渡氛围（黑屏渐变、角色切换立绘过渡）
+- 角色切换"你现在是"提示动效增强（现实撕裂风格）
+- 血迹黑屏音效（内心连续恐怖）
+- 小结局/大结局专属音频
 
 ### 不在范围
 
 - 角色动画补全
 - 美术素材重制/替换
 - 分轨音量控制（仅保留简单总开关）
+- 楼层氛围差异（仅区分平常/追逐战，不按楼层区分）
 
 ## 3. 架构
 
@@ -57,13 +75,13 @@
 ├─────────────────────────────────────────────────────┤
 │ 效果系统层（新模块）                                   │
 │  ┌────────────┐ ┌───────────┐ ┌────────┐ ┌────────┐ │
-│  │ParticleFact│ │ScreenShake│ │SfxSynth│ │SanityFX│ │
+│  │ParticleFact│ │ScreenShake│ │SfxSynth│ │SceneFX │ │
 │  └────────────┘ └───────────┘ └────────┘ └────────┘ │
 ├─────────────────────────────────────────────────────┤
 │ 现有系统层（改造集成）                                 │
 │  ┌────────────────┐ ┌──────────────┐ ┌───────────┐  │
 │  │RedEdgeFogOverlay│ │FS HUD        │ │PauseMenu  │  │
-│  │→ 接入SanityFX   │ │→ UI动效增强   │ │→音频开关接线│  │
+│  │→ 接入SceneFX    │ │→ UI动效增强   │ │→音频开关接线│  │
 │  └────────────────┘ └──────────────┘ └───────────┘  │
 ├─────────────────────────────────────────────────────┤
 │ 资源层                                               │
@@ -76,17 +94,20 @@
 
 ### 数据流
 
-- `RunLifecycle` → 理智值变化 → `SanityFX` → 同时驱动 `ScreenEffectManager`（扭曲/色差/震动加剧）+ `AudioManager`（心跳加速/环境变调/幻听）
-- `CombatManager` → 击中/受击事件 → `ParticleFactory` + `ScreenShake` + `SfxSynth`
+- `RunLifecycle` → 理智值变化 → `SceneFX.activatePreset('sanity')` → 同时驱动 `ScreenEffectManager`（扭曲/色差/震动加剧）+ `AudioManager`（心跳加速/环境变调/幻听）
+- `PlayScene` → 追逐战触发 → `SceneFX.activatePreset('chase')` → 全程高压视觉+心跳BGM
+- `CombatManager` → 击中/受击事件 → `ParticleFactory` + `ScreenShake` + `SfxSynth`（不限制叠层数量）
 - `PauseMenu` → 音频开关 → `AudioManager.setEnabled()`
-- `RedEdgeFogOverlay.activate()/deactivate()` → `SanityFX.activate()/deactivate()`
+- `RedEdgeFogOverlay.activate()/deactivate()` → `SceneFX.activatePreset('sanity')/deactivate()`
 
 ### 关键技术约束
 
-- Phaser 4 已移除 BitmapMask（v3 API），替换为 FilterMask / FilterPipeline。后处理基于 Phaser 4 FilterPipeline 实现。
-- jsdom 测试环境不提供 WebGL 和 AudioContext，所有效果模块通过接口抽象 + mock 测试，与现有 `RedEdgeFogOverlay` 测试策略一致。
-- 浏览器自动播放策略：AudioContext 必须在首次用户交互后初始化。
+- Phaser 4 已移除 BitmapMask（v3 API），替换为 FilterMask。后处理基于 Phaser 4 **FilterList** 实现（非FilterPipeline，Phaser 4中PostFXPipeline/PreFXPipeline系统已被FilterList替代）。
+- CRT扫描线、胶片颗粒、色差、全屏Bloom为**自定义GLSL Fragment Shader**，通过FilterList串联。仅暗角使用Phaser 4内置Vignette filter。Bloom采用双轨：全屏自定义shader + `Phaser.Actions.AddEffectBloom()`用于对象级辉光。
+- jsdom 测试环境不提供 WebGL 和 AudioContext。Shader测试使用 **headless-gl**（devDependency）在Node.js中提供WebGL上下文。所有效果模块通过接口抽象 + mock 测试，与现有 `RedEdgeFogOverlay` 测试策略一致。
+- 浏览器自动播放策略：AudioContext 在首次用户交互后初始化。利用游戏现有的"开始"按钮（主菜单/Boot场景）作为初始化触发点，无需额外UI。
 - 全平台全开所有后处理效果，不做移动端降级。
+- 音频文件格式：OGG（良好浏览器兼容性+较小文件体积）。
 
 ## 4. 美术系统设计（方案C：最大化沉浸）
 
@@ -94,18 +115,18 @@
 
 新增模块 `src/effects/ScreenEffectManager.ts`。
 
-6个后处理效果层，通过 Phaser 4 FilterPipeline 串联：
+6个后处理效果层，通过 Phaser 4 FilterList 串联。4个为自定义GLSL shader（CRT/颗粒/色差/全屏Bloom），暗角使用内置Vignette filter，震动使用camera.shake()：
 
-| 效果 | 基础参数 | 理智消散参数 | 触发条件 |
-|------|----------|-------------|---------|
-| CRT扫描线 | 强度 0.08-0.15 | 不变 | 常驻，全平台恒开 |
-| 胶片颗粒 | 强度 0.05 | ×3 (0.15) | 常驻，每帧刷新随机噪点 |
-| 动态暗角 | 60% 径向遮蔽 | 85% | 常驻，径向渐变黑边 |
-| 色差 | 1px RGB偏移 | 5px | 常驻，RGB通道偏移 |
-| Bloom辉光 | 血色/金色高光 | 不变 | 战斗命中/光柱/大招释放时触发 |
-| 屏幕震动 | 0 | 持续微抖 | 受击8px / 击杀12px / 理智消散20px |
+**常驻基调（明显风格化）**：
 
-理智联动：理智消散时颗粒×3、暗角+25%、色差×5、持续微抖、间歇性屏幕扭曲脉冲。
+| 效果 | 基础参数（明显风格化） | 理智消散参数 | 追逐战参数 | 实现方式 |
+|------|----------------------|-------------|-----------|---------|
+| CRT扫描线 | 强度 0.15，清晰可见 | 不变 | 不变 | 自定义GLSL shader |
+| 胶片颗粒 | 强度 0.08，可见噪点 | ×2 (0.16) | ×1.5 (0.12) | 自定义GLSL shader |
+| 动态暗角 | 65% 径向遮蔽 | 85% | 75% | 内置Vignette filter |
+| 色差 | 2px RGB偏移 | 6px | 4px | 自定义GLSL shader |
+| Bloom辉光 | 关闭 | 不变 | 关闭 | 双轨：全屏shader + AddEffectBloom() |
+| 屏幕震动 | 0 | 持续微抖 | 全程高频微抖 | camera.shake() |
 
 参数插值：所有后处理参数变化使用平滑插值（300ms），不硬切。
 
@@ -119,10 +140,12 @@
 |---------|---------|--------|------|---------|---------|
 | 血迹飞溅 | 命中敌人 | 8-15 | #b01724 | 0.6s | 重力下落 |
 | 墙壁碎片 | 投射物撞墙 | 6-10 | #49313a | 0.4s | 弹射反弹 |
-| 拾取光效 | 拾取碎片 | 10-20 | 按稀有度 | 0.8s | 光柱上升，金/蓝/紫/绿/白 |
+| 拾取光效 | 拾取碎片（无声） | 10-20 | 按稀有度 | 0.8s | 光柱上升，金/蓝/紫/绿/白 |
 | 粉笔尘雾 | ChalkDust敌人 | 12-18 | #c9b9a6 | 0.8s | 扩散云，击杀时大范围爆发 |
 | 环境灰烬 | Run内常驻 | 持续 | #49313a 50%透明 | 持续 | 缓慢下落，理智低时密度×2 |
 | 死亡爆裂 | 敌人死亡 | 15-25 | 按敌人种类 | 0.5s | 配合Bloom辉光 |
+
+注：拾取碎片时仅触发粒子效果，不触发音效（grill-me决策：仅粒子无声）。
 
 ### 4.3 UI动效增强
 
@@ -147,35 +170,58 @@
 
 初始化流程：
 1. `PreloadScene.preload()` 添加 `this.load.audio()` 加载CC0音频文件
-2. 首次用户交互后初始化 AudioContext（浏览器自动播放策略）
+2. 首次用户交互（现有"开始"按钮点击）后初始化 AudioContext（浏览器自动播放策略）
 3. PauseMenu 音频开关接线到 `AudioManager.setEnabled()`
 
 全局开关行为：
 - 开关关闭时：BGM淡出200ms → 停止 · SFX静音 · 环境音暂停
 - 开关打开时：恢复之前播放的BGM/环境音
 
+**暂停菜单BGM行为**（grill-me决策）：暂停时BGM**完全停止**（非淡出/压低），恢复时重新淡入。清晰的"现实中断"边界感。
+
+**对话时BGM行为**（grill-me决策）：对话激活时BGM**不压低**，照常播放，对话音效（翻纸声）叠加在其上，维持氛围连续性。
+
+**战斗SFX叠层**（grill-me决策）：**不限制**同时播放的SFX数量，所有触发的SFX都播放，最大化战斗的嘈杂压迫感。
+
+**BGM切换规则**（grill-me决策）：
+- 场景切换（探索→战斗）：交叉淡入淡出500ms（平滑交叉）
+- 理智消散触发：立即切入消散BGM（不等交叉淡出）
+- 追逐战触发：立即切入追逐BGM（不等交叉淡出），叠加心跳声
+
 ### 5.2 BGM 分层播放
 
-CC0免费素材（freesound.org等），存放于 `public/assets/audio/bgm/`：
+CC0免费素材（freesound.org等），存放于 `public/assets/audio/bgm/`。共10首BGM/音效文件：
 
-| BGM层 | 风格 | 音量 | 场景 |
-|-------|------|------|------|
-| 菜单BGM | 低频嗡鸣+钢琴单音 | 0.3 | Boot/Preload/Hub |
-| 探索BGM | 工业噪音+远处低语 | 0.25 | Run内探索 |
-| 追逐/战斗BGM | 急促心跳+金属碰撞 | 0.4 | 敌人追击/战斗中 |
-| 理智消散BGM | 耳鸣高频+扭曲低频 | 0.5 | RedEdgeFog激活 |
+| # | BGM名称 | 风格 | 音量 | 场景 |
+|---|--------|------|------|------|
+| 1 | 菜单BGM | 低频嗡鸣drone + 偶尔钢琴单音 | 0.3 | Boot/Preload/主菜单 |
+| 2 | 探索BGM-Act1 | 寂静岭式空旷：低频drone + 远处低语 + 偶发钢琴 | 0.25 | 第一幕探索 |
+| 3 | 探索BGM-FS | 寂静岭式空旷变体：更压抑drone + 工业噪纹 | 0.25 | 被遗忘的理智探索 |
+| 4 | Hub BGM | 与Run内相同的后处理+BGM持续，无安全感 | 0.25 | Hub休息区（持续不安） |
+| 5 | 追逐BGM | 急促心跳+低频压迫+金属碰撞 | 0.4 | 追逐战全程 |
+| 6 | 战斗BGM | 工业噪音+失真低频+急促节奏 | 0.4 | 被遗忘的理智战斗 |
+| 7 | 理智消散BGM | 耳鸣高频+扭曲低频+人声低语层 | 0.5 | RedEdgeFog激活 |
+| 8 | 小结局BGM | 每结局独特音效（非循环BGM，一次性触发） | 0.4 | 小结局触发 |
+| 9 | 大结局BGM | 爆发后死寂：全效果叠加爆发0.5s → 突然全部消失 | 0.5 | 大结局"幸存-报假警" |
+| 10 | F-B爆发音效 | BGM突然失真变调 + 多层人声低语叠加爆发（非循环，一次性） | 0.6 | F-B（杨云追上董继豪） |
 
-切换规则：场景切换时BGM交叉淡入淡出500ms。理智消散时立即切入消散BGM（不等交叉淡出）。
+BGM情绪基调（grill-me决策）：**寂静岭式空旷**——低频嗡鸣drone + 偶尔钢琴单音，旋律极简，空旷孤独感。
+
+小结局音频（grill-me决策）：**每结局独特**——
+- "一分为二"（尺子闪屏死亡）：撕裂音（下行频率扫频 + 噪音burst）
+- "躁子"（F-B触发）：混乱低语爆发（多层人声叠加 + 失真）
+
+大结局音频（grill-me决策）：**爆发后死寂**——倒计时结束瞬间所有效果音叠加爆发，0.5s后突然全部消失，用"爆发→死寂"对比收尾。
 
 ### 5.3 环境氛围音
 
-CC0免费素材，存放于 `public/assets/audio/ambient/`：
+CC0免费素材，存放于 `public/assets/audio/ambient/`。稀疏氛围（grill-me决策）：
 
 | 环境音 | 类型 | 音量 | 触发规则 |
 |-------|------|------|---------|
 | 风声 | 低频呼啸循环 | 0.15（理智低+0.1） | Run内常驻 |
-| 电流杂音 | 间歇性嗡嗡声 | 0.1 | 10-20s随机触发 |
-| 远处低语 | 含糊人声片段 | 0.12 | 15-30s随机，理智消散时频率×3 |
+| 电流杂音 | 间歇性嗡嗡声 | 0.1 | 30-60s随机触发 |
+| 远处低语 | 含糊人声片段 | 0.12 | 30-60s随机，理智消散时频率×3 |
 
 ### 5.4 SfxSynth 程序化音效
 
@@ -200,31 +246,48 @@ CC0免费素材，存放于 `public/assets/audio/ambient/`：
 |------|---------|
 | 按钮点击 | 短方波，0.05s |
 | 面板弹出 | 上行三度（两个正弦音），0.15s |
-| 拾取碎片 | 清脆正弦叮，0.1s |
 | 宝箱开锁 | 机械咔哒（噪音+低通），0.1s |
 | 破译密码 | 滴答序列（3-5个短方波），0.3s |
 | 购买 | 金币音（高频正弦双音），0.15s |
 | 暂停/恢复 | 下行/上行二度，0.1s |
 
-技术约束：每个SFX <0.5s，首次播放延迟 <5ms。
+注：拾取碎片**无音效**（grill-me决策：仅粒子无声）。
 
-### 5.5 理智消散深度联动
+技术约束：每个SFX <0.5s，首次播放延迟 <5ms。战斗SFX不限制叠层数量。
 
-新增模块 `src/effects/SanityFX.ts`，协调 ScreenEffectManager 和 AudioManager。
+### 5.5 SceneFX 场景效果协调器
 
-**激活时**（`RedEdgeFogOverlay.activate()` 触发）：
-- AudioManager：BGM立即切入"理智消散BGM"（耳鸣+扭曲低频）
-- AudioManager：环境音"远处低语"频率×3，出现幻听（随机反向播放）
+新增模块 `src/effects/SceneFX.ts`，协调 ScreenEffectManager 和 AudioManager。使用预设系统管理两种核心场景状态：
+
+**预设1：理智消散（sanity）**
+
+激活时（`RedEdgeFogOverlay.activate()` 触发）：
+- AudioManager：BGM立即切入"理智消散BGM"（耳鸣+扭曲低频+人声低语层）
+- AudioManager：环境音"远处低语"频率×3
+- AudioManager：出现幻听——**剧情台词碎片**（角色名+关键台词："但宇轩""杨云""让我尝尝""我干了什么"），随机反向播放+失真滤波
 - AudioManager：心跳声层叠加，BPM随剩余时间加速
 - AudioManager：所有SFX附加失真滤波器（BiquadFilter distortion）
-- ScreenEffectManager：色差×5 / 颗粒×3 / 暗角+25% / 持续微抖
+- ScreenEffectManager：色差×3 / 颗粒×2 / 暗角+20% / 持续微抖
 - ParticleFactory：环境灰烬粒子密度×2
 
-**恢复时**（`RedEdgeFogOverlay.deactivate()` 触发）：
+恢复时（`RedEdgeFogOverlay.deactivate()` 触发）：
 - AudioManager：BGM交叉淡出回探索BGM（500ms）
 - AudioManager：环境音/SFX恢复原参数
 - ScreenEffectManager：后处理参数平滑回归基础值（300ms插值）
 - ParticleFactory：灰烬密度回归
+
+**预设2：追逐战（chase）**
+
+激活时（追逐战触发）：
+- AudioManager：BGM立即切入"追逐BGM"（急促心跳+低频压迫+金属碰撞）
+- AudioManager：**全程心跳声**叠加，BPM随倒计时加速（120s→60BPM, 10s→180BPM）
+- ScreenEffectManager：全程高压——暗角扩大至75% / 颗粒×1.5 / 持续高频微抖 / 色差×2
+- ScreenEffectManager：倒计时≤10s时全屏红色脉冲遮罩（0.1透明度，0.5s周期）
+- ParticleFactory：环境灰烬粒子密度×1.5
+
+恢复时（追逐战结束/大结局）：
+- AudioManager：大结局爆发后死寂
+- ScreenEffectManager：后处理参数平滑回归基础值（300ms插值）
 
 ## 6. 第一幕主线专属设计
 
@@ -232,19 +295,23 @@ CC0免费素材，存放于 `public/assets/audio/ambient/`：
 
 ### 6.1 对话音效
 
-改造模块 `src/ui/NarrativeUIManager.ts`，在对话推进时触发音效：
+改造模块 `src/ui/NarrativeUIManager.ts`，对话推进时触发音效（grill-me决策：每次推进都播）：
 
 | 事件 | 音效 | 合成方式 |
 |------|------|---------|
-| 对话推进（点击/按键） | 轻微纸张翻动音 | 短白噪音burst + 带通滤波，0.08s |
+| 对话推进（每次点击/按键） | 轻微纸张翻动音 | 短白噪音burst + 带通滤波，0.08s |
 | 说话人切换 | 低沉提示音 | 低频正弦 80Hz，0.1s |
 | 分支选择出现 | 选项弹出音 | 上行二度双正弦，0.15s |
 | 分支选择确认 | 确认点击音 | 短方波 + 衰减，0.06s |
 | 任务更新 | 任务提示音 | 三音上行琶音（正弦），0.25s |
 
+对话激活时BGM不压低（grill-me决策），翻纸声叠加在BGM上维持氛围连续性。
+
 ### 6.2 死亡闪屏增强
 
-改造模块 `src/scenes/DeathFlashManager.ts`，在现有闪屏帧序列基础上叠加后处理和音效：
+改造模块 `src/scenes/DeathFlashManager.ts`，在现有闪屏帧序列基础上叠加后处理和音效。
+
+音效风格（grill-me决策）：**尖锐刺耳**——高频锯齿波+失真，模拟金属刮擦/惨叫感，最大化不适感。
 
 **视觉增强**：
 - 每帧切换时触发 ScreenShake（强度按帧递增：首帧4px → 末帧16px）
@@ -253,79 +320,101 @@ CC0免费素材，存放于 `public/assets/audio/ambient/`：
 - 最后一帧（血迹黑屏1s）叠加颗粒爆发（强度0.2，持续1s）
 
 **音效增强**：
+
 | 帧类型 | 音效 |
 |-------|------|
 | 血迹黑屏帧 | 低频冲击（80Hz正弦 + 噪音burst），0.3s |
-| 白底黑芹菜/尺子 | 尖锐高频刺耳音（锯齿波 2000Hz），0.15s |
+| 白底黑芹菜/尺子 | **尖锐高频刺耳音**（锯齿波 2000Hz + 失真），0.15s |
 | 黑底白芹菜/尺子 | 低频嗡鸣（正弦 60Hz），0.15s |
 | 大尺寸帧 | 上述音效音量×1.5 + 失真滤波 |
 | 末帧血迹黑屏 | 下行扫频 + 持续低频嗡鸣，1s |
 
 ### 6.3 追逐战特效
 
-第一幕末段（检查点H-I）有120s/30s倒计时追逐战，杨云追踪董继豪。改造 `PlayScene` 和 `NarrativeUIManager`：
+第一幕末段（检查点H-I）有120s/30s倒计时追逐战，杨云追踪董继豪。改造 `PlayScene` 和 `NarrativeUIManager`。
 
-**倒计时压力视觉**：
+压迫强度（grill-me决策）：**全程高压**——进入追逐战即刻全力压迫，维持到结束。
+
+**全程高压视觉**：
+- 进入追逐战即刻：暗角扩大至75% + 颗粒×1.5 + 持续高频微抖 + 色差×2
 - 倒计时 ≤ 60s：计时器文字开始轻微脉动（scale 1.0↔1.05，1s周期）
-- 倒计时 ≤ 30s：计时器文字红色闪烁（accent/textDanger交替，0.5s周期）+ 暗角扩大至75%
-- 倒计时 ≤ 10s：全屏红色脉冲遮罩（0.1透明度，0.5s周期）+ 颗粒强度提升至0.12 + 心跳BGM加速
+- 倒计时 ≤ 30s：计时器文字红色闪烁（accent/textDanger交替，0.5s周期）
+- 倒计时 ≤ 10s：全屏红色脉冲遮罩（0.1透明度，0.5s周期）+ 颗粒强度提升至0.12
+
+**全程心跳声**（grill-me决策）：追逐全程叠加程序化心跳声，BPM随倒计时加速（120s→60BPM, 10s→180BPM）。
 
 **杨云追踪红边提示**：
 - 杨云出现在屏幕内时：屏幕边缘红色渐变光晕（类似RedEdgeFogOverlay但更弱，边缘5%透明度）
-- 杨云连续出现在屏幕内3s：触发F-B（已有逻辑），触发时全屏红色闪屏 + 强ScreenShake(20px) + 失真音效
+- 杨云连续出现在屏幕内3s：触发F-B（已有逻辑）
 
-**被追上时的屏幕效果**：
-- F-B触发瞬间：ScreenShake 20px + 全屏红色闪屏0.2s + 色差激增至8px + 低频冲击音效
+**F-B被追上时的效果**（grill-me决策：精神崩溃混乱）：
+- 视觉：ScreenShake 20px + 全屏红色闪屏0.2s + 色差激增至8px
+- 音效：BGM突然失真变调 + 多层人声低语叠加爆发 + 强ScreenShake(20px)，模拟"精神崩溃"的混乱感（非尖叫/非寂静，而是声音混乱崩溃）
 
 ### 6.4 场景过渡氛围
 
-改造 `PlayScene` 的 fade/blackScreen/switchView 事件处理：
+改造 `PlayScene` 的 fade/blackScreen/switchView 事件处理。**不区分楼层**（grill-me决策），仅区分平常/追逐战。
 
 **黑屏渐变增强**：
 - fade out（渐黑）：叠加低频嗡鸣渐入（0→0.15音量，与fade同步）+ 颗粒强度临时提升
 - fade in（渐亮）：叠加低频嗡鸣渐出 + 轻微风声音效
 - blackScreen（纯黑等待）：叠加间歇性电流杂音（已有环境音逻辑）
 
-**角色切换立绘过渡**：
-- "你现在是"提示出现时：立绘从0.8 scale + 0透明度淡入至1.0 scale + 1透明度（300ms）
-- 红边角色切换：立绘边框叠加红色Bloom脉冲
-- 蓝边角色切换：立绘边框叠加蓝色Bloom脉冲（使用borderBlue色值）
+**血迹黑屏时刻**（grill-me决策：内心连续恐怖）：
+- 血迹黑屏时BGM**不中断**，叠加失真低频嗡鸣 + 心跳声
+- 维持"角色内心"视角的连续恐怖，而非"突然寂静"
+- 配合色差脉冲 + 颗粒爆发
 
-**楼层氛围差异**：
-- 4楼（初始探索）：后处理基础参数，探索BGM
-- 5楼（办公室/校长室/通信）：暗角+5%，颗粒+0.02，BGM切换为更压抑变体（降低音量0.05，叠加低频嗡鸣层）
-- 追逐战阶段：动态暗角扩大，BGM切入追逐BGM
+**角色切换立绘过渡**（grill-me决策：现实撕裂）：
+- "你现在是"提示出现时：**屏幕短暂扭曲**（色差激增至6px + 颗粒爆发至0.15）+ 低频冲击音效
+- 立绘从0.8 scale + 0透明度淡入至1.0 scale + 1透明度（300ms）
+- 红边角色：立绘边框叠加红色Bloom脉冲 + 更强色差（8px）
+- 蓝边角色：立绘边框叠加蓝色Bloom脉冲（使用borderBlue色值）+ 较弱色差（4px）
 
 ### 6.5 角色切换提示动效
 
-改造 `NarrativeUIManager` 的 role prompt（"你现在是"卡片）：
+改造 `NarrativeUIManager` 的 role prompt（"你现在是"卡片）。现实撕裂风格（grill-me决策）：
 
 | 元素 | 动效 | 时长 |
 |------|------|------|
+| 全屏 | 色差激增+颗粒爆发（现实撕裂效果） | 200ms |
+| 音效 | 低频冲击音（80Hz正弦 + 噪音burst） | 0.2s |
 | 卡片背景 | opacity 0→1 + scale 0.95→1.0 | 200ms |
 | 角色立绘 | opacity 0→1 + 从下方滑入20px | 250ms（延迟100ms启动） |
 | 角色名文字 | opacity 0→1 + 从右侧滑入10px | 200ms（延迟200ms启动） |
-| 红边角色 | 卡片边框红色Bloom脉冲2次 | 400ms |
-| 蓝边角色 | 卡片边框蓝色Bloom脉冲1次 | 300ms |
+| 红边角色 | 卡片边框红色Bloom脉冲2次 + 色差8px | 400ms |
+| 蓝边角色 | 卡片边框蓝色Bloom脉冲1次 + 色差4px | 300ms |
 | 退出 | 整体opacity 1→0 + scale 1.0→0.98 | 200ms |
 
 遵循 DESIGN.md：只使用 opacity/transform，不动画布局属性。
+
+### 6.6 小结局与大结局音频
+
+**小结局**（grill-me决策：每结局独特）：
+- "一分为二"（尺子闪屏死亡）：撕裂音——下行频率扫频 + 白噪音burst + 失真，0.5s
+- "躁子"（F-B触发）：混乱低语爆发——多层人声低语叠加 + 失真BGM碎片，0.5s
+- 小结局后返回检查点：**回响衰减**——死亡音效的回响/失真版本逐渐衰减（2s），叠加恢复点环境音淡入，"从噩梦中醒来"感
+
+**大结局**（grill-me决策：爆发后死寂）：
+- "幸存-报假警"：倒计时结束瞬间所有效果音叠加爆发（BGM + 环境音 + SFX全部最大化），0.5s后突然全部消失
+- 黑屏"报假警"文字出现时：完全寂静，仅留极轻微风声
+- 用"爆发→死寂"对比作为第一幕的最终情绪落地
 
 ## 7. 集成点
 
 | 集成位置 | 改动内容 |
 |---------|---------|
 | `PreloadScene` | 添加 `load.audio()` 加载CC0音频文件；初始化AudioManager |
-| `GameScene`（主菜单） | 接入菜单BGM；PauseMenu音频开关接线到AudioManager |
-| `PlayScene`（第一幕） | 接入探索BGM + 环境音；后处理管线挂载；追逐战特效；场景过渡氛围；楼层氛围差异 |
-| `NarrativeUIManager` | 对话音效；角色切换提示动效；倒计时压力视觉 |
-| `DeathFlashManager` | 死亡闪屏视觉+音效增强 |
+| `GameScene`（主菜单） | 接入菜单BGM；现有"开始"按钮触发AudioContext初始化；PauseMenu音频开关接线到AudioManager |
+| `PlayScene`（第一幕） | 接入探索BGM + 环境音；后处理管线挂载；追逐战特效（全程高压）；场景过渡氛围；血迹黑屏音效 |
+| `NarrativeUIManager` | 对话音效（每次推进都播）；角色切换提示动效（现实撕裂）；倒计时压力视觉 |
+| `DeathFlashManager` | 死亡闪屏视觉+音效增强（尖锐刺耳） |
 | `EventEngine` | fade/blackScreen/switchView事件触发场景过渡音效与后处理联动 |
-| `ForgottenSanityScene` | 接入探索/战斗/消散BGM切换 |
-| `RunLifecycle` | 接入粒子系统 + HUD动效 + SanityFX联动；战斗事件→粒子/音效 |
-| `RedEdgeFogOverlay` | `activate()/deactivate()` 触发/恢复 SanityFX |
+| `ForgottenSanityScene` | 接入探索/战斗/消散BGM切换；Hub区持续不安氛围 |
+| `RunLifecycle` | 接入粒子系统 + HUD动效 + SceneFX联动；战斗事件→粒子/音效（不限制叠层） |
+| `RedEdgeFogOverlay` | `activate()/deactivate()` 触发/恢复 `SceneFX.activatePreset('sanity')` |
 | `ForgottenSanityHUD` | UI动效增强（条动画/面板过渡/受击反馈/大招释放） |
-| `PauseMenu` | 音频开关接线到 `AudioManager.setEnabled()` |
+| `PauseMenu` | 音频开关接线到 `AudioManager.setEnabled()`；暂停时BGM完全停止 |
 
 ## 8. 错误处理
 
@@ -335,18 +424,25 @@ CC0免费素材，存放于 `public/assets/audio/ambient/`：
 | AudioContext初始化失败 | 静默禁用音频，游戏正常运行；AudioManager所有方法变no-op |
 | WebGL不可用 | 后处理管线降级为纯Canvas叠加（与RedEdgeFogOverlay现有降级策略一致） |
 | SfxSynth合成失败 | 静默跳过该音效，不影响游戏逻辑 |
+| headless-gl安装失败（测试环境） | Shader测试跳过，仅测试参数计算逻辑；CI环境标记为可选 |
 
 ## 9. 测试策略
 
 ### 单元测试
 
 - `SfxSynth`：每个音效合成函数的参数正确性（mock AudioContext），包含第一幕对话音效和死亡闪屏音效
-- `AudioManager`：开关状态、淡入淡出计时、BGM切换逻辑（mock Phaser Sound）
-- `ScreenEffectManager`：参数插值计算、理智联动参数变化、追逐战倒计时压力参数变化（mock WebGL）
-- `SanityFX`：激活/恢复状态机、对ScreenEffectManager和AudioManager的调用验证
-- `ParticleFactory`：粒子配置生成、按事件类型选择正确配置
+- `AudioManager`：开关状态、淡入淡出计时、BGM切换逻辑、暂停完全停止行为、对话时不压低行为（mock Phaser Sound）
+- `ScreenEffectManager`：参数插值计算、理智消散预设参数变化、追逐战预设参数变化（mock WebGL）
+- `SceneFX`：预设激活/恢复状态机（sanity/chase两种预设）、对ScreenEffectManager和AudioManager的调用验证
+- `ParticleFactory`：粒子配置生成、按事件类型选择正确配置、拾取无声验证
 - `DeathFlashManager`：增强后的帧序列触发ScreenShake/音效调用的时序验证
-- `NarrativeUIManager`：对话音效触发、角色切换动效状态机、倒计时压力视觉阶段切换
+- `NarrativeUIManager`：对话音效每次触发验证、角色切换现实撕裂动效状态机、倒计时压力视觉阶段切换
+
+### Shader测试
+
+- 使用 **headless-gl**（devDependency）在Node.js中提供WebGL上下文
+- 验证4个自定义GLSL shader（CRT/颗粒/色差/全屏Bloom）的编译和基本渲染输出
+- 测试shader参数变化对输出的影响（mock WebGL context）
 
 ### jsdom约束
 
@@ -356,28 +452,40 @@ CC0免费素材，存放于 `public/assets/audio/ambient/`：
 
 - 验证音频文件加载（网络请求）
 - 验证BGM在场景切换时切换（主菜单→第一幕→被遗忘的理智）
-- 验证理智消散触发SanityFX（通过debug hook或DOM状态）
+- 验证理智消散触发SceneFX sanity预设（通过debug hook或DOM状态）
 - 验证音频开关功能
+- 验证暂停时BGM完全停止
 - 验证第一幕死亡闪屏增强（ScreenShake debug状态 + 音效调用计数）
-- 验证追逐战倒计时压力视觉阶段切换（≤60s/≤30s/≤10s）
-- 验证角色切换提示动效播放
+- 验证追逐战全程高压 + 心跳声（进入追逐→结束）
+- 验证角色切换现实撕裂效果播放
+- 验证大结局"爆发后死寂"音频序列
+- 验证小结局独特音效 + 回响衰减过渡
 
 ## 10. 新增文件清单
 
 ```
 src/effects/
-  ScreenEffectManager.ts    # 后处理管线管理器
+  ScreenEffectManager.ts    # 后处理管线管理器（FilterList + 4自定义shader）
   ParticleFactory.ts        # 增强粒子系统工厂
   ScreenShake.ts            # 屏幕震动控制
-  SanityFX.ts               # 理智联动效果协调器
+  SceneFX.ts                # 场景效果协调器（sanity/chase预设系统）
 
 src/audio/
   AudioManager.ts           # 音频管线管理器
   SfxSynth.ts               # 程序化音效合成器
 
+src/effects/shaders/
+  crt-scanlines.glsl.ts     # CRT扫描线 Fragment Shader
+  film-grain.glsl.ts        # 胶片颗粒 Fragment Shader
+  chromatic-aberration.glsl.ts  # 色差 Fragment Shader
+  fullscreen-bloom.glsl.ts  # 全屏Bloom Fragment Shader
+
 public/assets/audio/
-  bgm/                      # CC0 BGM文件(.ogg)
+  bgm/                      # CC0 BGM文件(.ogg)，共10首
   ambient/                  # CC0 环境音文件(.ogg)
+
+devDependencies:
+  headless-gl               # WebGL shader测试（Node.js环境）
 ```
 
 ## 11. 现有素材风格分析（多模态审查）
@@ -387,13 +495,13 @@ public/assets/audio/
 ### UI素材
 
 - **血条/理智条**：极简功能性像素UI，纯色填充无渐变，硬边无抗锯齿。血条深红(#8B0000级)，理智条青蓝(#00BFFF级)。结构统一但细节层次单一（无高光/阴影边）。优化方向：后处理Bloom为血条添加红色辉光，理智条添加青色辉光；受击时红色脉冲闪烁。
-- **稀有度边框（金）**：多层金色像素描边（外深棕→中金黄→内亮金高光），模拟金属反光。优化方向：Bloom辉光增强金色边框闪烁，拾取时配合光柱粒子。
+- **稀有度边框（金）**：多层金色像素描边（外深棕→中金黄→内亮金高光），模拟金属反光。优化方向：Bloom辉光增强金色边框闪烁，拾取时配合光柱粒子（无声）。
 - **视野黑雾**：高质量径向渐变暗角，中心90%透明→边缘0%透明，非线性缓出曲线，重度羽化无带状瑕疵。优化方向：ScreenEffectManager的动态暗角应参考此素材的渐变曲线，不重新造轮子而是参数化调节其透明度。
 - **光柱（金）**：复合径向渐变+垂直遮罩，4层透明度结构（核心95%→消散10%），指数衰减模型，轻微噪点纹理。优化方向：拾取光效粒子直接复用此素材作为粒子纹理，按稀有度换色。
 
 ### 角色立绘
 
-- **杨云-红边**：伪写实数字绘（厚涂/半厚涂），非像素风。冷灰肤色+暗红血迹+蓝白校服的"日常异化"恐怖手法。无勾线，软边笔刷过渡。优化方向：后处理色差/颗粒效果叠加在立绘上时需注意厚涂风格对噪点的容忍度较高，可以适当增加颗粒强度。
+- **杨云-红边**：伪写实数字绘（厚涂/半厚涂），非像素风。冷灰肤色+暗红血迹+蓝白校服的"日常异化"恐怖手法。无勾线，软边笔刷过渡。优化方向：后处理色差/颗粒效果叠加在立绘上时需注意厚涂风格对噪点的容忍度较高，可以适当增加颗粒强度。现实撕裂效果在立绘上尤为有效。
 - **敌人（漂浮眼球）**：16-bit复古像素恐怖，Dithering渐变模拟，硬边透明，瞳孔区域全透明（游戏机制用）。优化方向：死亡爆裂粒子应使用与敌人相同的像素风格（硬边、有限色板），不用柔和粒子。
 
 ### 场景素材
@@ -404,7 +512,7 @@ public/assets/audio/
 
 项目存在**混合美术风格**：UI和敌人为像素风（硬边、有限色板、Dithering），角色立绘为厚涂伪写实（软边、渐变、高色深）。后处理管线需同时适配两种风格：
 - 像素素材：CRT扫描线+颗粒增强复古感，色差保持低强度避免破坏硬边
-- 厚涂立绘：可承受更强颗粒和色差，Bloom辉光更有效
+- 厚涂立绘：可承受更强颗粒和色差，Bloom辉光更有效，现实撕裂效果更突出
 - 粒子系统：区分硬边粒子（血迹/碎片/死亡爆裂，配合像素敌人）和柔边粒子（光柱/灰烬/尘雾，配合厚涂氛围）
 
 ## 12. 设计原则遵循
@@ -415,3 +523,4 @@ public/assets/audio/
 - 遵循现有代码风格：仅 import type Phaser 的模式用于jsdom兼容
 - 模块隔离：每个新模块单一职责，通过明确接口通信，可独立测试
 - 素材风格适配：后处理参数区分像素素材和厚涂立绘的容忍度差异，粒子系统区分硬边和柔边两种风格
+- 氛围粒度：仅区分"平常"与"追逐战"两种状态，不按楼层区分（grill-me决策）

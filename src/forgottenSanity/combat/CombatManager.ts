@@ -567,19 +567,18 @@ export class CombatManager {
   // 设计变更：杨云红边中立→激怒机制。
   // 玩家攻击命中任何敌人时，所有处于中立状态、且距被命中敌人 ≤350px 视野内的杨云红边永久激怒。
   // 命中杨云红边本人时（距离 0）其自身亦激怒。
-  // 通过 duck-typing 访问 aggroState/enrage（项目 E2E 可观察性模式，与 onBoundHeadDied 探测一致）。
+  // spec#5 §4.2：通过 Enemy 基类可选钩子 aggroState/enrage 访问（取代 duck-typing）。
   private applyEliteAggro(hitEnemies: readonly Enemy[]): void {
     if (hitEnemies.length === 0) return;
     const rangeSq = ELITE_AGGRO_VISION_RANGE * ELITE_AGGRO_VISION_RANGE;
     for (const target of hitEnemies) {
       for (const e of this.enemies) {
         if (e.dead || e.kind !== 'yangYunRed') continue;
-        const elite = e as unknown as { aggroState: 'neutral' | 'hostile'; enrage: () => void };
-        if (elite.aggroState !== 'neutral') continue;
+        if (e.aggroState !== 'neutral') continue;
         const ddx = e.x - target.x;
         const ddy = e.y - target.y;
         if (ddx * ddx + ddy * ddy <= rangeSq) {
-          elite.enrage();
+          e.enrage?.();
         }
       }
     }
@@ -639,19 +638,12 @@ export class CombatManager {
       if (enemy.dead) continue;
 
       // spec §5.9 A: 召唤核心召唤计时器始终按真实时间推进（远房降级例外）
-      const summonExt = enemy as unknown as { tickSummonTimer?: (ms: number) => void };
-      if (typeof summonExt.tickSummonTimer === 'function') {
-        summonExt.tickSummonTimer(deltaMs);
-      }
+      // spec#5 §4.2：通过 Enemy 基类可选钩子 tickSummonTimer 访问（取代 duck-typing）
+      enemy.tickSummonTimer?.(deltaMs);
       // spec §5.9 C: 头颅复活检查也始终按真实 timeMs 推进（远房降级例外）
-      const reviveExt = enemy as unknown as {
-        tickHeadRevive?: (nowMs: number, spawnFn: (kind: EnemyKind, x: number, y: number, parentId: string) => Enemy | null) => number;
-      };
-      if (typeof reviveExt.tickHeadRevive === 'function') {
-        reviveExt.tickHeadRevive(this.timeMs, (kind, x, y, parentId) => {
-          return this.spawnEnemyAt(kind, x, y, parentId);
-        });
-      }
+      enemy.tickHeadRevive?.(this.timeMs, (kind, x, y, parentId) => {
+        return this.spawnEnemyAt(kind, x, y, parentId);
+      });
 
       if (enemy.isStunned() || enemy.isRooted()) continue;
       const fleeFrom = enemy.getFleeFrom();
@@ -954,9 +946,9 @@ export class CombatManager {
     for (const enemy of this.enemies) {
       if (enemy.dead) continue;
       // 设计变更：中立杨云红边不攻击玩家（含接触伤害）
+      // spec#5 §4.2：通过 Enemy 基类可选钩子 aggroState 访问（取代 duck-typing）
       if (enemy.kind === 'yangYunRed') {
-        const elite = enemy as unknown as { aggroState: 'neutral' | 'hostile' };
-        if (elite.aggroState === 'neutral') continue;
+        if (enemy.aggroState === 'neutral') continue;
       }
       const dist = enemy.distanceTo(this.playerPosition.x, this.playerPosition.y);
       if (dist > enemy.contactRadius + 16) continue;
@@ -1019,22 +1011,19 @@ export class CombatManager {
       const enemy = this.enemies[i]!;
       if (!enemy.dead) continue;
       // 通知身体：绑定头颅死亡（spec §5.9 B/C）
+      // spec#5 §4.2：通过 Enemy 基类可选钩子 onBoundHeadDied 访问（取代 duck-typing）
       if (enemy.parentId !== null) {
         const body = this.enemies.find((e) => e.id === enemy.parentId && !e.dead);
-        if (body !== undefined && typeof (body as unknown as { onBoundHeadDied?: (head: Enemy, timeMs: number) => void }).onBoundHeadDied === 'function') {
-          (body as unknown as { onBoundHeadDied: (head: Enemy, timeMs: number) => void }).onBoundHeadDied(enemy, this.timeMs);
-        }
+        body?.onBoundHeadDied?.(enemy, this.timeMs);
         // 30% 标记身体位置
         if (this.rng.chance(0.3)) {
           this.callbacks.onMarkBodyOnMinimap?.(enemy.parentId, body?.x ?? 0, body?.y ?? 0);
         }
       }
       // 身体死亡 → 通知 onBodyDied（spec §5.9 B 机制 B：清场所有绑定头颅）
+      // spec#5 §4.2：通过 Enemy 基类可选钩子 onBodyDied 访问（取代 duck-typing）
       if (enemy.kind === 'danYuxuanBody') {
-        const body = enemy as unknown as { onBodyDied?: () => void };
-        if (typeof body.onBodyDied === 'function') {
-          body.onBodyDied();
-        }
+        enemy.onBodyDied?.();
       }
       // 精英死亡事件
       if (enemy.kind === 'yangYunRed') {

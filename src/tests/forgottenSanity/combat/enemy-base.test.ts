@@ -13,6 +13,8 @@ import {
   registerEnemyKind,
   createCombatRng,
 } from '../../../forgottenSanity/combat/Enemy';
+import { YangYunRedEnemy, registerYangYunRed } from '../../../forgottenSanity/combat/enemies/YangYunRed';
+import { DanYuxuanBodyEnemy, registerDanYuxuanBody } from '../../../forgottenSanity/combat/enemies/DanYuxuanBody';
 import type { DamageInstance } from '../../../forgottenSanity/combat/DamageType';
 
 class TestEnemy extends Enemy {
@@ -181,6 +183,42 @@ describe('Enemy burn debuff — M5 accumulation (Task 12)', () => {
     e.applyDebuff({ type: 'burn', dps: 5, remainingMs: 3000 });
     expect(e.getStatusBurn()?.dps).toBe(15); // 10 + 5
     expect(e.getStatusBurn()?.remainingMs).toBe(3000); // max(2000, 3000)
+  });
+});
+
+// spec#5 §4.2：Enemy 基类声明可选钩子，取代 CombatManager duck-typing。
+// 子类按需实现；基类实例调用未实现的钩子必须 undefined 安全（?. 短路）。
+describe('Enemy base class — 可选钩子 (spec#5 §4.2)', () => {
+  it('基类 Enemy 实例 aggroState 默认 undefined', () => {
+    const e = new TestEnemy({ id: 'e1', x: 0, y: 0, maxHp: 10, speed: 0, contactDamage: 0, contactRadius: 0 });
+    expect(e.aggroState).toBeUndefined();
+  });
+
+  it('基类 Enemy 实例调用未实现的钩子不抛错（undefined 安全）', () => {
+    const e = new TestEnemy({ id: 'e1', x: 0, y: 0, maxHp: 10, speed: 0, contactDamage: 0, contactRadius: 0 });
+    expect(() => e.enrage?.()).not.toThrow();
+    expect(() => e.tickSummonTimer?.(16)).not.toThrow();
+    expect(() => e.onBodyDied?.()).not.toThrow();
+    expect(() => e.onBoundHeadDied?.(e, 0)).not.toThrow();
+    expect(() => e.tickHeadRevive?.(0, () => null)).not.toThrow();
+  });
+
+  it('YangYunRed 实例 aggroState 初始 neutral 且 enrage 为函数', () => {
+    registerYangYunRed();
+    const elite = new YangYunRedEnemy('elite-1', 0, 0);
+    expect(elite.aggroState).toBe('neutral');
+    expect(typeof elite.enrage).toBe('function');
+    elite.enrage();
+    expect(elite.aggroState).toBe('hostile');
+  });
+
+  it('DanYuxuanBody 实例实现 tickSummonTimer/onBodyDied/onBoundHeadDied/tickHeadRevive', () => {
+    registerDanYuxuanBody();
+    const body = new DanYuxuanBodyEnemy('body-1', 0, 0);
+    expect(typeof body.tickSummonTimer).toBe('function');
+    expect(typeof body.onBodyDied).toBe('function');
+    expect(typeof body.onBoundHeadDied).toBe('function');
+    expect(typeof body.tickHeadRevive).toBe('function');
   });
 });
 

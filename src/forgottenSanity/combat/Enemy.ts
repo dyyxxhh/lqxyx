@@ -229,6 +229,26 @@ export abstract class Enemy implements EnemyViewMetadata {
   tint: { color: number; alpha: number } | null = null;
   overlay: 'bloodEye' | null = null;
 
+  // ===========================================================================
+  // spec#5 §4.2：可选钩子 — 子类按需实现，取代 CombatManager duck-typing。
+  // 基类实例未实现时为 undefined，调用方通过 ?. 短路保证安全。
+  // ===========================================================================
+  /** 杨云红边中立/敌对状态（YangYunRedEnemy 实现） */
+  aggroState?: 'neutral' | 'hostile';
+  /** 中立 → 敌对激怒（YangYunRedEnemy 实现） */
+  enrage?(): void;
+  /** 召唤核心召唤计时器推进（DanYuxuanBodyEnemy 实现，spec §5.9 A） */
+  tickSummonTimer?(deltaMs: number): void;
+  /** 召唤核心头颅复活检查（DanYuxuanBodyEnemy 实现，spec §5.9 C） */
+  tickHeadRevive?(
+    nowMs: number,
+    spawnFn: (kind: EnemyKind, x: number, y: number, parentId: string) => Enemy | null,
+  ): number;
+  /** 身体死亡 → 清场绑定头颅（DanYuxuanBodyEnemy 实现，spec §5.9 B） */
+  onBodyDied?(): void;
+  /** 绑定头颅死亡通知（DanYuxuanBodyEnemy 实现，spec §5.9 B/C） */
+  onBoundHeadDied?(head: Enemy, timeMs: number): void;
+
   // 三态机状态（grill 2026-07-17）
   aiState: EnemyAIState = 'idle';
   /** 最后目击玩家位置（chase/search 用） */

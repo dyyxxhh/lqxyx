@@ -2,11 +2,11 @@
 // RunTestHooks 子模块单测（spec#5 §7.1 / plan#5 Task 15）。
 // RunTestHooks 仅依赖 RunSharedState + RunInteractionHandler，无 Phaser runtime import，
 // 故可用真实 Inventory/PlayerCombat/CombatManager + mock scene/renderer 注入。
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { RunTestHooks } from '../../../forgottenSanity/run/RunTestHooks';
 import type { RunSharedState } from '../../../forgottenSanity/run/runTypes';
-import type { RunInteractionHandler } from '../../../forgottenSanity/run/RunInteractionHandler';
+import { RunInteractionHandler } from '../../../forgottenSanity/run/RunInteractionHandler';
 import { PlayerCombat } from '../../../forgottenSanity/combat/PlayerCombat';
 import { CombatManager } from '../../../forgottenSanity/combat/CombatManager';
 import { Inventory } from '../../../forgottenSanity/loot/Inventory';
@@ -15,7 +15,9 @@ import {
   createRng,
 } from '../../../forgottenSanity/map/ForgottenSanityMapGenerator';
 import type { ForgottenSanityMapRenderer } from '../../../forgottenSanity/map/ForgottenSanityMapRenderer';
+import type { ForgottenSanityNoteSpawn } from '../../../forgottenSanity/map/forgottenSanityMapState';
 import type { NoteOverlay } from '../../../forgottenSanity/ui/NoteOverlay';
+import { FORGOTTEN_SANITY_NOTES_STORAGE_KEY } from '../../../forgottenSanity/state/forgottenSanityState';
 import {
   UNARMED_ID,
   type Loadout,
@@ -274,5 +276,170 @@ describe('RunTestHooks.spawnNoteForTest / movePlayerToNoteForTest (spec §11)', 
     hooks.movePlayerToNoteForTest();
     expect(state.playerX).toBeCloseTo(expectedX, 5);
     expect(state.playerY).toBeCloseTo(expectedY, 5);
+  });
+});
+
+// ───────────────────────────────────────────────────────────────────────────
+// 审核 N5 补全：覆盖剩余 7 个 *ForTest 方法（spec §10.1 / §11）。
+// readNearestNoteForTest / closeNoteOverlayForTest 需验证 noteOverlay.show/hide
+// + combatManager.setFrozen 副作用，故改用真实 RunInteractionHandler（而非 mock），
+// 通过 vi.spyOn 隔离 findNearestNote 的地图布局依赖。forceNotesStateForTest /
+// readNearestNoteForTest 会写 localStorage，故 beforeEach 清空避免跨用例污染。
+// ───────────────────────────────────────────────────────────────────────────
+
+describe('RunTestHooks.movePlayerToVaultDoorForTest (spec §10.1)', () => {
+  it('玩家位置同步为 vaultDoor 坐标 + playerSprite.setPosition 被调用', () => {
+    const state = makeMockState();
+    state.vaultDoorX = 1234.5;
+    state.vaultDoorY = 6789;
+    const hooks = new RunTestHooks(state, makeMockInteraction());
+
+    hooks.movePlayerToVaultDoorForTest();
+
+    expect(state.playerX).toBe(1234.5);
+    expect(state.playerY).toBe(6789);
+    expect(state.playerSprite?.setPosition).toHaveBeenCalledWith(1234.5, 6789);
+  });
+});
+
+describe('RunTestHooks.spawnChestForTest (spec §10.1)', () => {
+  it('合成宝箱委派 startChestDecrypt；isVaultChest=true 强制 roomId=vaultRoomId', () => {
+    const state = makeMockState();
+    const interaction = makeMockInteraction();
+    const hooks = new RunTestHooks(state, interaction);
+    const vaultRoom = state.manifest.rooms.find(
+      (r) => r.id === state.manifest.vaultRoomId,
+    )!;
+    const entranceRoom = state.manifest.rooms.find(
+      (r) => r.id === state.manifest.entranceRoomId,
+    )!;
+
+    // isVaultChest=true：roomId 参数被忽略，合成宝箱落到 vault 房间中心（32×32）
+    hooks.spawnChestForTest('ignored-room-id', true);
+    expect(interaction.startChestDecrypt).toHaveBeenCalledTimes(1);
+    let synthetic = (
+      interaction.startChestDecrypt as ReturnType<typeof vi.fn>
+    ).mock.calls[0]![0];
+    expect(synthetic.roomId).toBe(state.manifest.vaultRoomId);
+    expect(synthetic.kind).toBe('normal');
+    expect(synthetic.bounds.width).toBe(32);
+    expect(synthetic.bounds.height).toBe(32);
+    expect(synthetic.bounds.x).toBeCloseTo(
+      vaultRoom.bounds.x + vaultRoom.bounds.width / 2 - 16,
+      5,
+    );
+    expect(synthetic.bounds.y).toBeCloseTo(
+      vaultRoom.bounds.y + vaultRoom.bounds.height / 2 - 16,
+      5,
+    );
+
+    // isVaultChest=false：合成宝箱落到 caller 指定的 roomId
+    hooks.spawnChestForTest(state.manifest.entranceRoomId, false);
+    expect(interaction.startChestDecrypt).toHaveBeenCalledTimes(2);
+    synthetic = (
+      interaction.startChestDecrypt as ReturnType<typeof vi.fn>
+    ).mock.calls[1]![0];
+    expect(synthetic.roomId).toBe(state.manifest.entranceRoomId);
+    expect(synthetic.bounds.x).toBeCloseTo(
+      entranceRoom.bounds.x + entranceRoom.bounds.width / 2 - 16,
+      5,
+    );
+  });
+});
+
+describe('RunTestHooks.getNoteStateForTest (spec §11)', () => {
+  it('返回 nextSequentialIndex + readThisRun 键数组；返回值为副本', () => {
+    const state = makeMockState();
+    state.notesState = { schemaVersion: 1, nextSequentialIndex: 3 };
+    state.readNoteInstancesThisRun.set('note-0', 0);
+    state.readNoteInstancesThisRun.set('note-2', 2);
+    const hooks = new RunTestHooks(state, makeMockInteraction());
+
+    const result = hooks.getNoteStateForTest();
+    expect(result.nextSequentialIndex).toBe(3);
+    expect(result.readThisRun.sort()).toEqual(['note-0', 'note-2']);
+
+    // 副本独立性：修改返回的 readThisRun 不影响原 Map
+    result.readThisRun.push('note-fake');
+    expect(state.readNoteInstancesThisRun.has('note-fake')).toBe(false);
+  });
+});
+
+describe('RunTestHooks.readNearestNoteForTest (spec §11)', () => {
+  beforeEach(() => localStorage.clear());
+
+  it('找到最近纸条后触发 noteOverlay.show + combatManager.setFrozen(true)，返回 true', () => {
+    const state = makeMockState();
+    // 用真实 RunInteractionHandler 以验证 startReadNote 的副作用
+    const handler = new RunInteractionHandler(state, { onEvacuate: vi.fn() });
+    const hooks = new RunTestHooks(state, handler);
+    const fakeNote: ForgottenSanityNoteSpawn = {
+      id: 'note-fake-1',
+      roomId: state.manifest.entranceRoomId,
+      bounds: { x: 0, y: 0, width: 48, height: 48 },
+    };
+    // 隔离 findNearestNote 的地图布局依赖，直接返回合成纸条
+    vi.spyOn(handler, 'findNearestNote').mockReturnValue(fakeNote);
+    const setFrozenSpy = vi.spyOn(state.combatManager, 'setFrozen');
+
+    expect(state.noteOverlayActive).toBe(false);
+    const ok = hooks.readNearestNoteForTest();
+
+    expect(ok).toBe(true);
+    expect(state.noteOverlayActive).toBe(true);
+    // 真实 startReadNote 副作用：冻结战斗 + 显示 overlay
+    expect(setFrozenSpy).toHaveBeenCalledWith(true);
+    expect(state.noteOverlay?.show).toHaveBeenCalled();
+  });
+});
+
+describe('RunTestHooks.isNoteOverlayActiveForTest (spec §11)', () => {
+  it('noteOverlayActive=true 返回 true，false 返回 false', () => {
+    const state = makeMockState();
+    const hooks = new RunTestHooks(state, makeMockInteraction());
+
+    expect(state.noteOverlayActive).toBe(false);
+    expect(hooks.isNoteOverlayActiveForTest()).toBe(false);
+
+    state.noteOverlayActive = true;
+    expect(hooks.isNoteOverlayActiveForTest()).toBe(true);
+  });
+});
+
+describe('RunTestHooks.closeNoteOverlayForTest (spec §11)', () => {
+  it('关闭 overlay：noteOverlay.hide + combatManager.setFrozen(false) + noteOverlayActive=false', () => {
+    const state = makeMockState();
+    // closeNoteOverlay 早返回守卫：必须先激活 overlay 才会触发副作用
+    state.noteOverlayActive = true;
+    // 用真实 RunInteractionHandler 以验证 closeNoteOverlay 的副作用
+    const handler = new RunInteractionHandler(state, { onEvacuate: vi.fn() });
+    const hooks = new RunTestHooks(state, handler);
+    const setFrozenSpy = vi.spyOn(state.combatManager, 'setFrozen');
+
+    hooks.closeNoteOverlayForTest();
+
+    expect(state.noteOverlayActive).toBe(false);
+    expect(state.noteOverlay?.hide).toHaveBeenCalled();
+    expect(setFrozenSpy).toHaveBeenCalledWith(false);
+  });
+});
+
+describe('RunTestHooks.forceNotesStateForTest (spec §11)', () => {
+  beforeEach(() => localStorage.clear());
+
+  it('强制覆盖 notesState.nextSequentialIndex 并持久化（schemaVersion 保留）', () => {
+    const state = makeMockState();
+    expect(state.notesState.nextSequentialIndex).toBe(0);
+    const hooks = new RunTestHooks(state, makeMockInteraction());
+
+    hooks.forceNotesStateForTest(7);
+
+    // state.notesState 被强制设置为目标索引，schemaVersion 保留
+    expect(state.notesState.nextSequentialIndex).toBe(7);
+    expect(state.notesState.schemaVersion).toBe(1);
+    // saveNotesState 已写入 localStorage（forceNotesStateForTest 末尾持久化）
+    const raw = localStorage.getItem(FORGOTTEN_SANITY_NOTES_STORAGE_KEY);
+    expect(raw).not.toBeNull();
+    expect(JSON.parse(raw!)).toEqual({ schemaVersion: 1, nextSequentialIndex: 7 });
   });
 });

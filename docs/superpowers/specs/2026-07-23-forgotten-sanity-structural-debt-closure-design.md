@@ -206,6 +206,9 @@ declare global {
 ## §6 Phase 3：BitmapMask + 低风险打包
 
 ### §6.1 RedEdgeFogOverlay 升级 BitmapMask
+
+> **2026-07-23 实施回退**：冒烟验证发现 Phaser 4 已移除 `BitmapMask` API（v3 API，v4 替换为 `FilterMask`），且 `FilterMask` 依赖 WebGL，jsdom 测试环境不可用。本节目标**未达成**，保留简化版（黑底 rectangle + 透明 circle arc）+ 10 个回归测试 + TODO 注释。待真实浏览器测试环境（Playwright + WebGL）落地后，改用 `FilterMask` + 圆形白色蒙版纹理实现真实反向遮罩。详见 commit `282987e`。
+
 **位置**：`src/forgottenSanity/ui/RedEdgeFogOverlay.ts`
 
 **修复**：
@@ -336,10 +339,12 @@ Phase 4（测试补全 + 文档同步）
 - **音频实现**：spec §7.3 音效设计不做，仅标注「未规划」
 - **性能优化**：除 spec#3 已有的 far-room 4Hz 降级外不做额外优化
 - **素材 preload 降级逻辑**：仅完成清单拆分，forgotten sanity 缺失时的独立降级留待后续 polish
+- **BitmapMask 真实反向遮罩**：Phaser 4 已移除 `BitmapMask` API（v3），v4 替代 `FilterMask` 依赖 WebGL，jsdom 不可用。本 spec 保留简化版，真实遮罩留待后续 polish（需先落地真实浏览器测试环境）
 - **中立→激怒机制**：spec#1 §5.10 + §5.11.9 已有记录，无需正名（审核误报已修正）
 
 ## §10 风险与回滚
 
 - **Phase 2 拆分风险最高**：RunController 与 CombatManager 拆分可能引入回归。每步 TDD + E2E 回归保护。若拆分后 E2E 红，回滚该子模块拆分，保留 Phase 1 成果。
 - **Phase 3 BitmapMask 风险**：Phaser 4 BitmapMask API 与文档可能存在差异。先写最小冒烟测试验证 API 可用，再替换简化版。
+- **BitmapMask 风险已触发并回退**：冒烟验证确认 Phaser 4 无 `BitmapMask` API（`node_modules/phaser/dist/phaser.esm.js` grep 零命中），v4 替代 `FilterMask` 需 WebGL，jsdom 返回 `null`。已回退保留简化版，新增 10 个回归测试锁定简化版 API 契约（常量/生命周期/时序分离/depth），待真实浏览器环境落地后再升级。
 - **功能冻结期**：spec#5 实施期间若需紧急修复 forgotten sanity 线上 bug，可临时解冻，但需在解冻 commit 中标注「spec#5 实施期临时解冻」。

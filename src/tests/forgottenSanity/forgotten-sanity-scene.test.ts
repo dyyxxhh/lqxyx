@@ -391,9 +391,10 @@ describe('M8 abandonRun source contract (plan Task 14)', () => {
     const fs = await import('fs');
     const path = await import('path');
     const ctrlSrc = fs.readFileSync(
-      path.resolve(__dirname, '../../forgottenSanity/ForgottenSanityRunController.ts'),
+      path.resolve(__dirname, '../../forgottenSanity/run/RunLifecycle.ts'),
       'utf8',
     );
+    // spec#5 §5.1 拆分后 abandonRun 位于 RunLifecycle。
     // 匹配 abandonRun 方法体（可见性修饰符可选）
     const match = ctrlSrc.match(/^[ \t]*(?:private\s+|public\s+)?abandonRun\(\)[^{]*\{([\s\S]*?)\n  \}/m);
     expect(match).not.toBeNull();

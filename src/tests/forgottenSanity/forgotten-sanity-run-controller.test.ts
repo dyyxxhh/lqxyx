@@ -22,10 +22,10 @@ describe('ForgottenSanityRunController.runEvacuation (spec §1.3 — stash uncha
     const fs = await import('fs');
     const path = await import('path');
     const ctrlSrc = fs.readFileSync(
-      path.resolve(__dirname, '../../forgottenSanity/ForgottenSanityRunController.ts'),
+      path.resolve(__dirname, '../../forgottenSanity/run/RunLifecycle.ts'),
       'utf8',
     );
-    // 提取 runEvacuation 方法体
+    // 提取 runEvacuation 方法体（spec#5 §5.1 拆分后位于 RunLifecycle）
     const match = ctrlSrc.match(/private runEvacuation\(\)[^{]*\{([\s\S]*?)\n  \}/);
     expect(match).not.toBeNull();
     const methodBody = match![1]!;
@@ -113,9 +113,10 @@ describe('handleEliteDefeated source contract (spec §5.10 + §9.3 + §10.1)', (
     const fs = await import('fs');
     const path = await import('path');
     const ctrlSrc = fs.readFileSync(
-      path.resolve(__dirname, '../../forgottenSanity/ForgottenSanityRunController.ts'),
+      path.resolve(__dirname, '../../forgottenSanity/run/RunLifecycle.ts'),
       'utf8',
     );
+    // spec#5 §5.1 拆分后 handleEliteDefeated 位于 RunLifecycle。
     // Task 1 将 handleEliteDefeated 从 private 改为 public（无修饰符），
     // 以便 ForgottenSanityScene 测试钩子直接调用。regex 可见性修饰符可选，
     // 并用 ^[ \t]* + m flag 锚定行首，避免匹配 this.handleEliteDefeated() 调用处。
@@ -140,9 +141,10 @@ describe('tryUnlockVaultDoor source contract (spec §10.1)', () => {
     const fs = await import('fs');
     const path = await import('path');
     const ctrlSrc = fs.readFileSync(
-      path.resolve(__dirname, '../../forgottenSanity/ForgottenSanityRunController.ts'),
+      path.resolve(__dirname, '../../forgottenSanity/run/RunInteractionHandler.ts'),
       'utf8',
     );
+    // spec#5 §5.1 拆分后 tryUnlockVaultDoor 位于 RunInteractionHandler。
     const match = ctrlSrc.match(/private tryUnlockVaultDoor\(\)[^{]*\{([\s\S]*?)\n  \}/);
     expect(match).not.toBeNull();
     const body = match![1]!;
@@ -160,9 +162,10 @@ describe('tryUnlockVaultDoor source contract (spec §10.1)', () => {
     const fs = await import('fs');
     const path = await import('path');
     const ctrlSrc = fs.readFileSync(
-      path.resolve(__dirname, '../../forgottenSanity/ForgottenSanityRunController.ts'),
+      path.resolve(__dirname, '../../forgottenSanity/run/RunInteractionHandler.ts'),
       'utf8',
     );
+    // spec#5 §5.1 拆分后 onInteractPressed 位于 RunInteractionHandler。
     const match = ctrlSrc.match(/private onInteractPressed\(\)[^{]*\{([\s\S]*?)\n  \}/);
     expect(match).not.toBeNull();
     const body = match![1]!;

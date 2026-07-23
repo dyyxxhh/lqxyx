@@ -6,6 +6,13 @@ import type Phaser from 'phaser';
 
 import { GAME_WIDTH, GAME_HEIGHT } from '../../game/scaffoldState';
 import { UI_THEME, applyPixelStrokeStyle } from '../../ui/uiTheme';
+import {
+  FORGOTTEN_SANITY_MAP_WIDTH,
+  FORGOTTEN_SANITY_MAP_HEIGHT,
+  GRID_COLS,
+  CELL_WIDTH,
+  CELL_HEIGHT,
+} from '../map/forgottenSanityMapState';
 
 export const MINIMAP_DEPTH = 1011;
 export const BIG_MAP_DEPTH = 1980;
@@ -35,8 +42,6 @@ export interface MinimapUpdate {
   readonly exitY: number;
 }
 
-const MAP_WORLD_WIDTH = 5000;
-const MAP_WORLD_HEIGHT = 4000;
 const MINIMAP_WIDTH = 200;
 const MINIMAP_HEIGHT = 160;
 const MINIMAP_X = GAME_WIDTH - MINIMAP_WIDTH / 2 - 16;
@@ -120,9 +125,9 @@ export class Minimap {
     // spec §9.2: 雾战脚步点亮——仅绘制已探索 cell 内的宝箱/出口/身体标记。
     // 玩家点本身始终绘制（玩家所在 cell 必然已探索）。
     const exploredSet = new Set<number>(u.exploredCells);
-    const cellCols = 5;      // GRID_COLS (spec §2.1)
-    const cellWidth = 1000;  // CELL_WIDTH
-    const cellHeight = 1000; // CELL_HEIGHT
+    const cellCols = GRID_COLS;      // spec §2.1
+    const cellWidth = CELL_WIDTH;
+    const cellHeight = CELL_HEIGHT;
     const cellIndexOf = (wx: number, wy: number): number => {
       const col = Math.floor(wx / cellWidth);
       const row = Math.floor(wy / cellHeight);
@@ -218,11 +223,11 @@ export class Minimap {
   }
 
   private worldToMinimapX(worldX: number): number {
-    return MINIMAP_X - MINIMAP_WIDTH / 2 + (worldX / MAP_WORLD_WIDTH) * MINIMAP_WIDTH;
+    return MINIMAP_X - MINIMAP_WIDTH / 2 + (worldX / FORGOTTEN_SANITY_MAP_WIDTH) * MINIMAP_WIDTH;
   }
 
   private worldToMinimapY(worldY: number): number {
-    return MINIMAP_Y - MINIMAP_HEIGHT / 2 + (worldY / MAP_WORLD_HEIGHT) * MINIMAP_HEIGHT;
+    return MINIMAP_Y - MINIMAP_HEIGHT / 2 + (worldY / FORGOTTEN_SANITY_MAP_HEIGHT) * MINIMAP_HEIGHT;
   }
 
   destroy(): void {

@@ -178,80 +178,31 @@ export class ForgottenSanityScene extends Phaser.Scene {
     }
 
     // ── 测试钩子（仅 DEV / test 环境挂载到 window）──
-    // plan 2026-07-19 Task 1：当前仅暴露壳 + 占位返回值。
-    // __testTriggerEliteDefeat 直接调用 runController.handleEliteDefeated()（已改 public）。
-    // __testTogglePause 调用 this.togglePause()（简单布尔切换）。
-    // 其他钩子通过 duck-typing 探测 runController.*ForTest 方法（Task 23 实现），
-    //   方法不存在时返回占位值。
+    // 所有 *ForTest 方法已在 ForgottenSanityRunController 门面上类型化暴露
+    // （spec#5 §5.1 拆分后门面单行委托 RunTestHooks）；runController 为 null 时
+    // （mock 测试环境）返回占位值，与原 duck-typing 行为一致。
     if (import.meta.env.DEV || process.env.NODE_ENV === 'test') {
       const hooks: ForgottenSanityTestHooks = {
         __testTriggerEliteDefeat: () => this.runController?.handleEliteDefeated(),
-        __testGiveVaultKey: () => {
-          const ctrl = this.runController as unknown as { giveVaultKeyForTest?: () => void } | null;
-          ctrl?.giveVaultKeyForTest?.();
-        },
-        __testMovePlayerToVaultDoor: () => {
-          const ctrl = this.runController as unknown as { movePlayerToVaultDoorForTest?: () => void } | null;
-          ctrl?.movePlayerToVaultDoorForTest?.();
-        },
-        __testSpawnChest: (roomId, isVaultChest) => {
-          const ctrl = this.runController as unknown as {
-            spawnChestForTest?: (rId: string, isVault: boolean) => void;
-          } | null;
-          ctrl?.spawnChestForTest?.(roomId, isVaultChest);
-        },
-        __testGetInventorySummary: () => {
-          const ctrl = this.runController as unknown as {
-            getInventorySummaryForTest?: () => { items: Record<string, number>; vaultKey: number };
-          } | null;
-          return ctrl?.getInventorySummaryForTest?.() ?? { items: {}, vaultKey: 0 };
-        },
-        __testGetCombatSummary: () => {
-          const ctrl = this.runController as unknown as {
-            getCombatSummaryForTest?: () => { enemyCount: number; duplicateCount: number; farRoomCount: number };
-          } | null;
-          return ctrl?.getCombatSummaryForTest?.() ?? { enemyCount: 0, duplicateCount: 0, farRoomCount: 0 };
-        },
-        __testGetVaultState: () => {
-          const ctrl = this.runController as unknown as {
-            getVaultStateForTest?: () => { doorUnlocked: boolean; chestsOpened: number };
-          } | null;
-          return ctrl?.getVaultStateForTest?.() ?? { doorUnlocked: false, chestsOpened: 0 };
-        },
-        __testGetExploredCells: () => {
-          const ctrl = this.runController as unknown as { getExploredCellsForTest?: () => number[] } | null;
-          return ctrl?.getExploredCellsForTest?.() ?? [];
-        },
-        __testMovePlayerTo: (roomId) => {
-          const ctrl = this.runController as unknown as { movePlayerToForTest?: (rId: string) => void } | null;
-          ctrl?.movePlayerToForTest?.(roomId);
-        },
-        __testSpawnNote: (roomId) => {
-          const ctrl = this.runController as unknown as { spawnNoteForTest?: (rId: string) => void } | null;
-          ctrl?.spawnNoteForTest?.(roomId);
-        },
-        __testGetNoteState: () => {
-          const ctrl = this.runController as unknown as {
-            getNoteStateForTest?: () => { nextSequentialIndex: number; readThisRun: string[] };
-          } | null;
-          return ctrl?.getNoteStateForTest?.() ?? { nextSequentialIndex: 0, readThisRun: [] };
-        },
-        __testReadNearestNote: () => {
-          const ctrl = this.runController as unknown as { readNearestNoteForTest?: () => boolean } | null;
-          return ctrl?.readNearestNoteForTest?.() ?? false;
-        },
-        __testIsNoteOverlayVisible: () => {
-          const ctrl = this.runController as unknown as { isNoteOverlayActiveForTest?: () => boolean } | null;
-          return ctrl?.isNoteOverlayActiveForTest?.() ?? false;
-        },
-        __testMovePlayerToNote: () => {
-          const ctrl = this.runController as unknown as { movePlayerToNoteForTest?: () => void } | null;
-          ctrl?.movePlayerToNoteForTest?.();
-        },
-        __testForceNotesState: (nextSequentialIndex) => {
-          const ctrl = this.runController as unknown as { forceNotesStateForTest?: (n: number) => void } | null;
-          ctrl?.forceNotesStateForTest?.(nextSequentialIndex);
-        },
+        __testGiveVaultKey: () => this.runController?.giveVaultKeyForTest(),
+        __testMovePlayerToVaultDoor: () => this.runController?.movePlayerToVaultDoorForTest(),
+        __testSpawnChest: (roomId, isVaultChest) => this.runController?.spawnChestForTest(roomId, isVaultChest),
+        __testGetInventorySummary: () =>
+          this.runController?.getInventorySummaryForTest() ?? { items: {}, vaultKey: 0 },
+        __testGetCombatSummary: () =>
+          this.runController?.getCombatSummaryForTest() ?? { enemyCount: 0, duplicateCount: 0, farRoomCount: 0 },
+        __testGetVaultState: () =>
+          this.runController?.getVaultStateForTest() ?? { doorUnlocked: false, chestsOpened: 0 },
+        __testGetExploredCells: () => this.runController?.getExploredCellsForTest() ?? [],
+        __testMovePlayerTo: (roomId) => this.runController?.movePlayerToForTest(roomId),
+        __testSpawnNote: (roomId) => this.runController?.spawnNoteForTest(roomId),
+        __testGetNoteState: () =>
+          this.runController?.getNoteStateForTest() ?? { nextSequentialIndex: 0, readThisRun: [] },
+        __testReadNearestNote: () => this.runController?.readNearestNoteForTest() ?? false,
+        __testIsNoteOverlayVisible: () => this.runController?.isNoteOverlayActiveForTest() ?? false,
+        __testMovePlayerToNote: () => this.runController?.movePlayerToNoteForTest(),
+        __testForceNotesState: (nextSequentialIndex) =>
+          this.runController?.forceNotesStateForTest(nextSequentialIndex),
         __testTogglePause: () => this.togglePause(),
       };
       window.__YING_ZHONG_JIU_FORGOTTEN_SANITY_SCENE__ = hooks;

@@ -40,9 +40,11 @@
 | 改角色动画/方向 | `src/characters/CharacterRegistry.ts` + `src/scenes/PlayScene.ts` | 8 方向移动，斜向取上下方向贴图 |
 | 改 UI（对话/提示/计时器） | `src/ui/NarrativeUIManager.ts` | 角色提示全屏遮罩，阻塞 2 秒（ROLE_PROMPT_DURATION_MS=2000） |
 | 改输入锁/交互 | `src/input/InputManager.ts` | lockReason: dialogue/rolePrompt/blackScreen/elevatorFade/scriptedMovement/ending |
-| 改素材路径/清单 | `src/data/assets.ts` + `src/data/assetUrls.ts` | 禁止引用 `其他/` 目录 |
+| 改素材路径/清单 | `src/data/assets/`（spec#5 拆分：mainGameAssets + forgottenSanityAssets + index）+ `src/data/assetUrls.ts` | 禁止引用 `其他/` 目录；`src/data/assets.ts` 仍存在但仅 re-export |
 | 改预加载/失败注入 | `src/scenes/PreloadScene.ts` + `preloadDebugGate.ts` | URL 参数可强制预加载失败（调试用） |
 | 改生产部署 | `server/static-server.js` + `ecosystem.config.cjs` | PM2 端口 8949，512MB 内存限制 |
+| 改 forgotten sanity 战斗 | `src/forgottenSanity/combat/`（EnemySystem/ProjectileSystem/ZoneSystem/WallHitParticleSystem + CombatManager 门面） | spec#5 §5.2 拆分 |
+| 改 forgotten sanity 运行流程 | `src/forgottenSanity/run/`（RunLifecycle/RunInteractionHandler/RunTestHooks + ForgottenSanityRunController 门面） | spec#5 §5.1 拆分 |
 
 ## CODE MAP
 | Symbol | Type | Location | Role |
@@ -55,8 +57,10 @@
 | `NarrativeUIManager` | Class | `src/ui/NarrativeUIManager.ts` | 对话/任务/提示/计时器 UI |
 | `SaveState` | Interface | `src/state/saveState.ts` | 存档 schema（localStorage） |
 | `SchoolMapManifest` | Interface | `src/data/maps.ts` | 地图数据 schema |
-| `AssetManifestEntry` | Interface | `src/data/assets.ts` | 资产清单条目 |
+| `AssetManifestEntry` | Interface | `src/data/assetsTypes.ts` | 资产清单条目（spec#5 拆分：类型在 assetsTypes.ts，清单在 assets/index.ts） |
 | `UI_THEME` | Const | `src/ui/uiTheme.ts` | 暗色像素恐怖主题 |
+| `ForgottenSanityRunController` | Class | `src/forgottenSanity/ForgottenSanityRunController.ts` | forgotten sanity 门面（spec#5 拆分：门面 + run/RunLifecycle + run/RunInteractionHandler + run/RunTestHooks） |
+| `CombatManager` | Class | `src/forgottenSanity/combat/CombatManager.ts` | 战斗门面（spec#5 拆分：门面 + EnemySystem + ProjectileSystem + ZoneSystem + WallHitParticleSystem，implements CombatPort） |
 
 ## CONVENTIONS
 - **素材根目录唯一**: 只允许 `最终素材/`。`src/data/assets.ts` 的 `validateAssetManifest` 会拒绝含 `其他/` 的路径。`allowedAssetRoots = ['最终素材']`。
@@ -79,14 +83,14 @@
 - **Never** 在 `PlayScene` 中直接用 `yangYunRed` 硬编码作为默认角色；始终以 `saveState.controllableCharacterId` 为准。
 - **Never** 删除/跳过失败测试来让构建通过。本项目强制 TDD（RED→GREEN→SURFACE）。
 - **Never** 跳过 `syncDebugState()` — E2E 和手动 QA 依赖 `window.__YING_ZHONG_JIU_SCENE_STATE__`。
-- **Never** 使用未声明的 window 全局 — 只有 `__YING_ZHONG_JIU_SCENE_STATE__` 在 `Window` 接口上有类型声明。
+- **Never** 使用未声明的 window 全局 — 只有以下 3 个全局在 `Window` 接口上有类型声明（`src/game/scaffoldState.ts`）：`__YING_ZHONG_JIU_SCENE_STATE__`、`__YING_ZHONG_JIU_FORGOTTEN_SANITY_SCENE__`、`__YING_ZHONG_JIU_FORGOTTEN_SANITY_HUB_ACTIVE__`。
 
 ## UNIQUE STYLES
 - **像素恐怖风格**: `UI_THEME` 使用暗色 surface + 金色边框 + 像素字体。所有 UI 元素通过 `applyPixelTextStyle` / `applyPixelStrokeStyle` 统一风格。
 - **死亡闪屏**: `DeathFlashManager` 按剧本定义的顺序快速切换血黑/白底/黑底 + 芹菜/尺子贴图。
 - **Debug 全局状态**: 全量调试状态挂在 `window.__YING_ZHONG_JIU_SCENE_STATE__`，E2E 与手动 QA 依赖此状态断言。`SceneDebugState` 聚合 save/input/story/ui/character/map/preload 7 个子状态。
 - **窗口暴露**: 多个核心对象挂在 `window`（`__YING_ZHONG_JIU_INPUT_MANAGER__`、`__YING_ZHONG_JIU_EVENT_ENGINE__` 等），仅供 E2E 和调试。
-- **`as unknown as` 模式**: 代码中使用 `as unknown as` 进行 window 全局挂载和 duck-typing（如 `EventEngine.ts:544` 探测 `isRolePromptBlocking`），是项目特有的 E2E 可观察性模式。
+- **`as unknown as` 模式**: 代码中使用 `as unknown as` 进行 window 全局挂载和 duck-typing（如 `EventEngine.ts:544` 探测 `isRolePromptBlocking`），是项目特有的 E2E 可观察性模式。spec#5 §4.2 已消除 forgotten sanity `CombatManager` 的 enemy duck-typing cast（改用基类可选钩子），但 `EnemySystem.ts:453` 仍有 1 处残留（chargeState），`ForgottenSanityScene.ts:189-254` 的测试钩子探测仍用此模式（门面已类型化，属冗余）。
 
 ## COMMANDS
 ```bash

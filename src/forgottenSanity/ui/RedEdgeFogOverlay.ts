@@ -2,6 +2,17 @@
 // 杨云红边击杀全屏遮罩：触发后全屏"理智正在消散"持续 2s，玩家视野缩减为 220px，理智刷新 +100%。
 // 仅 import type Phaser —— 编译期擦除，jsdom 测试无需 Phaser runtime。
 // spec §5.10 / §9.3，plan 6 Task 8。
+//
+// TODO(spec#5 §6.1 Task 10)：升级为真实反向遮罩（孔外黑、孔内透明）。
+//   原计划用 Phaser.Display.Masks.BitmapMask，但经冒烟验证：
+//   1. Phaser 4 已移除 BitmapMask（v3 API）；v3-to-v4-migration/SKILL.md 明确
+//      "BitmapMask removed. Use the new Mask filter instead."
+//      node_modules/phaser/dist/phaser.esm.js 中 grep "BitmapMask" 零命中。
+//   2. v4 替换方案为 FilterMask（gameObject.filters.internal.addMask），依赖
+//      WebGL shader pass；jsdom 测试环境不提供 WebGL（见
+//      forgotten-sanity-red-edge-fog.test.ts 冒烟验证），无法运行/验证。
+//   → 当前保留简化版（黑底 rectangle + 透明 circle arc 近似"反向遮罩"）。
+//   待真实浏览器测试环境（如 Playwright + WebGL）落地后再升级为 FilterMask。
 import type Phaser from 'phaser';
 
 import { GAME_WIDTH, GAME_HEIGHT } from '../../game/scaffoldState';

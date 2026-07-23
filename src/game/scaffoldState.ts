@@ -8,6 +8,7 @@ import type { PreloadDebugState } from '../scenes/preloadState';
 import { createInitialStoryDebugState, type StoryDebugState } from '../story/eventState';
 import { createInitialNarrativeUiDebugState, type NarrativeUiDebugState } from '../ui/uiState';
 import { createInitialMapDebugState, type MapDebugState } from '../map/mapState';
+import type { ForgottenSanityTestHooks } from '../forgottenSanity/ForgottenSanityScene';
 
 export const GAME_WIDTH = 1280;
 export const GAME_HEIGHT = 720;
@@ -84,6 +85,8 @@ export interface SceneDebugState {
 declare global {
   interface Window {
     __YING_ZHONG_JIU_SCENE_STATE__?: SceneDebugState;
+    __YING_ZHONG_JIU_FORGOTTEN_SANITY_SCENE__?: ForgottenSanityTestHooks;
+    __YING_ZHONG_JIU_FORGOTTEN_SANITY_HUB_ACTIVE__?: boolean;
   }
 }
 

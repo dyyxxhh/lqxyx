@@ -4,6 +4,7 @@ import { CombatManager, type IsWalkableFn, type CombatCallbacks } from '../../..
 import { PlayerCombat } from '../../../forgottenSanity/combat/PlayerCombat';
 import { Enemy, registerEnemyKind, type EnemyUpdateContext, type EnemyKind, type Projectile, type ZoneEffect, createCombatRng } from '../../../forgottenSanity/combat/Enemy';
 import { WEAK_PUNCH_DAMAGE } from '../../../forgottenSanity/combat/DamageType';
+import type { CombatPort } from '../../../forgottenSanity/weapons/WeaponCombatAdapter';
 
 class DummyEnemy extends Enemy {
   readonly kind = 'butYuxuanHead' as const;
@@ -681,5 +682,16 @@ describe('1.2 farRoomAccumMs cleanup on enemy death (Task 21)', () => {
     cm.setFarRoomAccumMs('e1', 250);
     cm.update(16); // 敌人活着，update 不应清理 farRoomAccumMs
     expect(cm.hasFarRoomAccumMs('e1')).toBe(true);
+  });
+});
+
+// spec#5 §4.1: CombatManager implements CombatPort — 取代 RunController 手写代理。
+// 类型契约：CombatManager 必须显式实现 CombatPort 接口，使 WeaponCombatAdapter 可直接接收
+// CombatManager 实例，无需 RunController 手写 combatPort 对象字面量代理。
+describe('spec#5 §4.1 CombatManager implements CombatPort', () => {
+  it('CombatManager 可赋值给 CombatPort', () => {
+    const cm = makeManager();
+    const port: CombatPort = cm;
+    expect(port).toBe(cm);
   });
 });

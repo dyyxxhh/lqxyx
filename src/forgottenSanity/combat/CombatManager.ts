@@ -22,6 +22,7 @@ import {
 } from './Enemy';
 import { makeEnemyOpts } from './enemyDefaults';
 import { PlayerCombat } from './PlayerCombat';
+import type { CombatPort } from '../weapons/WeaponCombatAdapter';
 
 export type IsWalkableFn = (x: number, y: number) => boolean;
 
@@ -117,7 +118,7 @@ const WALL_HIT_PARTICLE_COLOR = 0xffffff;
 // Task 6 (#4): 敌侧投射物子步进最大步长（px），避免高速穿墙
 const ENEMY_PROJECTILE_SUBSTEP_PX = 4;
 
-export class CombatManager {
+export class CombatManager implements CombatPort {
   readonly player: PlayerCombat;
   readonly enemies: Enemy[] = [];
   readonly projectiles: Projectile[] = [];

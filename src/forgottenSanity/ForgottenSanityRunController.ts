@@ -9,14 +9,11 @@ import {
   PLAYER_RUN_SPEED,
   STAMINA_MAX,
 } from './combat/DamageType';
-import type { DamageInstance } from './combat/DamageType';
 import { PlayerCombat } from './combat/PlayerCombat';
 import {
   CombatManager,
   type IsWalkableFn,
   type CombatCallbacks,
-  type PlayerProjectile,
-  type PlayerZone,
 } from './combat/CombatManager';
 import {
   Enemy,
@@ -219,46 +216,7 @@ export class ForgottenSanityRunController {
     };
     this.combatManager = new CombatManager(this.player, callbacks, isWalkable);
     this.weaponCooldowns = new WeaponCooldowns();
-    const combatPort = {
-      player: this.player,
-      getPlayerPosition: () => ({ x: this.playerX, y: this.playerY }),
-      damageClosestEnemyInFan: (...args: readonly unknown[]) =>
-        this.combatManager.damageClosestEnemyInFan(
-          args[0] as number, args[1] as number,
-          args[2] as number, args[3] as number,
-          args[4] as number, args[5] as number,
-          args[6] as DamageInstance,
-        ),
-      damageClosestEnemyInFanWithHit: (...args: readonly unknown[]) =>
-        this.combatManager.damageClosestEnemyInFanWithHit(
-          args[0] as number, args[1] as number,
-          args[2] as number, args[3] as number,
-          args[4] as number, args[5] as number,
-          args[6] as DamageInstance,
-        ),
-      damageEnemiesInFan: (...args: readonly unknown[]) =>
-        this.combatManager.damageEnemiesInFan(
-          args[0] as number, args[1] as number,
-          args[2] as number, args[3] as number,
-          args[4] as number, args[5] as number,
-          args[6] as DamageInstance,
-        ),
-      damageEnemiesInCircle: (...args: readonly unknown[]) =>
-        this.combatManager.damageEnemiesInCircle(
-          args[0] as number, args[1] as number, args[2] as number, args[3] as DamageInstance,
-          args[4] as { excludeIds?: Set<string>; source?: string } | undefined,
-        ),
-      spawnPlayerProjectile: (p: PlayerProjectile) => this.combatManager.spawnPlayerProjectile(p),
-      spawnPlayerZone: (z: PlayerZone) => this.combatManager.spawnPlayerZone(z),
-      pullEnemiesToward: (cx: number, cy: number, radius: number, pullDistance: number) =>
-        this.combatManager.pullEnemiesToward(cx, cy, radius, pullDistance),
-      killRandomEnemyInRadiusExcluding: (
-        cx: number, cy: number, radius: number,
-        excludeKinds: readonly EnemyKind[],
-      ) => this.combatManager.killRandomEnemyInRadiusExcluding(cx, cy, radius, excludeKinds),
-      getTimeMs: () => this.combatManager.getTimeMs(),
-    };
-    this.weaponAdapter = new WeaponCombatAdapter(combatPort, this.weaponCooldowns, null);
+    this.weaponAdapter = new WeaponCombatAdapter(this.combatManager, this.weaponCooldowns, null);
     if (this.loadout.weaponId !== UNARMED_ID) {
       this.player.weaponId = this.loadout.weaponId;
     }

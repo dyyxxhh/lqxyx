@@ -6,6 +6,7 @@
 import type Phaser from 'phaser';
 
 import { UI_THEME, applyPixelStrokeStyle, applyPixelTextStyle } from '../../ui/uiTheme';
+import { GAME_WIDTH, GAME_HEIGHT } from '../../game/scaffoldState';
 
 export const MOBILE_ACTION_DEPTH = 952; // 复用 InputManager 摇杆层 (950/951) 之上
 
@@ -31,11 +32,12 @@ export interface MobileControlsCallbacks {
 
 const BUTTON_RADIUS = 44;
 // 右侧 4 按钮：普攻上、大招中、交互下、消耗品左下（环绕拇指可达区）
+// 坐标基于 GAME_WIDTH/GAME_HEIGHT 计算（1280×720 时与原硬编码完全一致）。
 const BUTTON_POSITIONS: Readonly<Record<MobileActionDef['id'], { readonly x: number; readonly y: number }>> = {
-  basicAttack: { x: 1140, y: 460 },
-  ultimate:    { x: 1200, y: 580 },
-  interact:    { x: 1100, y: 660 },
-  consumable:  { x: 980,  y: 620 },
+  basicAttack: { x: GAME_WIDTH - 140, y: GAME_HEIGHT - 260 },
+  ultimate:    { x: GAME_WIDTH - 80,  y: GAME_HEIGHT - 140 },
+  interact:    { x: GAME_WIDTH - 180, y: GAME_HEIGHT - 60 },
+  consumable:  { x: GAME_WIDTH - 300, y: GAME_HEIGHT - 100 },
 };
 
 export class MobileControls {

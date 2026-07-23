@@ -22,6 +22,7 @@ import {
   type WeaponProjectileKind,
 } from './WeaponRegistry';
 import type { WeaponCooldowns } from './WeaponCooldowns';
+import { GAME_WIDTH, GAME_HEIGHT } from '../../game/scaffoldState';
 
 // ---------------------------------------------------------------------------
 // CombatPort — CombatManager 子集接口（适配器依赖的契约）
@@ -88,8 +89,12 @@ export type WeaponVisualEvent =
 let playerProjectileCounter = 0;
 let playerZoneCounter = 0;
 
-/** grill §4.7: soulCapture captureMode='screenViewport' — 1280×720 视口半对角线 ≈ 735，取 800 覆盖全屏。 */
-const SOUL_CAPTURE_SCREEN_RADIUS = 800;
+/**
+ * grill §4.7: soulCapture captureMode='screenViewport' — 视口半对角线覆盖全屏。
+ * 取 Math.ceil(hypot(GAME_WIDTH, GAME_HEIGHT) / 2) 为最小覆盖半径，
+ * 并以 800 为保守下限（1280×720 时半对角线 ≈ 735，ceil=735，max(800,735)=800，行为不变）。
+ */
+const SOUL_CAPTURE_SCREEN_RADIUS = Math.max(800, Math.ceil(Math.hypot(GAME_WIDTH, GAME_HEIGHT) / 2));
 
 export class WeaponCombatAdapter {
   constructor(

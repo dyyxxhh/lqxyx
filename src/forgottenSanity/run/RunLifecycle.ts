@@ -5,6 +5,7 @@
 // 持有全部共享状态（implements RunSharedState），并把引用注入 InteractionHandler / TestHooks。
 import Phaser from 'phaser';
 
+import { GAME_WIDTH, GAME_HEIGHT } from '../../game/scaffoldState';
 import { STAMINA_MAX } from '../combat/DamageType';
 import { PlayerCombat } from '../combat/PlayerCombat';
 import {
@@ -446,10 +447,10 @@ export class RunLifecycle implements RunSharedState {
     this.scene.triggerRedEdgeKill(this.playerX, this.playerY);
     // 4. 缄默者复制 ×2（spec §9.3 替换原"理智刷新+100%"）
     this.combatManager.duplicateSilentOnes({
-      x: this.playerX - 640,  // 视口左上角 = 玩家中心 - 半宽
-      y: this.playerY - 360,
-      width: 1280,
-      height: 720,
+      x: this.playerX - GAME_WIDTH / 2,  // 视口左上角 = 玩家中心 - 半宽
+      y: this.playerY - GAME_HEIGHT / 2,
+      width: GAME_WIDTH,
+      height: GAME_HEIGHT,
     });
     // 5. M6: 雾战遮罩激活期间冻结敌人 AI（2s）— 玩家视野缩减为 220px，
     //    期间敌人不移动、不攻击，仅视觉特效（wallHitParticles）推进。

@@ -162,3 +162,63 @@ describe('Plan 4 集成冒烟 — 未知武器 no-op', () => {
     expect(adapter.performUltimate({ x: 1, y: 0 }, 0)).toBe(false);
   });
 });
+
+describe('Plan 5 §6.3 — 计数器实例隔离（playerProjectileCounter / playerZoneCounter）', () => {
+  it('两个 adapter 实例的 projectile 计数器互不影响', () => {
+    // adapter A 发射一次投射物（spiritBlade 普攻 = rangedPiercing）
+    const playerA = new PlayerCombat();
+    const managerA = new CombatManager(playerA);
+    const adapterA = new WeaponCombatAdapter(managerA as unknown as CombatPort, new WeaponCooldowns(), null);
+    playerA.weaponId = 'weapon.spiritBlade';
+    managerA.setPlayerPosition(0, 0);
+    adapterA.performAttack({ x: 1, y: 0 }, 0);
+    expect(managerA.playerProjectiles).toHaveLength(1);
+    const aId = managerA.playerProjectiles[0]!.id;
+    expect(aId).toMatch(/^wproj-\d+$/);
+
+    // adapter B 是全新实例，其计数器应从 0 开始（不受 A 影响）
+    const playerB = new PlayerCombat();
+    const managerB = new CombatManager(playerB);
+    const adapterB = new WeaponCombatAdapter(managerB as unknown as CombatPort, new WeaponCooldowns(), null);
+    playerB.weaponId = 'weapon.spiritBlade';
+    managerB.setPlayerPosition(0, 0);
+    adapterB.performAttack({ x: 1, y: 0 }, 0);
+    expect(managerB.playerProjectiles).toHaveLength(1);
+    const bId = managerB.playerProjectiles[0]!.id;
+    expect(bId).toMatch(/^wproj-\d+$/);
+
+    // 修复前：共享模块级计数器 → aId='wproj-N', bId='wproj-(N+1)'，二者不等
+    // 修复后：实例字段 → 两个 adapter 各自从 0 开始，aId === bId === 'wproj-0'
+    expect(bId).toBe('wproj-0');
+    expect(aId).toBe(bId);
+  });
+
+  it('两个 adapter 实例的 zone 计数器互不影响', () => {
+    // adapter A 触发一次大招 zone（ruler 的 rulerStorm）
+    const playerA = new PlayerCombat();
+    const managerA = new CombatManager(playerA);
+    const adapterA = new WeaponCombatAdapter(managerA as unknown as CombatPort, new WeaponCooldowns(), null);
+    playerA.weaponId = 'weapon.ruler';
+    managerA.setPlayerPosition(0, 0);
+    expect(adapterA.performUltimate({ x: 1, y: 0 }, 0)).toBe(true);
+    expect(managerA.playerZones).toHaveLength(1);
+    const aId = managerA.playerZones[0]!.id;
+    expect(aId).toMatch(/^wzone-\d+$/);
+
+    // adapter B 是全新实例，其 zone 计数器应从 0 开始
+    const playerB = new PlayerCombat();
+    const managerB = new CombatManager(playerB);
+    const adapterB = new WeaponCombatAdapter(managerB as unknown as CombatPort, new WeaponCooldowns(), null);
+    playerB.weaponId = 'weapon.ruler';
+    managerB.setPlayerPosition(0, 0);
+    expect(adapterB.performUltimate({ x: 1, y: 0 }, 0)).toBe(true);
+    expect(managerB.playerZones).toHaveLength(1);
+    const bId = managerB.playerZones[0]!.id;
+    expect(bId).toMatch(/^wzone-\d+$/);
+
+    // 修复前：共享模块级计数器 → bId 受 A 影响而非 'wzone-0'
+    // 修复后：实例字段 → bId === 'wzone-0' === aId
+    expect(bId).toBe('wzone-0');
+    expect(aId).toBe(bId);
+  });
+});

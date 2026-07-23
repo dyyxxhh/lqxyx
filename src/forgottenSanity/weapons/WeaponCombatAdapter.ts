@@ -86,9 +86,6 @@ export type WeaponVisualEvent =
 // ---------------------------------------------------------------------------
 // WeaponCombatAdapter
 // ---------------------------------------------------------------------------
-let playerProjectileCounter = 0;
-let playerZoneCounter = 0;
-
 /**
  * grill §4.7: soulCapture captureMode='screenViewport' — 视口半对角线覆盖全屏。
  * 取 Math.ceil(hypot(GAME_WIDTH, GAME_HEIGHT) / 2) 为最小覆盖半径，
@@ -105,6 +102,10 @@ export class WeaponCombatAdapter {
 
   /** grill §3.2: fistDash 锁定向 — 记录最近一次大招方向供 ultFistDash 复用。 */
   private lastDir: Vec2 = { x: 0, y: 1 };
+
+  /** spec#5 §6.3: 实例级投射物/区域 id 计数器（避免模块级共享导致测试隔离风险）。 */
+  private playerProjectileCounter = 0;
+  private playerZoneCounter = 0;
 
   /** 拾取替换武器：设置新武器，重置 CD，返回旧武器 ID（用于地面掉落）。 */
   equipWeapon(newId: WeaponId): string {
@@ -195,7 +196,7 @@ export class WeaponCombatAdapter {
       const ux = Math.cos(angle);
       const uy = Math.sin(angle);
       this.combat.spawnPlayerProjectile({
-        id: `wproj-${playerProjectileCounter++}`,
+        id: `wproj-${this.playerProjectileCounter++}`,
         x: pos.x, y: pos.y,
         vx: ux * ult.projectileSpeed,
         vy: uy * ult.projectileSpeed,
@@ -219,7 +220,7 @@ export class WeaponCombatAdapter {
     const cx = pos.x + dir.x * 120;
     const cy = pos.y + dir.y * 120;
     this.combat.spawnPlayerZone({
-      id: `wzone-${playerZoneCounter++}`,
+      id: `wzone-${this.playerZoneCounter++}`,
       shape: 'circle', x: cx, y: cy, radius: ult.radius,
       burstDamage: ult.damage, damagePerSecond: 0,
       category: 'aoe', remainingMs: 100,
@@ -232,7 +233,7 @@ export class WeaponCombatAdapter {
   // -- 尺子：跟随玩家风暴区域 (grill §4.7: r150 / 3s / dps15) --
   private ultRulerStorm(ult: RulerStormUlt, pos: Vec2): void {
     this.combat.spawnPlayerZone({
-      id: `wzone-${playerZoneCounter++}`,
+      id: `wzone-${this.playerZoneCounter++}`,
       shape: 'circle', x: pos.x, y: pos.y, radius: ult.radius,
       burstDamage: 0, damagePerSecond: ult.damagePerSecond,
       category: 'aoe', remainingMs: ult.durationMs,
@@ -249,7 +250,7 @@ export class WeaponCombatAdapter {
       const ux = Math.cos(angle);
       const uy = Math.sin(angle);
       this.combat.spawnPlayerProjectile({
-        id: `wproj-${playerProjectileCounter++}`,
+        id: `wproj-${this.playerProjectileCounter++}`,
         x: pos.x, y: pos.y,
         vx: ux * ult.projectileSpeed,
         vy: uy * ult.projectileSpeed,
@@ -299,7 +300,7 @@ export class WeaponCombatAdapter {
       amount: 0, category: 'aoe', debuff: root,
     });
     this.combat.spawnPlayerZone({
-      id: `wzone-${playerZoneCounter++}`,
+      id: `wzone-${this.playerZoneCounter++}`,
       shape: 'circle', x: pos.x, y: pos.y, radius: ult.pullRadius,
       burstDamage: 0, damagePerSecond: ult.burnDps,
       category: 'aoe', remainingMs: ult.burnMs,
@@ -312,7 +313,7 @@ export class WeaponCombatAdapter {
   // -- 血镰：跟随玩家血轮区域 (grill §4.7: r130 / 3s / dps50) --
   private ultBloodWheel(ult: BloodWheelUlt, pos: Vec2): void {
     this.combat.spawnPlayerZone({
-      id: `wzone-${playerZoneCounter++}`,
+      id: `wzone-${this.playerZoneCounter++}`,
       shape: 'circle', x: pos.x, y: pos.y, radius: ult.radius,
       burstDamage: 0, damagePerSecond: ult.damagePerSecond,
       category: 'aoe', remainingMs: ult.durationMs,
@@ -389,7 +390,7 @@ export class WeaponCombatAdapter {
     if (basic.kind !== 'rangedPiercing') return;
     const angle = Math.atan2(dir.y, dir.x);
     const proj: PlayerProjectile = {
-      id: `wproj-${playerProjectileCounter++}`,
+      id: `wproj-${this.playerProjectileCounter++}`,
       x: pos.x, y: pos.y,
       vx: dir.x * basic.projectileSpeed,
       vy: dir.y * basic.projectileSpeed,

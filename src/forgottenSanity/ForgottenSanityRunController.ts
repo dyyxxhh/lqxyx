@@ -24,6 +24,7 @@ import {
   type EnemyConstructorOpts,
   createEnemy,
 } from './combat/Enemy';
+import { makeEnemyOpts } from './combat/enemyDefaults';
 import {
   ForgottenSanityMapRenderer,
 } from './map/ForgottenSanityMapRenderer';
@@ -628,36 +629,11 @@ export class ForgottenSanityRunController {
 
   private spawnEnemy(kind: EnemyKind, pos: { x: number; y: number }): Enemy | null {
     const id = `${kind}-${Date.now()}-${Math.floor(Math.random() * 100000)}`;
-    const opts: EnemyConstructorOpts = this.defaultEnemyOpts(kind, id, pos.x, pos.y);
+    const opts: EnemyConstructorOpts = makeEnemyOpts(kind, id, pos.x, pos.y);
     const enemy = createEnemy(kind, opts);
     if (enemy === null) return null;
     this.combatManager.addEnemy(enemy);
     return enemy;
-  }
-
-  private defaultEnemyOpts(kind: EnemyKind, id: string, x: number, y: number): EnemyConstructorOpts {
-    const table: Record<EnemyKind, { maxHp: number; speed: number; contactDamage: number; contactRadius: number }> = {
-      butYuxuanHead: { maxHp: 45, speed: 60, contactDamage: 8, contactRadius: 22 },
-      qinHaoruiHead: { maxHp: 55, speed: 50, contactDamage: 8, contactRadius: 22 },
-      deskChairs: { maxHp: 120, speed: 40, contactDamage: 15, contactRadius: 28 },
-      phone: { maxHp: 70, speed: 55, contactDamage: 10, contactRadius: 22 },
-      bloodHand: { maxHp: 70, speed: 0, contactDamage: 16, contactRadius: 26 },
-      floatingEye: { maxHp: 35, speed: 80, contactDamage: 6, contactRadius: 20 },
-      chalkDust: { maxHp: 150, speed: 30, contactDamage: 5, contactRadius: 40 },
-      butYuxuanHeadBloodEye: { maxHp: 70, speed: 75, contactDamage: 12, contactRadius: 22 },
-      danYuxuanBody: { maxHp: 1, speed: 0, contactDamage: 0, contactRadius: 30 },
-      yangYunRed: { maxHp: 320, speed: 95, contactDamage: 22, contactRadius: 26 },
-      yangYunRedPhantom: { maxHp: 40, speed: 80, contactDamage: 8, contactRadius: 20 },
-    };
-    const t = table[kind];
-    return {
-      id,
-      x, y,
-      maxHp: t.maxHp,
-      speed: t.speed,
-      contactDamage: t.contactDamage,
-      contactRadius: t.contactRadius,
-    };
   }
 
   // ───────────────────────────────────────────────────────────────────

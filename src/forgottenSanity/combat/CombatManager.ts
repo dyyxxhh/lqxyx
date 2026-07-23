@@ -20,6 +20,7 @@ import {
   createEnemy,
   type Vec2,
 } from './Enemy';
+import { makeEnemyOpts } from './enemyDefaults';
 import { PlayerCombat } from './PlayerCombat';
 
 export type IsWalkableFn = (x: number, y: number) => boolean;
@@ -717,7 +718,7 @@ export class CombatManager {
 
   private spawnEnemyInternal(kind: EnemyKind, pos: Vec2, parentId?: string): Enemy | null {
     const id = `${kind}-${this.timeMs}-${Math.floor(this.rng.next() * 100000)}`;
-    const opts = this.defaultEnemyOpts(kind, id, pos.x, pos.y);
+    const opts = makeEnemyOpts(kind, id, pos.x, pos.y);
     const enemy = createEnemy(kind, opts);
     if (enemy === null) return null;
     if (parentId !== undefined) enemy.parentId = parentId;
@@ -728,7 +729,7 @@ export class CombatManager {
   /** spec §5.9 C: 在指定位置生成绑定身体的头颅（由 DanYuxuanBodyEnemy.tickHeadRevive 调用）。 */
   private spawnEnemyAt(kind: EnemyKind, x: number, y: number, parentId: string): Enemy | null {
     const id = `enemy-${this.enemyCounter++}`;
-    const opts = this.defaultEnemyOpts(kind, id, x, y);
+    const opts = makeEnemyOpts(kind, id, x, y);
     const enemy = createEnemy(kind, opts);
     if (enemy === null) return null;
     enemy.parentId = parentId;
@@ -768,7 +769,7 @@ export class CombatManager {
       }
       if (!ok) continue;
       const id = `enemy-${this.enemyCounter++}`;
-      const opts = this.defaultEnemyOpts(orig.kind, id, nx, ny);
+      const opts = makeEnemyOpts(orig.kind, id, nx, ny);
       const clone = createEnemy(orig.kind, opts);
       if (clone === null) continue;
       clone.hp = orig.hp;
@@ -778,25 +779,6 @@ export class CombatManager {
       duplicated += 1;
     }
     return duplicated;
-  }
-
-  private defaultEnemyOpts(kind: EnemyKind, id: string, x: number, y: number) {
-    // 各敌人初始数值；与子类构造保持一致
-    const table: Record<EnemyKind, { maxHp: number; speed: number; contactDamage: number; contactRadius: number }> = {
-      butYuxuanHead: { maxHp: 45, speed: 60, contactDamage: 8, contactRadius: 22 },
-      qinHaoruiHead: { maxHp: 55, speed: 50, contactDamage: 8, contactRadius: 22 },
-      deskChairs: { maxHp: 120, speed: 40, contactDamage: 15, contactRadius: 28 },
-      phone: { maxHp: 70, speed: 55, contactDamage: 10, contactRadius: 22 },
-      bloodHand: { maxHp: 70, speed: 0, contactDamage: 16, contactRadius: 26 },
-      floatingEye: { maxHp: 35, speed: 80, contactDamage: 6, contactRadius: 20 },
-      chalkDust: { maxHp: 150, speed: 30, contactDamage: 5, contactRadius: 40 },
-      butYuxuanHeadBloodEye: { maxHp: 70, speed: 75, contactDamage: 12, contactRadius: 22 },
-      danYuxuanBody: { maxHp: 1, speed: 0, contactDamage: 0, contactRadius: 30 },
-      yangYunRed: { maxHp: 320, speed: 95, contactDamage: 22, contactRadius: 30 },
-      yangYunRedPhantom: { maxHp: 40, speed: 80, contactDamage: 8, contactRadius: 24 },
-    };
-    const s = table[kind];
-    return { id, x, y, maxHp: s.maxHp, speed: s.speed, contactDamage: s.contactDamage, contactRadius: s.contactRadius };
   }
 
   private updateProjectiles(deltaMs: number): void {

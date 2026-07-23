@@ -231,6 +231,59 @@ describe('rollLootTable purity', () => {
   });
 });
 
+describe('#14 LootTable empty-array guards (spec#5 §6.5)', () => {
+  it('throws when multiPick table has empty entries (pickWeightedEntry guard)', () => {
+    const emptyTable: LootTable = {
+      id: 'test.empty-entries',
+      rollMode: 'multiPick',
+      itemCount: { min: 1, max: 1 },
+      entries: [],
+    };
+    expect(() => rollLootTable(emptyTable, mulberry32(1))).toThrowError(
+      /LootTable fallback empty/,
+    );
+  });
+
+  it('throws when independent+itemCount table has empty entries', () => {
+    const emptyTable: LootTable = {
+      id: 'test.empty-entries-ind',
+      rollMode: 'independent',
+      itemCount: { min: 1, max: 1 },
+      entries: [],
+    };
+    expect(() => rollLootTable(emptyTable, mulberry32(1))).toThrowError(
+      /LootTable fallback empty/,
+    );
+  });
+
+  it('falls back to rarity pool when allowedTypes is too narrow (no throw)', () => {
+    // allowedTypes 为空 → candidates 为空 → 走 pickItem fallback（该稀有度全量），不应抛错
+    const narrowTable: LootTable = {
+      id: 'test.narrow-types',
+      rollMode: 'single',
+      noneWeight: 0,
+      entries: [{ rarity: 'blue', weight: 100, allowedTypes: [] }],
+    };
+    const r = rollLootTable(narrowTable, mulberry32(1));
+    expect(r).toHaveLength(1);
+    expect(r[0]!.rarity).toBe('blue');
+  });
+
+  it('white rarity with empty allowedTypes still returns blankDiploma fallback', () => {
+    // 白阶 + 空 allowedTypes → others 为空 → 回退 blankDiploma，不应抛错
+    const whiteNarrow: LootTable = {
+      id: 'test.white-narrow',
+      rollMode: 'single',
+      noneWeight: 0,
+      entries: [{ rarity: 'white', weight: 100, allowedTypes: [] }],
+    };
+    const rng = () => 0.95; // > 0.7，不走 70% blankDiploma 快速路径
+    const r = rollLootTable(whiteNarrow, rng);
+    expect(r).toHaveLength(1);
+    expect(r[0]!.id).toBe('treasure.blankDiploma');
+  });
+});
+
 // Static type asserts
 function _compileTimeAssert(item: LootItem, rarity: LootRarity): void {
   void item;

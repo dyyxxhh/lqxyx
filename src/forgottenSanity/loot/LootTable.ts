@@ -179,7 +179,14 @@ function pickWeightedEntry(entries: readonly LootTableEntry[], rng: () => number
     r -= e.weight;
     if (r <= 0) return e;
   }
-  return entries[entries.length - 1]!;
+  return pickFromFallback(entries, rng);
+}
+
+function pickFromFallback<T>(arr: readonly T[], rng: () => number): T {
+  if (arr.length === 0) {
+    throw new Error('LootTable fallback empty: no candidates for rarity');
+  }
+  return arr[Math.floor(rng() * arr.length)] as T;
 }
 
 function pickItem(entry: LootTableEntry, rng: () => number): LootItem {
@@ -192,7 +199,7 @@ function pickItem(entry: LootTableEntry, rng: () => number): LootItem {
     const others = ALL_LOOT.filter(
       (it) => it.rarity === 'white' && it.id !== 'treasure.blankDiploma' && entry.allowedTypes.includes(it.type),
     );
-    if (others.length > 0) return others[Math.floor(rng() * others.length)]!;
+    if (others.length > 0) return pickFromFallback(others, rng);
     // allowedTypes 过窄时回退
     const fallback = getLootItem('treasure.blankDiploma');
     if (fallback) return fallback;
@@ -204,9 +211,9 @@ function pickItem(entry: LootTableEntry, rng: () => number): LootItem {
   if (candidates.length === 0) {
     // allowedTypes 过窄：回退到该稀有度全部
     const fallback = ALL_LOOT.filter((it) => it.rarity === entry.rarity);
-    return fallback[Math.floor(rng() * fallback.length)]!;
+    return pickFromFallback(fallback, rng);
   }
-  return candidates[Math.floor(rng() * candidates.length)]!;
+  return pickFromFallback(candidates, rng);
 }
 
 function applyPity(

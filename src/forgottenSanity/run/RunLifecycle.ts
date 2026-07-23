@@ -415,7 +415,6 @@ export class RunLifecycle implements RunSharedState {
     const id = `${kind}-${Date.now()}-${Math.floor(Math.random() * 100000)}`;
     const opts: EnemyConstructorOpts = makeEnemyOpts(kind, id, pos.x, pos.y);
     const enemy = createEnemy(kind, opts);
-    if (enemy === null) return null;
     this.combatManager.addEnemy(enemy);
     return enemy;
   }

@@ -82,9 +82,6 @@ describe('集成：CombatManager 端到端 update 不崩溃', () => {
     for (const kind of ALL_KINDS) {
       const o = KIND_OPTS[kind];
       const enemy = createEnemy(kind, { id: `e2e-${kind}`, x: 0, y: 0, ...o });
-      if (enemy === null) {
-        throw new Error(`createEnemy(${kind}) 返回 null`);
-      }
       mgr.addEnemy(enemy);
     }
     expect(mgr.enemies).toHaveLength(ALL_KINDS.length);

@@ -124,10 +124,8 @@ describe('EnemyFactory registry', () => {
     expect(e!.x).toBe(1);
   });
 
-  it('createEnemy 未注册类型返回 null', () => {
-    const e = createEnemy('yangYunRed', { id: 'f2', x: 0, y: 0, maxHp: 1, speed: 0, contactDamage: 0, contactRadius: 0 });
-    // yangYunRed 在 Task 14 才注册；此时应返回 null
-    expect(e).toBeNull();
+  it('createEnemy 未注册 kind 抛错', () => {
+    expect(() => createEnemy('invalidKind' as EnemyKind, { id: 'f2', x: 0, y: 0, maxHp: 1, speed: 0, contactDamage: 0, contactRadius: 0 })).toThrow(/not registered/);
   });
 });
 

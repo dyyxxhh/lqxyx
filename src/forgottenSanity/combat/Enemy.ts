@@ -416,9 +416,11 @@ export function registerEnemyKind(kind: EnemyKind, factory: EnemyFactory): void 
   ENEMY_FACTORY.set(kind, factory);
 }
 
-export function createEnemy(kind: EnemyKind, opts: EnemyConstructorOpts): Enemy | null {
+export function createEnemy(kind: EnemyKind, opts: EnemyConstructorOpts): Enemy {
   const factory = ENEMY_FACTORY.get(kind);
-  if (factory === undefined) return null;
+  if (factory === undefined) {
+    throw new Error(`Enemy kind not registered: ${kind}`);
+  }
   return factory(opts);
 }
 

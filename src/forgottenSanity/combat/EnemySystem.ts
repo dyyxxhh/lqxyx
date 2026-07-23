@@ -555,7 +555,6 @@ export class EnemySystem {
       const id = `enemy-${this.enemyCounter++}`;
       const opts = makeEnemyOpts(orig.kind, id, nx, ny);
       const clone = createEnemy(orig.kind, opts);
-      if (clone === null) continue;
       clone.hp = orig.hp;
       clone.parentId = orig.parentId;
       clone.isDuplicate = true;
@@ -590,7 +589,6 @@ export class EnemySystem {
     const id = `${kind}-${timeMs}-${Math.floor(this.ctx.rng.next() * 100000)}`;
     const opts = makeEnemyOpts(kind, id, pos.x, pos.y);
     const enemy = createEnemy(kind, opts);
-    if (enemy === null) return null;
     if (parentId !== undefined) enemy.parentId = parentId;
     this.addEnemy(enemy);
     return enemy;
@@ -601,7 +599,6 @@ export class EnemySystem {
     const id = `enemy-${this.enemyCounter++}`;
     const opts = makeEnemyOpts(kind, id, x, y);
     const enemy = createEnemy(kind, opts);
-    if (enemy === null) return null;
     enemy.parentId = parentId;
     this.enemies.push(enemy);
     return enemy;

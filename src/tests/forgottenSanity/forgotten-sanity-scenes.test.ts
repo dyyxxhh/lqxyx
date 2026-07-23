@@ -18,6 +18,7 @@ vi.mock('phaser', () => {
 import { loadProgressState, loadStashState } from '../../forgottenSanity/state/forgottenSanityState';
 import { ForgottenSanityHubScene } from '../../forgottenSanity/ForgottenSanityHubScene';
 import { ForgottenSanityScene } from '../../forgottenSanity/ForgottenSanityScene';
+import { getSceneDebugState, resetSceneDebugState } from '../../game/scaffoldState';
 
 interface CapturedRect {
   readonly x: number;
@@ -107,6 +108,7 @@ describe('ForgottenSanityHubScene.create', () => {
   beforeEach(() => {
     localStorage.clear();
     (window as unknown as Record<string, unknown>).__YING_ZHONG_JIU_FORGOTTEN_SANITY_HUB_ACTIVE__ = undefined;
+    resetSceneDebugState();
   });
 
   it('发放起手包、设置 hub 全局、注册 SHUTDOWN、HubUI 返回按钮回到 GameScene', () => {
@@ -183,6 +185,48 @@ describe('ForgottenSanityHubScene.create', () => {
     scene.create();
     const back = captor.rects.find((r) => r.width === 120 && r.height === 40 && r.x === 80 && r.y === 690);
     expect(back).toBeDefined();
+  });
+
+  it('create 后在调试状态标记 forgottenSanity.scene === "hub"（spec §4.6）', () => {
+    const captor = createCapturingAdd();
+    const scene = Object.create(ForgottenSanityHubScene.prototype) as ForgottenSanityHubScene & {
+      add: CapturingAdd;
+      scene: { start: (key: string) => void };
+      events: { once: (event: string, cb: () => void) => void };
+      cameras: { main: { setBackgroundColor: (color: unknown) => void } };
+    };
+    scene.add = captor.add;
+    scene.scene = { start: vi.fn() };
+    scene.events = { once: vi.fn() };
+    scene.cameras = { main: { setBackgroundColor: vi.fn() } };
+
+    scene.create();
+
+    expect(getSceneDebugState().forgottenSanity?.scene).toBe('hub');
+  });
+
+  it('SHUTDOWN 回调将 forgottenSanity.scene 重置为 "none"（spec §4.6）', () => {
+    const captor = createCapturingAdd();
+    const eventsOnce = vi.fn();
+    const scene = Object.create(ForgottenSanityHubScene.prototype) as ForgottenSanityHubScene & {
+      add: CapturingAdd;
+      scene: { start: (key: string) => void };
+      events: { once: (event: string, cb: () => void) => void };
+      cameras: { main: { setBackgroundColor: (color: unknown) => void } };
+    };
+    scene.add = captor.add;
+    scene.scene = { start: vi.fn() };
+    scene.events = { once: eventsOnce };
+    scene.cameras = { main: { setBackgroundColor: vi.fn() } };
+
+    scene.create();
+    expect(getSceneDebugState().forgottenSanity?.scene).toBe('hub');
+
+    const shutdownCb = eventsOnce.mock.calls[0]?.[1] as (() => void) | undefined;
+    expect(shutdownCb).toBeTypeOf('function');
+    shutdownCb?.();
+
+    expect(getSceneDebugState().forgottenSanity?.scene).toBe('none');
   });
 });
 

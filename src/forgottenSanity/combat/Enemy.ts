@@ -248,6 +248,8 @@ export abstract class Enemy implements EnemyViewMetadata {
   onBodyDied?(): void;
   /** 绑定头颅死亡通知（DanYuxuanBodyEnemy 实现，spec §5.9 B/C） */
   onBoundHeadDied?(head: Enemy, timeMs: number): void;
+  /** 冲撞击退向量（YangYunRedEnemy 实现，spec §5.10；冲撞中返回方向单位向量，否则 null）。 */
+  getChargeKnockback?(): { vx: number; vy: number } | null;
 
   // 三态机状态（grill 2026-07-17）
   aiState: EnemyAIState = 'idle';

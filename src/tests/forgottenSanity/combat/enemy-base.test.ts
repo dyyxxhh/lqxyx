@@ -199,6 +199,28 @@ describe('Enemy base class — 可选钩子 (spec#5 §4.2)', () => {
     expect(() => e.onBodyDied?.()).not.toThrow();
     expect(() => e.onBoundHeadDied?.(e, 0)).not.toThrow();
     expect(() => e.tickHeadRevive?.(0, () => null)).not.toThrow();
+    expect(e.getChargeKnockback?.()).toBeUndefined();
+  });
+
+  it('YangYunRed 非冲撞状态 getChargeKnockback 返回 null', () => {
+    registerYangYunRed();
+    const elite = new YangYunRedEnemy('elite-c1', 0, 0);
+    expect(elite.getChargeKnockback?.()).toBeNull();
+  });
+
+  it('YangYunRed 冲撞中 getChargeKnockback 返回方向向量', () => {
+    registerYangYunRed();
+    const elite = new YangYunRedEnemy('elite-c2', 0, 0);
+    // 反射设置冲撞状态（private 字段，测试可观察性模式）
+    const internal = elite as unknown as {
+      chargeState: 'idle' | 'windup' | 'charging';
+      chargeDirX: number;
+      chargeDirY: number;
+    };
+    internal.chargeState = 'charging';
+    internal.chargeDirX = 1;
+    internal.chargeDirY = 0;
+    expect(elite.getChargeKnockback?.()).toEqual({ vx: 1, vy: 0 });
   });
 
   it('YangYunRed 实例 aggroState 初始 neutral 且 enrage 为函数', () => {

@@ -159,6 +159,12 @@ export class YangYunRedEnemy extends Enemy {
     this.aggroState = 'hostile';
   }
 
+  /** 冲撞击退向量（spec §5.10；冲撞中返回方向单位向量，否则 null）。 */
+  getChargeKnockback(): { vx: number; vy: number } | null {
+    if (this.chargeState !== 'charging') return null;
+    return { vx: this.chargeDirX, vy: this.chargeDirY };
+  }
+
   /** 测试用：设置精英死亡回调 */
   setOnEliteDefeatedForTest(cb: () => void): void {
     this.onEliteDefeated = cb;

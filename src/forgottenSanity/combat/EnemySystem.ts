@@ -448,18 +448,14 @@ export class EnemySystem {
         : { amount: effectiveDamage, category: 'melee' };
       this.ctx.player.takeDamage(instance);
       enemy.contactCooldownMs = PLAYER_CONTACT_DAMAGE_COOLDOWN_MS;
-      // 击退（仅冲撞中的杨云红边触发）
+      // 击退（仅冲撞中的杨云红边触发，spec §5.10）
       if (enemy.kind === 'yangYunRed' && enemy.contactDamageOverride !== null) {
-        const elite = enemy as unknown as {
-          chargeState: 'idle' | 'windup' | 'charging';
-          chargeDirX: number;
-          chargeDirY: number;
-        };
-        if (elite.chargeState === 'charging') {
+        const knockback = enemy.getChargeKnockback?.();
+        if (knockback !== null && knockback !== undefined) {
           const knockbackPx = 80;
           this.ctx.callbacks.onKnockback?.(
-            elite.chargeDirX * knockbackPx,
-            elite.chargeDirY * knockbackPx,
+            knockback.vx * knockbackPx,
+            knockback.vy * knockbackPx,
             200,
           );
         }

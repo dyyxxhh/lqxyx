@@ -239,10 +239,28 @@ export class ForgottenSanityHUD {
     };
   }
 
+  /** Red pulse flash on HP bar when player takes damage. */
+  flashRedPulse(): void {
+    if (this.hpBarFill) {
+      this.scene.tweens.add({
+        targets: this.hpBarFill,
+        alpha: { from: 1, to: 0.3 },
+        duration: 120,
+        yoyo: true,
+        repeat: 1,
+      });
+    }
+  }
+
   destroy(): void {
     for (const t of this.consumableTexts) t.destroy();
     this.consumableTexts = [];
   }
+}
+
+/** Smoothly interpolate a bar value toward target (200ms feel). */
+export function smoothBarValue(current: number, target: number, t: number): number {
+  return current + (target - current) * t;
 }
 
 /** 格式化毫秒为 mm:ss 或 hh:mm:ss（≥1h 时）。 */

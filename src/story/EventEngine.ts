@@ -89,6 +89,9 @@ export class EventEngine {
   private onFadeSfx: ((direction: 'in' | 'out') => void) | null = null;
   private onBlackScreenSfx: ((asset: string | undefined) => void) | null = null;
   private onSwitchViewSfx: (() => void) | null = null;
+  private onBranchSfx: (() => void) | null = null;
+  private onTaskSfx: (() => void) | null = null;
+  private onCurtainSfx: (() => void) | null = null;
   private pendingProximityTarget: StoryProximityTarget | null = null;
   private pendingProximityArmedPosition: StoryPoint | null = null;
   private pendingVisibilityTargetId: string | null = null;
@@ -171,6 +174,21 @@ export class EventEngine {
   /** Register a callback for switchView SFX (reality tear on character switch). */
   public setOnSwitchViewSfxCallback(cb: () => void): void {
     this.onSwitchViewSfx = cb;
+  }
+
+  /** Register a callback for branch SFX (played when a branch choice appears). */
+  public setOnBranchSfxCallback(cb: () => void): void {
+    this.onBranchSfx = cb;
+  }
+
+  /** Register a callback for task SFX (played when the task tracker updates). */
+  public setOnTaskSfxCallback(cb: () => void): void {
+    this.onTaskSfx = cb;
+  }
+
+  /** Register a callback for curtain SFX (played when a curtain/act title appears). */
+  public setOnCurtainSfxCallback(cb: () => void): void {
+    this.onCurtainSfx = cb;
   }
 
   // ── Public API ───────────────────────────────────────────────
@@ -645,6 +663,7 @@ export class EventEngine {
   private handleTask(command: Extract<StoryCommand, { type: 'task' }>): void {
     this.mutable.task = command.text;
     this.narrativeUI.setTask(command.text);
+    this.onTaskSfx?.();
   }
 
   private handleDialogue(command: Extract<StoryCommand, { type: 'dialogue' }>): void {
@@ -739,6 +758,7 @@ export class EventEngine {
     if (!this.pendingBranchIds.includes(command.id)) {
       this.pendingBranchIds.push(command.id);
     }
+    this.onBranchSfx?.();
   }
 
   private stopActiveTimers(): void {
@@ -974,6 +994,7 @@ export class EventEngine {
 
   private handleCurtain(command: Extract<StoryCommand, { type: 'curtain' }>): void {
     this.narrativeUI.setCurtain(true, command.title, command.subtitle);
+    this.onCurtainSfx?.();
   }
 
   // ── Timing helpers ───────────────────────────────────────────

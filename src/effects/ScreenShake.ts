@@ -14,7 +14,12 @@ export class ScreenShake {
   }
 
   private get camera(): Phaser.Cameras.Scene2D.Camera {
-    return (this.scene as any).cameras?.main ?? (this.scene as any).cam2d?.main;
+    return (this.scene as any).cameras.main;
+  }
+
+  /** Expose the scene reference for external consumers (e.g. SceneFX). */
+  getScene(): Phaser.Scene {
+    return this.scene;
   }
 
   /** Hit: 8px, 200ms. */
@@ -44,8 +49,11 @@ export class ScreenShake {
 
   /** Red flash overlay using a full-screen rectangle. */
   flashRed(durationMs: number, alpha: number): void {
+    const cam = this.camera;
+    const cx = cam.scrollX + cam.width / 2;
+    const cy = cam.scrollY + cam.height / 2;
     const rect = this.scene.add.rectangle(
-      640, 360, 1280, 720, 0xb01724, alpha
+      cx, cy, cam.width, cam.height, 0xb01724, alpha
     )
       .setOrigin(0.5)
       .setScrollFactor(0)
@@ -56,5 +64,10 @@ export class ScreenShake {
       duration: durationMs,
       onComplete: () => rect.destroy(),
     });
+  }
+
+  destroy(): void {
+    // Camera shake auto-resolves; flashRed tween/rect auto-destroyed via onComplete.
+    // No persistent resources to clean up.
   }
 }

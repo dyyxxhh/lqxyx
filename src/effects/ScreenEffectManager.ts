@@ -39,6 +39,9 @@ export class ScreenEffectManager {
   private params: PostProcessingParams = { ...BASELINE_PARAMS };
   private activePreset: 'none' | 'sanity' | 'chase' = 'none';
   private enabled = true;
+  private smoothTween: Phaser.Tweens.Tween | null = null;
+  private pendingTimers: Phaser.Time.TimerEvent[] = [];
+  private redPulseActive = false;
 
   constructor(scene: Phaser.Scene) {
     this.scene = scene;
@@ -70,7 +73,45 @@ export class ScreenEffectManager {
   }
 
   setParamsSmooth(updates: Partial<PostProcessingParams>, durationMs = 300): void {
-    this.params = { ...this.params, ...updates };
+    if (!this.enabled) {
+      this.params = { ...this.params, ...updates };
+      return;
+    }
+    // Cancel previous smooth transition
+    this.smoothTween?.stop();
+    this.smoothTween = null;
+    // Create a proxy object to tween
+    const proxy: Record<string, number> = {};
+    for (const [key, value] of Object.entries(updates)) {
+      if (typeof value === 'number') {
+        proxy[key] = this.params[key as keyof PostProcessingParams] as number;
+      }
+    }
+    if (Object.keys(proxy).length > 0 && this.scene?.tweens) {
+      this.smoothTween = this.scene.tweens.add({
+        targets: proxy,
+        duration: durationMs,
+        ease: 'Linear',
+        onComplete: () => { this.smoothTween = null; },
+        onUpdate: () => {
+          for (const key of Object.keys(proxy)) {
+            (this.params as any)[key] = proxy[key];
+          }
+        },
+      });
+      // Set target values for tween
+      for (const [key, value] of Object.entries(updates)) {
+        if (typeof value === 'number') {
+          proxy[key] = value;
+        }
+      }
+    }
+    // Non-number params (bloomEnabled etc) set immediately
+    for (const [key, value] of Object.entries(updates)) {
+      if (typeof value !== 'number') {
+        (this.params as any)[key] = value;
+      }
+    }
   }
 
   activateSanityPreset(): void {
@@ -95,10 +136,12 @@ export class ScreenEffectManager {
   triggerBloom(durationMs = 300): void {
     this.params.bloomEnabled = true;
     this.params.bloomIntensity = 0.5;
-    this.scene.time?.delayedCall(durationMs, () => {
+    if (!this.scene.time) return;
+    const t = this.scene.time.delayedCall(durationMs, () => {
       this.params.bloomEnabled = false;
       this.params.bloomIntensity = 0;
     });
+    this.pendingTimers.push(t);
   }
 
   triggerRealityTear(): void {
@@ -106,19 +149,37 @@ export class ScreenEffectManager {
       chromaticAberration: 8,
       grainIntensity: 0.20,
     }, 200);
-    this.scene.time?.delayedCall(300, () => {
+    if (!this.scene.time) return;
+    const t = this.scene.time.delayedCall(300, () => {
       if (this.activePreset === 'sanity') this.activateSanityPreset();
       else if (this.activePreset === 'chase') this.activateChasePreset();
       else this.deactivatePreset();
     });
+    this.pendingTimers.push(t);
   }
 
+  /**
+   * Red pulse overlay for chase countdown <= 10s.
+   * Triggers bloom internally; the caller is responsible for also calling
+   * ScreenShake.flashRed() to produce the red flash visual.
+   * Includes debouncing to prevent timer accumulation from per-frame calls.
+   */
   triggerChaseRedPulse(durationMs = 300): void {
-    // Red pulse overlay for countdown <= 10s
+    if (this.redPulseActive) return; // Debounce: skip if already pulsing
+    this.redPulseActive = true;
     this.triggerBloom(durationMs);
+    const t = this.scene.time?.delayedCall(durationMs, () => {
+      this.redPulseActive = false;
+    });
+    if (t) this.pendingTimers.push(t);
   }
 
   destroy(): void {
-    // Clean up shaders, overlays, timers
+    this.smoothTween?.stop();
+    this.smoothTween = null;
+    for (const t of this.pendingTimers) {
+      t.remove();
+    }
+    this.pendingTimers = [];
   }
 }

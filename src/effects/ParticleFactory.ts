@@ -19,6 +19,7 @@ export class ParticleFactory {
   private scene: Phaser.Scene;
   private ashEmitter: Phaser.GameObjects.Particles.ParticleEmitter | null = null;
   private ashDensityMultiplier = 1;
+  private pendingTimers: Phaser.Time.TimerEvent[] = [];
 
   constructor(scene: Phaser.Scene) {
     this.scene = scene;
@@ -27,13 +28,15 @@ export class ParticleFactory {
   emitBloodSplash(x: number, y: number): void {
     const count = 8 + Math.floor(Math.random() * 8);
     const emitter = this.createEmitter(x, y, 0xb01724, count, 600, true);
-    this.scene.time.delayedCall(700, () => emitter?.destroy());
+    const t = this.scene.time.delayedCall(700, () => emitter?.destroy());
+    this.pendingTimers.push(t);
   }
 
   emitWallDebris(x: number, y: number): void {
     const count = 6 + Math.floor(Math.random() * 5);
     const emitter = this.createEmitter(x, y, 0x49313a, count, 400, false);
-    this.scene.time.delayedCall(500, () => emitter?.destroy());
+    const t = this.scene.time.delayedCall(500, () => emitter?.destroy());
+    this.pendingTimers.push(t);
   }
 
   emitPickupLight(x: number, y: number, rarity: Rarity | string): void {
@@ -42,20 +45,24 @@ export class ParticleFactory {
       : RARITY_COLORS.common;
     const count = 10 + Math.floor(Math.random() * 11);
     const emitter = this.createEmitter(x, y, color, count, 800, false, true);
-    this.scene.time.delayedCall(900, () => emitter?.destroy());
+    const t = this.scene.time.delayedCall(900, () => emitter?.destroy());
+    this.pendingTimers.push(t);
   }
 
   emitChalkDust(x: number, y: number): void {
     const count = 12 + Math.floor(Math.random() * 7);
     const emitter = this.createEmitter(x, y, 0xc9b9a6, count, 800, false);
-    this.scene.time.delayedCall(900, () => emitter?.destroy());
+    const t = this.scene.time.delayedCall(900, () => emitter?.destroy());
+    this.pendingTimers.push(t);
   }
 
   emitDeathBurst(x: number, y: number, colorHex: string): void {
-    const color = parseInt(colorHex.replace('#', ''), 16) || 0xb01724;
+    const parsed = parseInt(colorHex.replace('#', ''), 16);
+    const color = Number.isNaN(parsed) ? 0xb01724 : parsed;
     const count = 15 + Math.floor(Math.random() * 11);
     const emitter = this.createEmitter(x, y, color, count, 500, true);
-    this.scene.time.delayedCall(600, () => emitter?.destroy());
+    const t = this.scene.time.delayedCall(600, () => emitter?.destroy());
+    this.pendingTimers.push(t);
   }
 
   startAmbientAsh(): void {
@@ -97,6 +104,10 @@ export class ParticleFactory {
 
   destroy(): void {
     this.stopAmbientAsh();
+    for (const t of this.pendingTimers) {
+      t.remove();
+    }
+    this.pendingTimers = [];
   }
 
   private createEmitter(

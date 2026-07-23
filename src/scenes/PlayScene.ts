@@ -1131,8 +1131,10 @@ export class PlayScene extends Phaser.Scene {
     this.audioManager?.stopBgm();
     this.audioManager?.stopAmbient();
     this.audioManager?.stopHeartbeat();
+    this.audioManager?.destroy();
     this.particleFactory?.destroy();
     this.screenEffect?.destroy();
+    this.sceneFX?.destroy();
     for (const sprite of this.storyEntitySprites) {
       sprite.destroy();
     }

@@ -26,6 +26,8 @@ export class SceneFX {
   private audio: AudioManager;
   private activePreset: PresetName = 'none';
   private scene: Phaser.Scene;
+  private pendingTimers: Phaser.Time.TimerEvent[] = [];
+  private lastHeartbeatBpm = 0;
 
   constructor(
     screenEffect: ScreenEffectManager,
@@ -37,8 +39,8 @@ export class SceneFX {
     this.shake = shake;
     this.particles = particles;
     this.audio = audio;
-    // Extract scene from ScreenShake (they share the same scene)
-    this.scene = (shake as any).scene;
+    // Extract scene from ScreenShake via public accessor (they share the same scene)
+    this.scene = shake.getScene();
   }
 
   getActivePreset(): PresetName {
@@ -73,9 +75,13 @@ export class SceneFX {
   /** Update chase countdown (called every frame during chase). */
   updateChaseCountdown(remainingSeconds: number): void {
     if (this.activePreset !== 'chase') return;
-    // BPM: 120s -> 60 BPM, 10s -> 180 BPM
-    const bpm = Math.round(60 + (120 - remainingSeconds) * (120 / 110));
-    this.audio.startHeartbeat(bpm);
+    const clamped = Math.max(0, Math.min(remainingSeconds, 120));
+    const bpm = Math.round(60 + (120 - clamped) * (120 / 110));
+    // Only restart heartbeat if BPM changed significantly (avoid restarting every frame)
+    if (bpm !== this.lastHeartbeatBpm) {
+      this.lastHeartbeatBpm = bpm;
+      this.audio.startHeartbeat(bpm);
+    }
     if (remainingSeconds <= 10) {
       this.screenEffect.triggerChaseRedPulse();
     }
@@ -89,6 +95,11 @@ export class SceneFX {
     this.audio.playSfx('realityTear');
     // BGM distortion + layered whispers burst
     this.audio.switchBgmImmediate('fb_burst_sfx' as BgmKey, 0.6);
+    // Restore chromatic aberration after 1s
+    const t = this.scene.time.delayedCall(1000, () => {
+      this.screenEffect.deactivatePreset();
+    });
+    this.pendingTimers.push(t);
   }
 
   /** Reality tear: chromatic aberration burst + grain + low-freq impact. */
@@ -103,12 +114,13 @@ export class SceneFX {
     this.screenEffect.setParams({ bloomEnabled: true, bloomIntensity: 1.0, grainIntensity: 0.3 });
     this.shake.shakeCustom(20, 500);
     // After 0.5s: complete silence
-    this.scene.time.delayedCall(500, () => {
+    const t = this.scene.time.delayedCall(500, () => {
       this.audio.stopBgm();
       this.audio.stopAmbient();
       this.audio.stopHeartbeat();
       this.screenEffect.deactivatePreset();
     });
+    this.pendingTimers.push(t);
   }
 
   /** Minor ending: unique per ending (grill-me: 每结局独特). */
@@ -126,9 +138,10 @@ export class SceneFX {
         break;
     }
     // After ending: echo decay transition back to exploration (2s)
-    this.scene.time.delayedCall(2000, () => {
+    const t = this.scene.time.delayedCall(2000, () => {
       this.audio.switchBgm('explore_act1_bgm' as BgmKey, 0.25, 1000);
     });
+    this.pendingTimers.push(t);
   }
 
   /** Death flash frame SFX trigger. */
@@ -139,6 +152,16 @@ export class SceneFX {
       case 'blackSilhouette': this.audio.playSfx('blackSilhouette'); break;
       case 'finalBloodBlack': this.audio.playSfx('finalBloodBlack'); break;
     }
+  }
+
+  /** Reset preset state, stop heartbeat, and release pending timers. */
+  destroy(): void {
+    this.activePreset = 'none';
+    this.audio.stopHeartbeat();
+    for (const t of this.pendingTimers) {
+      t.remove();
+    }
+    this.pendingTimers = [];
   }
 
   private activateSanity(): void {

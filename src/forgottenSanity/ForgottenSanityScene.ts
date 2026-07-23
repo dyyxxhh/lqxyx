@@ -214,14 +214,17 @@ export class ForgottenSanityScene extends Phaser.Scene {
     // full manager instantiation to avoid Phaser canvas/audio dependency.
     const hasTextures = (this as unknown as { textures?: { exists?: (k: string) => boolean } }).textures?.exists?.('floor.tile') === true;
     if (hasTextures) {
-      const audioCtx = (typeof window !== 'undefined' && (window as unknown as Record<string, unknown>).__YING_ZHONG_JIU_AUDIO_CONTEXT__)
-        ? (window as unknown as { __YING_ZHONG_JIU_AUDIO_CONTEXT__: AudioContext }).__YING_ZHONG_JIU_AUDIO_CONTEXT__
-        : null;
-      this.audioManager = new AudioManager(this, audioCtx);
+      // Only create AudioManager if not already injected via setAudioManager()
+      if (!this.audioManager) {
+        const audioCtx = (typeof window !== 'undefined' && (window as unknown as Record<string, unknown>).__YING_ZHONG_JIU_AUDIO_CONTEXT__)
+          ? (window as unknown as { __YING_ZHONG_JIU_AUDIO_CONTEXT__: AudioContext }).__YING_ZHONG_JIU_AUDIO_CONTEXT__
+          : null;
+        this.audioManager = new AudioManager(this, audioCtx);
+      }
       this.screenEffect = new ScreenEffectManager(this);
       this.screenShake = new ScreenShake(this);
       this.particleFactory = new ParticleFactory(this);
-      this.sceneFX = new SceneFX(this.screenEffect, this.screenShake, this.particleFactory, this.audioManager);
+      this.sceneFX = new SceneFX(this.screenEffect, this.screenShake, this.particleFactory, this.audioManager!);
 
       // Wire PauseMenu audio toggle → AudioManager
       this.pauseMenu?.setAudioToggleCallback((enabled) => {
@@ -236,10 +239,9 @@ export class ForgottenSanityScene extends Phaser.Scene {
       this.runController?.setCombatSfxCallback((event) => {
         switch (event) {
           case 'playerDamaged': this.audioManager?.playSfx('hurt' as SfxName); break;
-          case 'enemyHit': this.audioManager?.playSfx('hit' as SfxName); break;
           case 'enemyKilled': this.audioManager?.playSfx('kill' as SfxName); break;
-          case 'projectile': this.audioManager?.playSfx('projectile' as SfxName); break;
-          case 'wallBounce': this.audioManager?.playSfx('wallBounce' as SfxName); break;
+          // 'enemyHit', 'projectile', 'wallBounce' are not defined in CombatCallbacks
+          // and are never triggered by RunLifecycle — omitted to avoid dead code.
         }
       });
 
@@ -286,6 +288,7 @@ export class ForgottenSanityScene extends Phaser.Scene {
     // feature-detection：mock 测试环境（Object.create 绕过构造器）无 events.once
     if (typeof this.events?.once === 'function') {
       this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+        this.destroyPlan6Ui();
         const state = getSceneDebugState();
         state.forgottenSanity = { scene: 'none' };
       });
@@ -480,11 +483,15 @@ export class ForgottenSanityScene extends Phaser.Scene {
     // Cleanup audio & effect systems
     this.audioManager?.stopBgm();
     this.audioManager?.stopAmbient();
+    this.audioManager?.stopHeartbeat();
+    this.audioManager?.destroy();
+    this.audioManager = null;
     this.particleFactory?.destroy();
     this.particleFactory = null;
     this.screenEffect?.destroy();
     this.screenEffect = null;
     this.screenShake = null;
+    this.sceneFX?.destroy();
     this.sceneFX = null;
   }
 

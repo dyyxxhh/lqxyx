@@ -11,6 +11,8 @@
  */
 export class SfxSynth {
   private ctx: AudioContext | null;
+  /** Pending setTimeout handles scheduled by SFX methods, tracked for cleanup. */
+  private pendingTimers: ReturnType<typeof setTimeout>[] = [];
 
   constructor(ctx: AudioContext | null) {
     this.ctx = ctx;
@@ -19,13 +21,17 @@ export class SfxSynth {
   /** Play a simple tone with envelope. */
   playTone(freq: number, duration: number, type: OscillatorType, volume: number): void {
     if (!this.ctx) return;
+    // P0: exponentialRampToValueAtTime throws RangeError when the starting value
+    // is 0 (volume) or the frequency is <= 0. Clamp both to safe positive values.
+    const safeFreq = Math.max(freq, 0.01);
+    const safeVol = Math.max(volume, 0.0001);
     const now = this.ctx.currentTime;
     const osc = this.ctx.createOscillator();
     const gain = this.ctx.createGain();
 
     osc.type = type;
-    osc.frequency.setValueAtTime(freq, now);
-    gain.gain.setValueAtTime(volume, now);
+    osc.frequency.setValueAtTime(safeFreq, now);
+    gain.gain.setValueAtTime(safeVol, now);
     gain.gain.exponentialRampToValueAtTime(0.001, now + duration);
 
     osc.connect(gain);
@@ -33,19 +39,28 @@ export class SfxSynth {
 
     osc.start(now);
     osc.stop(now + duration);
+    // P3: release audio nodes once playback ends to avoid dangling graph nodes.
+    osc.onended = () => {
+      osc.disconnect();
+      gain.disconnect();
+    };
   }
 
   /** Play a frequency sweep (exponential ramp). */
   playSweep(startFreq: number, endFreq: number, duration: number, type: OscillatorType, volume: number): void {
     if (!this.ctx) return;
+    // P0: protect against non-positive frequencies/volume which crash exponential ramps.
+    const safeStart = Math.max(startFreq, 0.01);
+    const safeEnd = Math.max(endFreq, 0.01);
+    const safeVol = Math.max(volume, 0.0001);
     const now = this.ctx.currentTime;
     const osc = this.ctx.createOscillator();
     const gain = this.ctx.createGain();
 
     osc.type = type;
-    osc.frequency.setValueAtTime(startFreq, now);
-    osc.frequency.exponentialRampToValueAtTime(Math.max(endFreq, 0.01), now + duration);
-    gain.gain.setValueAtTime(volume, now);
+    osc.frequency.setValueAtTime(safeStart, now);
+    osc.frequency.exponentialRampToValueAtTime(safeEnd, now + duration);
+    gain.gain.setValueAtTime(safeVol, now);
     gain.gain.exponentialRampToValueAtTime(0.001, now + duration);
 
     osc.connect(gain);
@@ -53,11 +68,19 @@ export class SfxSynth {
 
     osc.start(now);
     osc.stop(now + duration);
+    // P3: release audio nodes once playback ends to avoid dangling graph nodes.
+    osc.onended = () => {
+      osc.disconnect();
+      gain.disconnect();
+    };
   }
 
   /** Play a white noise burst through a filter. */
   playNoiseBurst(duration: number, volume: number, filterType: BiquadFilterType, filterFreq: number): void {
     if (!this.ctx) return;
+    // P0: createBuffer crashes with a zero-length buffer.
+    if (duration <= 0) return;
+    const safeVol = Math.max(volume, 0.0001);
     const now = this.ctx.currentTime;
     const bufferSize = Math.floor(this.ctx.sampleRate * duration);
     const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
@@ -74,7 +97,7 @@ export class SfxSynth {
     filter.frequency.setValueAtTime(filterFreq, now);
 
     const gain = this.ctx.createGain();
-    gain.gain.setValueAtTime(volume, now);
+    gain.gain.setValueAtTime(safeVol, now);
     gain.gain.exponentialRampToValueAtTime(0.001, now + duration);
 
     source.connect(filter);
@@ -83,6 +106,12 @@ export class SfxSynth {
 
     source.start(now);
     source.stop(now + duration);
+    // P3: release audio nodes (including the filter) once playback ends.
+    source.onended = () => {
+      source.disconnect();
+      filter.disconnect();
+      gain.disconnect();
+    };
   }
 
   // ── Combat SFX ──
@@ -127,7 +156,15 @@ export class SfxSynth {
   /** Panel popup: ascending major third (two sines), 0.15s. */
   playPanelPopup(): void {
     this.playTone(523, 0.08, 'sine', 0.15);
-    setTimeout(() => this.playTone(659, 0.07, 'sine', 0.15), 80);
+    // `let` (declared separately) avoids a TDZ ReferenceError when a synchronous
+    // setTimeout stub invokes the callback before the handle is assigned; in normal
+    // async usage this is equivalent to `const t = setTimeout(...)`.
+    let t: ReturnType<typeof setTimeout>;
+    t = setTimeout(() => {
+      this.playTone(659, 0.07, 'sine', 0.15);
+      this.removeTimer(t);
+    }, 80);
+    this.pendingTimers.push(t);
   }
 
   /** Chest unlock: mechanical click (noise + lowpass), 0.1s. */
@@ -139,14 +176,24 @@ export class SfxSynth {
   playDecrypt(): void {
     const ticks = 3 + Math.floor(Math.random() * 3);
     for (let i = 0; i < ticks; i++) {
-      setTimeout(() => this.playTone(800, 0.03, 'square', 0.1), i * 60);
+      let t: ReturnType<typeof setTimeout>;
+      t = setTimeout(() => {
+        this.playTone(800, 0.03, 'square', 0.1);
+        this.removeTimer(t);
+      }, i * 60);
+      this.pendingTimers.push(t);
     }
   }
 
   /** Purchase: coin sound (two high-freq sines), 0.15s. */
   playPurchase(): void {
     this.playTone(1200, 0.08, 'sine', 0.15);
-    setTimeout(() => this.playTone(1600, 0.07, 'sine', 0.15), 80);
+    let t: ReturnType<typeof setTimeout>;
+    t = setTimeout(() => {
+      this.playTone(1600, 0.07, 'sine', 0.15);
+      this.removeTimer(t);
+    }, 80);
+    this.pendingTimers.push(t);
   }
 
   /** Pause: descending minor second, 0.1s. */
@@ -174,7 +221,12 @@ export class SfxSynth {
   /** Branch appear: ascending major second (two sines), 0.15s. */
   playBranchAppear(): void {
     this.playTone(440, 0.08, 'sine', 0.15);
-    setTimeout(() => this.playTone(494, 0.07, 'sine', 0.15), 80);
+    let t: ReturnType<typeof setTimeout>;
+    t = setTimeout(() => {
+      this.playTone(494, 0.07, 'sine', 0.15);
+      this.removeTimer(t);
+    }, 80);
+    this.pendingTimers.push(t);
   }
 
   /** Branch confirm: short square, 0.06s. */
@@ -185,8 +237,18 @@ export class SfxSynth {
   /** Task update: three-tone ascending arpeggio, 0.25s. */
   playTaskUpdate(): void {
     this.playTone(523, 0.08, 'sine', 0.15);
-    setTimeout(() => this.playTone(659, 0.08, 'sine', 0.15), 80);
-    setTimeout(() => this.playTone(784, 0.09, 'sine', 0.15), 160);
+    let t1: ReturnType<typeof setTimeout>;
+    t1 = setTimeout(() => {
+      this.playTone(659, 0.08, 'sine', 0.15);
+      this.removeTimer(t1);
+    }, 80);
+    this.pendingTimers.push(t1);
+    let t2: ReturnType<typeof setTimeout>;
+    t2 = setTimeout(() => {
+      this.playTone(784, 0.09, 'sine', 0.15);
+      this.removeTimer(t2);
+    }, 160);
+    this.pendingTimers.push(t2);
   }
 
   // ── Death Flash SFX ──
@@ -215,14 +277,37 @@ export class SfxSynth {
 
   /** Chase heartbeat: two thumps at given BPM. */
   playChaseHeartbeat(bpm: number): void {
+    // P2: previously the bpm parameter was ignored. Derive the half-beat interval
+    // between the two thumps so faster BPMs produce a quicker double-thump.
+    const interval = 60000 / bpm / 2;
     this.playTone(60, 0.08, 'sine', 0.3);
-    setTimeout(() => this.playTone(50, 0.06, 'sine', 0.2), 150);
-    void bpm;
+    let t: ReturnType<typeof setTimeout>;
+    t = setTimeout(() => {
+      this.playTone(50, 0.06, 'sine', 0.2);
+      this.removeTimer(t);
+    }, interval);
+    this.pendingTimers.push(t);
   }
 
   /** Reality tear: low-freq impact + noise burst, 0.2s. */
   playRealityTear(): void {
     this.playTone(80, 0.2, 'sine', 0.3);
     this.playNoiseBurst(0.2, 0.2, 'lowpass', 600);
+  }
+
+  // ── Lifecycle ──
+
+  /** Remove a fired timer from the pending list. */
+  private removeTimer(t: ReturnType<typeof setTimeout>): void {
+    this.pendingTimers = this.pendingTimers.filter(x => x !== t);
+  }
+
+  /** Clear all pending timers and release the AudioContext reference. */
+  destroy(): void {
+    for (const t of this.pendingTimers) {
+      clearTimeout(t);
+    }
+    this.pendingTimers = [];
+    this.ctx = null;
   }
 }

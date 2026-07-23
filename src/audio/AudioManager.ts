@@ -42,6 +42,7 @@ export class AudioManager {
   private currentBgmVolume = 0;
   private previousBgmKey: BgmKey | null = null;
   private previousBgmVolume = 0;
+  // Reserved for future BGM ducking during dialogue.
   private dialogueActive = false;
   private ambientTimers: Phaser.Time.TimerEvent[] = [];
   private heartbeatTimer: Phaser.Time.TimerEvent | null = null;
@@ -60,7 +61,7 @@ export class AudioManager {
     this.currentBgmKey = key;
     this.currentBgmVolume = volume;
     this.currentBgm = this.scene.sound.add(key, { volume, loop: true });
-    (this.currentBgm as any).play();
+    this.currentBgm.play();
   }
 
   switchBgm(key: BgmKey, volume: number, durationMs = 500): void {
@@ -74,7 +75,7 @@ export class AudioManager {
     this.currentBgmKey = key;
     this.currentBgmVolume = volume;
     this.currentBgm = this.scene.sound.add(key, { volume: 0, loop: true });
-    (this.currentBgm as any).play();
+    this.currentBgm.play();
     this.fadeIn(this.currentBgm, volume, durationMs);
   }
 
@@ -84,7 +85,7 @@ export class AudioManager {
     this.currentBgmKey = key;
     this.currentBgmVolume = volume;
     this.currentBgm = this.scene.sound.add(key, { volume, loop: true });
-    (this.currentBgm as any).play();
+    this.currentBgm.play();
   }
 
   stopBgm(): void {
@@ -94,15 +95,18 @@ export class AudioManager {
 
   pauseBgm(): void {
     if (this.currentBgm) {
+      this.stopBgmInternal();
       this.previousBgmKey = this.currentBgmKey;
       this.previousBgmVolume = this.currentBgmVolume;
-      (this.currentBgm as any).stop();
+      this.currentBgmKey = null;
     }
   }
 
   resumeBgm(): void {
+    if (this.currentBgm) return;
     if (this.previousBgmKey && this.enabled) {
       this.playBgm(this.previousBgmKey, this.previousBgmVolume);
+      this.previousBgmKey = null;
     }
   }
 
@@ -133,6 +137,11 @@ export class AudioManager {
       case 'finalBloodBlack': this.synth.playFinalBloodBlack(); break;
       case 'chaseHeartbeat': this.synth.playChaseHeartbeat(60); break;
       case 'realityTear': this.synth.playRealityTear(); break;
+      default: {
+        // Exhaustiveness check: ensures every SfxName is handled.
+        const _exhaustive: never = name;
+        void _exhaustive;
+      }
     }
   }
 
@@ -141,6 +150,7 @@ export class AudioManager {
   }
 
   startHeartbeat(bpm: number): void {
+    if (!this.enabled) return;
     this.stopHeartbeat();
     const intervalMs = 60000 / bpm;
     this.synth.playChaseHeartbeat(bpm);
@@ -158,7 +168,24 @@ export class AudioManager {
     }
   }
 
+  /**
+   * Tear down all audio: stop BGM, ambient loops, heartbeat, and the synth.
+   * The shared AudioContext is NOT closed here (it is owned by the caller).
+   */
+  destroy(): void {
+    this.stopBgm();
+    this.stopAmbient();
+    this.stopHeartbeat();
+    this.synth.destroy();
+  }
+
+  /** Whether dialogue is active (reserved for future BGM ducking). */
+  isDialogueActive(): boolean {
+    return this.dialogueActive;
+  }
+
   setDialogueActive(active: boolean): void {
+    // Reserved for future BGM ducking during dialogue (currently a no-op).
     this.dialogueActive = active;
   }
 
@@ -169,15 +196,19 @@ export class AudioManager {
         this.fadeOut(this.currentBgm, 200);
       }
       this.stopAmbient();
+      this.stopHeartbeat();
     } else {
       if (this.currentBgmKey) {
         this.playBgm(this.currentBgmKey, this.currentBgmVolume);
       }
+      this.startAmbient();
     }
   }
 
   startAmbient(): void {
     if (!this.enabled) return;
+    // Idempotent: clear any in-flight ambient timers before scheduling new ones.
+    this.stopAmbient();
     this.scheduleAmbientEvent('electrical', 30000, 60000);
     this.scheduleAmbientEvent('whisper', 30000, 60000);
   }
@@ -191,35 +222,38 @@ export class AudioManager {
 
   private stopBgmInternal(): void {
     if (this.currentBgm) {
-      (this.currentBgm as any).stop();
-      this.scene.sound.remove(this.currentBgm as any);
+      this.currentBgm.stop();
+      this.scene.sound.remove(this.currentBgm);
       this.currentBgm = null;
     }
   }
 
   private fadeOut(sound: Phaser.Sound.BaseSound, durationMs: number): void {
-    const s = sound as any;
+    // Phaser.Sound.BaseSound does not expose volume/setVolume; those live on the
+    // concrete WebAudioSound implementation, so assert for volume access only.
     const steps = 10;
     const stepMs = durationMs / steps;
-    const startVol = s.volume || 1;
+    const startVol = (sound as Phaser.Sound.WebAudioSound).volume || 1;
     for (let i = 1; i <= steps; i++) {
       this.scene.time.delayedCall(i * stepMs, () => {
-        if (s) s.setVolume(startVol * (1 - i / steps));
+        (sound as Phaser.Sound.WebAudioSound).setVolume(startVol * (1 - i / steps));
       });
     }
     this.scene.time.delayedCall(durationMs, () => {
-      if (s) { s.stop(); this.scene.sound.remove(s); }
+      sound.stop();
+      this.scene.sound.remove(sound);
     });
   }
 
   private fadeIn(sound: Phaser.Sound.BaseSound, targetVolume: number, durationMs: number): void {
-    const s = sound as any;
+    // Phaser.Sound.BaseSound does not expose volume/setVolume; those live on the
+    // concrete WebAudioSound implementation, so assert for volume access only.
     const steps = 10;
     const stepMs = durationMs / steps;
-    s.setVolume(0);
+    (sound as Phaser.Sound.WebAudioSound).setVolume(0);
     for (let i = 1; i <= steps; i++) {
       this.scene.time.delayedCall(i * stepMs, () => {
-        if (s) s.setVolume(targetVolume * (i / steps));
+        (sound as Phaser.Sound.WebAudioSound).setVolume(targetVolume * (i / steps));
       });
     }
   }
@@ -228,6 +262,9 @@ export class AudioManager {
     const delay = minMs + Math.random() * (maxMs - minMs);
     const timer = this.scene.time.delayedCall(delay, () => {
       if (!this.enabled) return;
+      // Remove this fired timer before rescheduling so the array never accumulates
+      // stale entries (prevents a timer leak across the session lifetime).
+      this.ambientTimers = this.ambientTimers.filter(t => t !== timer);
       if (_type === 'electrical') {
         this.synth.playNoiseBurst(0.3, 0.1, 'bandpass', 120);
       } else if (_type === 'whisper') {

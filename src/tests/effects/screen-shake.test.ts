@@ -6,6 +6,10 @@ function createMockCamera() {
   return {
     shake: vi.fn(),
     flash: vi.fn(),
+    scrollX: 0,
+    scrollY: 0,
+    width: 1280,
+    height: 720,
   };
 }
 
@@ -57,9 +61,21 @@ describe('ScreenShake', () => {
     expect(intensity).toBeCloseTo(0.015, 3);
   });
 
-  it('flashRed creates a red rectangle overlay', () => {
+  it('flashRed creates a red rectangle overlay using camera dimensions', () => {
     shake.flashRed(200, 0.3);
     expect(mockScene.add.rectangle).toHaveBeenCalled();
+    // Verify rectangle uses camera width/height (not hardcoded values)
+    const [x, y, width, height] = mockScene.add.rectangle.mock.calls[0];
+    expect(width).toBe(mockScene.cameras.main.width);
+    expect(height).toBe(mockScene.cameras.main.height);
     expect(mockScene.tweens.add).toHaveBeenCalled();
+  });
+
+  it('getScene returns the scene reference', () => {
+    expect(shake.getScene()).toBe(mockScene);
+  });
+
+  it('destroy does not throw', () => {
+    expect(() => shake.destroy()).not.toThrow();
   });
 });

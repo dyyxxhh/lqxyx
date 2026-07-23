@@ -91,6 +91,8 @@ export class PreloadScene extends Phaser.Scene {
     // Phaser scenes run after user clicks "start" so the gesture context is available.
     if (typeof window !== 'undefined' && !(window as unknown as Record<string, unknown>).__YING_ZHONG_JIU_AUDIO_CONTEXT__) {
       const initAudio = (): void => {
+        // Guard: skip if AudioContext already exists
+        if ((window as unknown as Record<string, unknown>).__YING_ZHONG_JIU_AUDIO_CONTEXT__) return;
         try {
           const Ctor = (window as unknown as { AudioContext?: typeof AudioContext; webkitAudioContext?: typeof AudioContext }).AudioContext
             ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;

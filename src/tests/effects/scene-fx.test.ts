@@ -37,7 +37,16 @@ function createMockScene() {
         return e;
       }),
     },
-    cameras: { main: { shake: vi.fn(), flash: vi.fn() } },
+    cameras: {
+      main: {
+        shake: vi.fn(),
+        flash: vi.fn(),
+        scrollX: 0,
+        scrollY: 0,
+        width: 1280,
+        height: 720,
+      },
+    },
     time: {
       addEvent: vi.fn(() => ({ remove: vi.fn() })),
       delayedCall: vi.fn((_ms: number, cb: () => void) => ({ cb, remove: vi.fn() })),
@@ -150,10 +159,29 @@ describe('SceneFX', () => {
     expect(sceneFX.getActivePreset()).toBe('sanity');
   });
 
+  it('updateChaseCountdown only restarts heartbeat when BPM changes', () => {
+    sceneFX.activatePreset('chase');
+    // First call starts heartbeat
+    sceneFX.updateChaseCountdown(60);
+    const firstCallCount = mockScene.time.addEvent.mock.calls.length;
+    // Second call with same BPM should NOT restart (no new addEvent)
+    sceneFX.updateChaseCountdown(60);
+    expect(mockScene.time.addEvent.mock.calls.length).toBe(firstCallCount);
+    // Different BPM should restart
+    sceneFX.updateChaseCountdown(50);
+    expect(mockScene.time.addEvent.mock.calls.length).toBeGreaterThan(firstCallCount);
+  });
+
   it('triggerFB triggers mental breakdown chaos effect', () => {
     sceneFX.triggerFB();
     // Should trigger shake + red flash + chromatic aberration + audio burst
     expect(mockScene.cameras.main.shake).toHaveBeenCalled();
+  });
+
+  it('triggerFB schedules chromatic aberration restore', () => {
+    sceneFX.triggerFB();
+    // Should schedule a delayedCall to restore (deactivatePreset)
+    expect(mockScene.time.delayedCall).toHaveBeenCalled();
   });
 
   it('triggerRealityTear triggers reality tear on ScreenEffectManager', () => {
@@ -182,5 +210,12 @@ describe('SceneFX', () => {
     sceneFX.triggerDeathFlashSfx('blackSilhouette');
     sceneFX.triggerDeathFlashSfx('finalBloodBlack');
     expect(true).toBe(true); // no throw — all frame types handled
+  });
+
+  it('destroy cleans up pending timers without throwing', () => {
+    sceneFX.triggerFB();
+    sceneFX.triggerMajorEnding();
+    sceneFX.triggerMinorEnding('split');
+    expect(() => sceneFX.destroy()).not.toThrow();
   });
 });

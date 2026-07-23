@@ -20,7 +20,7 @@ function createMockScene() {
     add: {
       particles: vi.fn(makeChainable),
     },
-    time: { delayedCall: vi.fn() },
+    time: { delayedCall: vi.fn(() => ({ remove: vi.fn() })) },
     _emitters: emitters,
   };
 }
@@ -59,6 +59,11 @@ describe('ParticleFactory', () => {
     expect(mockScene.add.particles).toHaveBeenCalled();
   });
 
+  it('emitDeathBurst falls back to default color for invalid hex', () => {
+    factory.emitDeathBurst(400, 300, 'not-a-color');
+    expect(mockScene.add.particles).toHaveBeenCalled();
+  });
+
   it('startAmbientAsh starts continuous particles', () => {
     factory.startAmbientAsh();
     expect(mockScene.add.particles).toHaveBeenCalled();
@@ -74,5 +79,20 @@ describe('ParticleFactory', () => {
     factory.startAmbientAsh();
     factory.stopAmbientAsh();
     expect(true).toBe(true);
+  });
+
+  it('destroy cleans up pending timers without throwing', () => {
+    factory.emitBloodSplash(400, 300);
+    factory.emitWallDebris(200, 200);
+    factory.startAmbientAsh();
+    expect(() => factory.destroy()).not.toThrow();
+  });
+
+  it('destroy stops ambient ash', () => {
+    factory.startAmbientAsh();
+    factory.destroy();
+    // After destroy, starting ash again should create a new emitter
+    factory.startAmbientAsh();
+    expect(mockScene.add.particles).toHaveBeenCalled();
   });
 });

@@ -48,6 +48,7 @@ function createCapturingAdd() {
     obj.setBlendMode = () => obj;
     obj.setStyle = () => obj;
     obj.disableInteractive = () => obj;
+    obj.destroy = () => { /* no-op mock */ };
     obj.on = (event: string, cb: () => void) => {
       (handlers[event] ??= []).push(cb);
       return obj;

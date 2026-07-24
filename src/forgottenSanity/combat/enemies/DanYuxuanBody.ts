@@ -85,8 +85,9 @@ export class DanYuxuanBodyEnemy extends Enemy {
 
   private trySummon(ctx: EnemyUpdateContext): void {
     // 存活血瞳 ≥ 3 → 不召唤
+    // (Enemy base class exposes `dead` as a public mutable field — no cast needed.)
     const aliveCount = this.boundHeads.filter(
-      (bh) => bh.deadAtMs === null && !(bh.head as unknown as { dead: boolean }).dead,
+      (bh) => bh.deadAtMs === null && !bh.head.dead,
     ).length;
     if (aliveCount >= MAX_ALIVE_HEADS) return;
 
@@ -111,15 +112,16 @@ export class DanYuxuanBodyEnemy extends Enemy {
     if (bh !== undefined && bh.deadAtMs === null) {
       // 记录真实死亡时刻 timeMs（spec §5.9 C：按真实时间推进 20s 复活）
       bh.deadAtMs = timeMs;
-      bh.deathX = (head as unknown as { x: number }).x;
-      bh.deathY = (head as unknown as { y: number }).y;
+      // Enemy base class exposes x/y as public fields — no cast needed.
+      bh.deathX = head.x;
+      bh.deathY = head.y;
     }
   }
 
   /** 机制 B：身体死亡 → 清场所有绑定头颅 */
   onBodyDied(): void {
     for (const bh of this.boundHeads) {
-      (bh.head as unknown as { dead: boolean }).dead = true;
+      bh.head.dead = true;
     }
     this.boundHeads = [];
   }
@@ -161,8 +163,8 @@ export class DanYuxuanBodyEnemy extends Enemy {
     this.boundHeads.push({
       head,
       deadAtMs: null,
-      deathX: (head as unknown as { x: number }).x ?? 0,
-      deathY: (head as unknown as { y: number }).y ?? 0,
+      deathX: head.x,
+      deathY: head.y,
     });
   }
 

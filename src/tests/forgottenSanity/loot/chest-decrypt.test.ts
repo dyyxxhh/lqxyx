@@ -49,6 +49,7 @@ interface FakeCamera {
 interface FakeKeyboard {
   handlers: Record<string, Array<() => void>>;
   on: (event: string, cb: () => void) => void;
+  off: (event: string, cb: () => void) => void;
 }
 interface FakeScene {
   add: {
@@ -66,6 +67,12 @@ function createFakeScene(): FakeScene {
     handlers: {},
     on(e: string, cb: () => void) {
       (this.handlers[e] ??= []).push(cb);
+    },
+    off(e: string, cb: () => void) {
+      const arr = this.handlers[e];
+      if (!arr) return;
+      const idx = arr.indexOf(cb);
+      if (idx >= 0) arr.splice(idx, 1);
     },
   };
   const camera: FakeCamera = { shake: vi.fn(), flash: vi.fn() };

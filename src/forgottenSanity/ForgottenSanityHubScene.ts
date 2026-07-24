@@ -24,6 +24,12 @@ export class ForgottenSanityHubScene extends Phaser.Scene {
       (window as unknown as Record<string, unknown>).__YING_ZHONG_JIU_FORGOTTEN_SANITY_HUB_ACTIVE__ = true;
     }
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      // Destroy hub UI (panel buttons, labels, title, content container, back
+      // button) so they don't leak when leaving the hub. Without this, all
+      // persistent HubUI GameObjects would linger until the next full scene
+      // teardown.
+      this.hubUI?.destroy();
+      this.hubUI = null;
       getSceneDebugState().forgottenSanity = { scene: 'none' };
       if (typeof window !== 'undefined') {
         (window as unknown as Record<string, unknown>).__YING_ZHONG_JIU_FORGOTTEN_SANITY_HUB_ACTIVE__ = false;

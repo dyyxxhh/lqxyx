@@ -118,6 +118,7 @@ describe('input lock semantics', () => {
       movementVector: { x: number; y: number };
       interactAction: string | null;
       interactPressedThisFrame: boolean;
+      hasKeyboard: boolean;
       keyF: { isDown: boolean };
       keyQ: { isDown: boolean };
       keyFPrevDown: boolean;
@@ -130,6 +131,7 @@ describe('input lock semantics', () => {
     manager.movementVector = { x: 1, y: -1 };
     manager.interactAction = null;
     manager.interactPressedThisFrame = false;
+    manager.hasKeyboard = true;
     manager.keyF = { isDown: false };
     manager.keyQ = { isDown: false };
     manager.keyFPrevDown = false;

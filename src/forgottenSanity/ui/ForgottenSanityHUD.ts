@@ -253,6 +253,34 @@ export class ForgottenSanityHUD {
   }
 
   destroy(): void {
+    // Destroy all persistent HUD objects created in create(). Without this,
+    // the 12 persistent Phaser GameObjects below leak on every scene
+    // shutdown. consumableTexts is rebuilt every frame so it may already be
+    // empty, but destroying any leftover is still correct.
+    this.hpBarBg?.destroy();
+    this.hpBarBg = null;
+    this.hpBarFill?.destroy();
+    this.hpBarFill = null;
+    this.hpText?.destroy();
+    this.hpText = null;
+    this.staminaBarBg?.destroy();
+    this.staminaBarBg = null;
+    this.staminaBarFill?.destroy();
+    this.staminaBarFill = null;
+    this.weaponText?.destroy();
+    this.weaponText = null;
+    this.ultRing?.destroy();
+    this.ultRing = null;
+    this.ultText?.destroy();
+    this.ultText = null;
+    this.sanityText?.destroy();
+    this.sanityText = null;
+    this.timerText?.destroy();
+    this.timerText = null;
+    this.fragmentText?.destroy();
+    this.fragmentText = null;
+    this.ratioText?.destroy();
+    this.ratioText = null;
     for (const t of this.consumableTexts) t.destroy();
     this.consumableTexts = [];
   }

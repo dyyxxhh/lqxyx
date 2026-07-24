@@ -21,11 +21,46 @@ function createMockScene() {
     },
     tweens: {
       add: vi.fn((config: any) => {
-        const tween = { stop: vi.fn() };
-        // Defer onUpdate/onComplete so the proxy target values are set first
+        let stopped = false;
+        const tween = {
+          stop: vi.fn(() => { stopped = true; }),
+          isStopped: () => stopped,
+        };
+        // Phaser reserves a set of config keys (targets, duration, ease,
+        // onComplete, onUpdate, ...). Any OTHER top-level key is a tween
+        // property whose value is the TARGET (end) value. Simulate a tween
+        // that interpolates `targets[key]` from its current value to the
+        // target across two onUpdate steps, then fires onComplete. This
+        // catches regressions where the tween config has no real tween
+        // property keys (which would make params jump instantly). Honors
+        // stop() like real Phaser (no further callbacks after stop).
+        const reserved = new Set([
+          'targets', 'duration', 'ease', 'delay', 'paused', 'useFrames',
+          'repeat', 'repeatDelay', 'yoyo', 'flipX', 'flipY', 'persist',
+          'interpolation', 'easeParams', 'onStart', 'onUpdate', 'onComplete',
+          'onActive', 'onYoyo', 'onRepeat', 'onLoop', 'props',
+        ]);
+        const targetEntries = Object.entries(config)
+          .filter(([k]) => !reserved.has(k))
+          .map(([k, v]) => [k, v as number]);
+        const proxy = config.targets as Record<string, number>;
         queueMicrotask(() => {
-          if (config.onUpdate) config.onUpdate();
-          if (config.onComplete) config.onComplete();
+          if (stopped) return; // honor stop()
+          // Step 1: move halfway to target.
+          for (const [k, target] of targetEntries) {
+            const current = proxy[k];
+            if (typeof current === 'number' && typeof target === 'number') {
+              proxy[k] = (current + target) / 2;
+            }
+          }
+          config.onUpdate?.();
+          if (stopped) return;
+          // Step 2: reach target.
+          for (const [k, target] of targetEntries) {
+            if (typeof target === 'number') proxy[k] = target;
+          }
+          config.onUpdate?.();
+          config.onComplete?.();
         });
         return tween;
       }),
@@ -117,6 +152,26 @@ describe('ScreenEffectManager', () => {
     expect(mockScene.tweens.add).toHaveBeenCalled();
     await Promise.resolve();
     expect(manager.getParams().chromaticAberration).toBeCloseTo(10);
+  });
+
+  it('setParamsSmooth passes target values as tween properties (not reserved-only config)', () => {
+    // Regression: tween config must include real tween property keys (the
+    // numeric targets) so Phaser's TweenBuilder creates TweenData. A config
+    // with only reserved keys produces zero TweenData and params jump
+    // instantly instead of interpolating.
+    manager.setParamsSmooth({ chromaticAberration: 10, grainIntensity: 0.20 }, 200);
+    const call = mockScene.tweens.add.mock.calls.at(-1)?.[0] as Record<string, unknown>;
+    expect(call).toBeDefined();
+    expect(call.chromaticAberration).toBe(10);
+    expect(call.grainIntensity).toBeCloseTo(0.20);
+  });
+
+  it('setEnabled(false) stops a running smooth tween so its onUpdate no longer mutates params', async () => {
+    manager.setParamsSmooth({ chromaticAberration: 10 }, 200);
+    expect(manager.getParams().chromaticAberration).toBeCloseTo(2); // baseline before microtask
+    manager.setEnabled(false); // should stop the tween + reset to disabled baseline
+    await Promise.resolve(); // microtask runs but should early-return (stopped)
+    expect(manager.getParams().chromaticAberration).toBeCloseTo(0); // disabled baseline preserved
   });
 
   it('setParamsSmooth applies immediately when disabled', () => {

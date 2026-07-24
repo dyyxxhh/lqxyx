@@ -231,10 +231,25 @@ export class Minimap {
   }
 
   destroy(): void {
+    // Destroy persistent background rectangles (with pointerup handlers)
+    // and any per-frame markers. Without this, bg/bigMapBg leak if Minimap
+    // is destroyed mid-scene (e.g. scene swap) — Phaser only auto-cleans
+    // GameObjects on full scene SHUTDOWN.
+    this.bg?.destroy();
+    this.bg = null;
+    this.bigMapBg?.destroy();
+    this.bigMapBg = null;
     for (const m of this.markers) m.destroy();
-    for (const m of this.bigMapMarkers) m.destroy();
     this.markers = [];
+    for (const m of this.bigMapMarkers) m.destroy();
     this.bigMapMarkers = [];
+    // Drop references to keyboard keys; the keyboard plugin (which tracks
+    // them) is torn down on scene shutdown.
+    this.keyM = null;
+    this.keyEsc = null;
+    this.mPrevDown = false;
+    this.escPrevDown = false;
+    this.bigMapOpen = false;
   }
 }
 

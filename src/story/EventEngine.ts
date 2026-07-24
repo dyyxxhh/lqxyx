@@ -102,6 +102,12 @@ export class EventEngine {
 
   // ── Game timers (runtime countdowns separate from save-state snapshots) ─
   private gameTimers: Map<string, { remainingMs: number; visibilityTargetId: string | null; visibilityRequiresContinuous: boolean; durationMs: number }> = new Map();
+  // Reused buffer for collecting expired timer ids in update() — avoids the
+  // per-frame `entries().filter().map()` triple-array allocation. Cleared at
+  // the start of each update pass; callbacks dispatched during the delete loop
+  // never re-enter update() (they only mutate gameTimers structure), so the
+  // buffer contents stay valid for the duration of one frame's expiry sweep.
+  private readonly expiredTimerIdsBuffer: string[] = [];
 
   // ── Blocked doors (story-driven, in-memory only) ────────────────
   private blockedDoors: Map<string, { message: string; speaker: string; shown: boolean }> = new Map();
@@ -112,6 +118,12 @@ export class EventEngine {
   // ── Double-trigger guard ─────────────────────────────────────
   private advanceGuard = false;
   private branchGuard = false;
+
+  // ── storyFlags revision counter ─────────────────────────────
+  // Bumped on every mutation of `mutable.storyFlags` so observers (e.g.
+  // PlayScene.refreshStoryEntities) can cheaply skip per-frame rebuilds when
+  // the flags haven't changed, instead of rebuilding + stringifying every frame.
+  private storyFlagsVersion = 0;
 
   public constructor(
     manifest: StoryManifest,
@@ -290,8 +302,10 @@ export class EventEngine {
     this.checkPendingProximity();
     this.checkPendingVisibility();
 
-    const timerEntries = Array.from(this.gameTimers.entries());
-    for (const [, timer] of timerEntries) {
+    // Pass 1: decrement remaining time for each active timer. Iterate the Map
+    // directly (no Array.from snapshot) — pass 1 only mutates the value objects,
+    // never the Map structure, so iteration order/stability is unaffected.
+    for (const timer of this.gameTimers.values()) {
       if (timer.visibilityTargetId && !this.visibilityPredicate(timer.visibilityTargetId)) {
         if (timer.visibilityRequiresContinuous) {
           timer.remainingMs = timer.durationMs;
@@ -301,9 +315,14 @@ export class EventEngine {
       timer.remainingMs -= delta;
     }
 
-    const expiredTimerIds = timerEntries
-      .filter(([, timer]) => timer.remainingMs <= 0)
-      .map(([id]) => id);
+    // Pass 2: collect expired timer ids into a reused buffer (avoids the
+    // per-frame `entries().filter().map()` triple-allocation). Cleared first
+    // so callbacks dispatched below can't see stale ids from a prior frame.
+    const expiredTimerIds = this.expiredTimerIdsBuffer;
+    expiredTimerIds.length = 0;
+    for (const [id, timer] of this.gameTimers) {
+      if (timer.remainingMs <= 0) expiredTimerIds.push(id);
+    }
     for (const id of expiredTimerIds) {
       const timer = this.gameTimers.get(id);
       if (!timer || timer.remainingMs > 0) continue;
@@ -328,7 +347,13 @@ export class EventEngine {
     if (activeGameTimer) {
       this.narrativeUI.setTimer(activeGameTimer.remainingMs, true);
     } else if (this.mutable.timers) {
-      const runningSave = Object.values(this.mutable.timers).find((t) => t.status === 'running');
+      // Iterate mutable.timers directly (for-in) to avoid the Object.values()
+      // array allocation that previously happened every fallback frame.
+      let runningSave: { status: SaveTimerStatus; durationMs: number; remainingMs: number } | null = null;
+      for (const id in this.mutable.timers) {
+        const t = this.mutable.timers[id];
+        if (t && t.status === 'running') { runningSave = t; break; }
+      }
       if (runningSave) {
         this.narrativeUI.setTimer(runningSave.remainingMs, true);
       } else {
@@ -373,6 +398,15 @@ export class EventEngine {
 
   public getStoryFlags(): Readonly<Record<string, boolean>> {
     return this.mutable.storyFlags;
+  }
+
+  /**
+   * Monotonic counter bumped whenever `storyFlags` is mutated. Observers can
+   * compare this against a cached value to cheaply detect changes without
+   * deep-comparing the flag map every frame.
+   */
+  public getStoryFlagsVersion(): number {
+    return this.storyFlagsVersion;
   }
 
   public getLocation(): Readonly<{ floorId: FloorId; roomId: SaveState['roomId'] }> {
@@ -448,7 +482,12 @@ export class EventEngine {
     if (matchedTargetIndex !== null && this.pendingInteractionFlagMap) {
       for (const entry of this.pendingInteractionFlagMap) {
         if (entry.targetIndex !== matchedTargetIndex) continue;
-        for (const flag of entry.flags) this.mutable.storyFlags[flag] = true;
+        for (const flag of entry.flags) {
+          if (this.mutable.storyFlags[flag] !== true) {
+            this.mutable.storyFlags[flag] = true;
+            this.storyFlagsVersion++;
+          }
+        }
       }
     }
 
@@ -891,7 +930,10 @@ export class EventEngine {
   }
 
   private handleSetFlag(command: Extract<StoryCommand, { type: 'setFlag' }>): void {
-    this.mutable.storyFlags[command.id] = command.value;
+    if (this.mutable.storyFlags[command.id] !== command.value) {
+      this.mutable.storyFlags[command.id] = command.value;
+      this.storyFlagsVersion++;
+    }
   }
 
   private handleBlockDoor(command: Extract<StoryCommand, { type: 'blockDoor' }>): void {
@@ -1172,6 +1214,8 @@ export class EventEngine {
       triggeredEvents: [...snapshot.triggeredEvents],
       position: { ...snapshot.position },
     };
+    // storyFlags object reference replaced — bump so observers re-evaluate.
+    this.storyFlagsVersion++;
     this.narrativeUI.setCurtain(false);
     this.onFade?.('in', 0);
     this.onSwitchView?.(snapshot.floorId, snapshot.roomId, { x: snapshot.position.x, y: snapshot.position.y }, snapshot.position.facing);

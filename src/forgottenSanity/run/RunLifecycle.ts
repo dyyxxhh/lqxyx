@@ -186,7 +186,8 @@ export class RunLifecycle implements RunSharedState {
     // 4. 创建玩家（应用升级 maxHpBonus）
     this.player = new PlayerCombat();
     // spec §8.4 physique：+4% maxHP per tier → maxHpBonus 已含
-    (this.player as unknown as { maxHp: number }).maxHp = 100 + this.upgradeEffects.maxHpBonus;
+    // Use the typed setMaxHp() seam rather than casting away readonly.
+    this.player.setMaxHp(100 + this.upgradeEffects.maxHpBonus);
     this.player.hp = this.player.maxHp;
 
     // 5. 玩家初始位置 = entrance 房间 spawnPoint
@@ -573,7 +574,8 @@ export class RunLifecycle implements RunSharedState {
   // ───────────────────────────────────────────────────────────────────
   destroy(): void {
     for (const decrypt of this.chestDecrypts.values()) {
-      (decrypt as unknown as { destroy?: () => void }).destroy?.();
+      // ChestDecrypt.destroy() is public — no cast needed.
+      decrypt.destroy();
     }
     this.chestDecrypts.clear();
     this.noteOverlay?.destroy();

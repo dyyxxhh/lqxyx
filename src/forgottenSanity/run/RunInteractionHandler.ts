@@ -335,11 +335,13 @@ export class RunInteractionHandler {
 
   private tryUnlockVaultDoor(): void {
     if (this.state.renderer.vaultUnlocked) {
-      (this.state.scene as unknown as { showToast?: (msg: string) => void }).showToast?.('已解锁');
+      // RunSharedState.scene is typed as ForgottenSanityScene & Phaser.Scene,
+      // and ForgottenSanityScene.showToast is a public method — no cast needed.
+      this.state.scene.showToast('已解锁');
       return;
     }
     if (!this.state.inventory.has('material.vaultKey')) {
-      (this.state.scene as unknown as { showToast?: (msg: string) => void }).showToast?.('需要仓库钥匙');
+      this.state.scene.showToast('需要仓库钥匙');
       return;
     }
     this.state.inventory.remove('material.vaultKey', 1);

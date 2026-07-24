@@ -50,6 +50,10 @@ export class ScreenEffectManager {
   /** Toggle post-processing on/off (wired to PauseMenu pixel filter toggle). */
   setEnabled(enabled: boolean): void {
     this.enabled = enabled;
+    // Stop any in-flight smooth transition so its onUpdate doesn't clobber the
+    // baseline params we reset to below.
+    this.smoothTween?.stop();
+    this.smoothTween = null;
     if (!enabled) {
       // Reset to no-effect baseline when disabled
       this.params = { ...BASELINE_PARAMS, crtIntensity: 0, grainIntensity: 0, vignetteAmount: 0, chromaticAberration: 0 };
@@ -80,36 +84,46 @@ export class ScreenEffectManager {
     // Cancel previous smooth transition
     this.smoothTween?.stop();
     this.smoothTween = null;
-    // Create a proxy object to tween
+    // Build a proxy holding the START values for each numeric property. The
+    // target (end) values are spread as top-level keys on the tween config so
+    // Phaser's TweenBuilder creates real TweenData for them — without this,
+    // `tweens.add` receives only reserved keys (targets/duration/ease/...)
+    // and creates a tween with zero TweenData (effectively a timer), so the
+    // params jump instantly instead of interpolating.
     const proxy: Record<string, number> = {};
+    const targets: Record<string, number> = {};
     for (const [key, value] of Object.entries(updates)) {
       if (typeof value === 'number') {
-        proxy[key] = this.params[key as keyof PostProcessingParams] as number;
+        const startValue = this.params[key as keyof PostProcessingParams] as number;
+        proxy[key] = startValue;
+        targets[key] = value;
       }
     }
-    if (Object.keys(proxy).length > 0 && this.scene?.tweens) {
+    const targetKeys = Object.keys(targets);
+    if (targetKeys.length > 0 && this.scene?.tweens) {
+      // Capture key list once to avoid per-frame allocation in onUpdate.
+      const keys = [...targetKeys];
       this.smoothTween = this.scene.tweens.add({
         targets: proxy,
         duration: durationMs,
         ease: 'Linear',
+        // Spread target values as top-level tween properties so TweenBuilder
+        // creates TweenData for each one.
+        ...targets,
         onComplete: () => { this.smoothTween = null; },
         onUpdate: () => {
-          for (const key of Object.keys(proxy)) {
-            (this.params as any)[key] = proxy[key];
+          const p = this.params as unknown as Record<string, unknown>;
+          for (const key of keys) {
+            p[key] = proxy[key];
           }
         },
       });
-      // Set target values for tween
-      for (const [key, value] of Object.entries(updates)) {
-        if (typeof value === 'number') {
-          proxy[key] = value;
-        }
-      }
     }
     // Non-number params (bloomEnabled etc) set immediately
+    const p = this.params as unknown as Record<string, unknown>;
     for (const [key, value] of Object.entries(updates)) {
       if (typeof value !== 'number') {
-        (this.params as any)[key] = value;
+        p[key] = value;
       }
     }
   }

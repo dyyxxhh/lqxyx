@@ -279,7 +279,11 @@ export class SfxSynth {
   playChaseHeartbeat(bpm: number): void {
     // P2: previously the bpm parameter was ignored. Derive the half-beat interval
     // between the two thumps so faster BPMs produce a quicker double-thump.
-    const interval = 60000 / bpm / 2;
+    // Clamp bpm to >= 1 so 0/negative values don't yield Infinity/negative
+    // intervals (negative → setTimeout fires immediately as a double-thump
+    // with no delay; zero → Infinity → never fires the second thump).
+    const safeBpm = Math.max(bpm, 1);
+    const interval = 60000 / safeBpm / 2;
     this.playTone(60, 0.08, 'sine', 0.3);
     let t: ReturnType<typeof setTimeout>;
     t = setTimeout(() => {

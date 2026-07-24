@@ -16,11 +16,25 @@ import {
 
 export class PlayerCombat {
   hp: number = PLAYER_MAX_HP;
+  // maxHp is `readonly` to discourage casual mutation at runtime — the only
+  // legitimate write point is run start, where the upgrade system applies the
+  // physique tier bonus via setMaxHp(). Direct field writes elsewhere are a bug.
   readonly maxHp: number = PLAYER_MAX_HP;
   weaponId: string = PLACEHOLDER_WEAPON_ID; // plan 4 替换为真实武器系统
   private debuffs = new DebuffTracker();
   private _isDead = false;
   private invincibleMs = 0; // plan 4: 无敌态（拳套霸体冲拳）
+
+  /**
+   * Apply the run-start max HP (base + upgrade bonus). This is the single
+   * legitimate mutation point for the readonly `maxHp` field — used by
+   * RunLifecycle when creating the player. Replaces the previous
+   * `(player as unknown as { maxHp }).maxHp = ...` cast that bypassed the
+   * readonly invariant.
+   */
+  setMaxHp(value: number): void {
+    (this as { maxHp: number }).maxHp = value;
+  }
 
   // stamina 状态机 (grill 2026-07-17)
   stamina: number = STAMINA_MAX;

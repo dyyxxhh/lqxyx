@@ -85,6 +85,10 @@ export class InputManager {
   private keyQ!: Phaser.Input.Keyboard.Key;
   private keyFPrevDown = false;
   private keyQPrevDown = false;
+  // True when setupDesktopKeyboard() successfully bound the keyboard plugin.
+  // Guards lock()/pollDesktopKeyboard() against the no-keyboard branch
+  // (scene.input.keyboard === null) where keyF/keyQ are never assigned.
+  private hasKeyboard = false;
 
   // Mobile
   private isMobile: boolean;
@@ -182,8 +186,13 @@ export class InputManager {
     this.movementVector = { x: 0, y: 0 };
     this.interactAction = null;
     this.interactPressedThisFrame = false;
-    this.keyFPrevDown = this.keyF.isDown;
-    this.keyQPrevDown = this.keyQ.isDown;
+    // Snapshot current key state so the first frame after unlock doesn't
+    // register a stale "press" from a key already held before the lock.
+    // Guard against the no-keyboard branch where keyF/keyQ are unassigned.
+    if (this.hasKeyboard) {
+      this.keyFPrevDown = this.keyF.isDown;
+      this.keyQPrevDown = this.keyQ.isDown;
+    }
 
     if (this.joystickPointerId !== null) {
       this.joystickPointerId = null;
@@ -256,6 +265,7 @@ export class InputManager {
     this.keyRight = keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.RIGHT, true, false);
     this.keyF = keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.F, true, false);
     this.keyQ = keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.Q, true, false);
+    this.hasKeyboard = true;
   }
 
   private setupDesktopPointerInput(): void {
@@ -269,6 +279,11 @@ export class InputManager {
   }
 
   private pollDesktopKeyboard(): void {
+    // No keyboard plugin (e.g. some embedded test contexts) — nothing to poll.
+    if (!this.hasKeyboard) {
+      this.movementVector = { x: 0, y: 0 };
+      return;
+    }
     if (this.locked) {
       this.movementVector = { x: 0, y: 0 };
       this.pollInteractKeys(this.allowsLockedInteract());

@@ -46,6 +46,12 @@ export class AudioManager {
   private dialogueActive = false;
   private ambientTimers: Phaser.Time.TimerEvent[] = [];
   private heartbeatTimer: Phaser.Time.TimerEvent | null = null;
+  // Fade-in/fade-out timers scheduled by fadeOut()/fadeIn(). Tracked so they
+  // can be cancelled when BGM changes mid-fade (e.g. setEnabled(true) within
+  // 200ms of setEnabled(false)) — without this, pending fade callbacks keep
+  // writing volume / calling stop+remove on an already-detached sound, which
+  // can double-remove the sound from the audio manager.
+  private fadeTimers: Phaser.Time.TimerEvent[] = [];
 
   constructor(scene: Phaser.Scene, audioCtx: AudioContext | null) {
     this.scene = scene;
@@ -176,7 +182,14 @@ export class AudioManager {
     this.stopBgm();
     this.stopAmbient();
     this.stopHeartbeat();
+    this.cancelFades();
     this.synth.destroy();
+  }
+
+  /** Cancel all pending fade-in/fade-out timers. Safe to call any time. */
+  private cancelFades(): void {
+    for (const t of this.fadeTimers) t.remove();
+    this.fadeTimers = [];
   }
 
   /** Whether dialogue is active (reserved for future BGM ducking). */
@@ -190,6 +203,9 @@ export class AudioManager {
   }
 
   setEnabled(enabled: boolean): void {
+    // Cancel any in-flight fade so its callbacks don't keep writing volume /
+    // calling stop+remove on a sound we're about to swap out (double-remove).
+    this.cancelFades();
     this.enabled = enabled;
     if (!enabled) {
       if (this.currentBgm) {
@@ -222,6 +238,10 @@ export class AudioManager {
 
   private stopBgmInternal(): void {
     if (this.currentBgm) {
+      // Cancel any pending fade on this sound so its callbacks don't keep
+      // writing volume / calling stop+remove on the sound we're stopping now
+      // (double-remove).
+      this.cancelFades();
       this.currentBgm.stop();
       this.scene.sound.remove(this.currentBgm);
       this.currentBgm = null;
@@ -235,14 +255,19 @@ export class AudioManager {
     const stepMs = durationMs / steps;
     const startVol = (sound as Phaser.Sound.WebAudioSound).volume || 1;
     for (let i = 1; i <= steps; i++) {
-      this.scene.time.delayedCall(i * stepMs, () => {
+      const t = this.scene.time.delayedCall(i * stepMs, () => {
         (sound as Phaser.Sound.WebAudioSound).setVolume(startVol * (1 - i / steps));
+        // Remove this fired timer from the tracked set.
+        this.fadeTimers = this.fadeTimers.filter(x => x !== t);
       });
+      this.fadeTimers.push(t);
     }
-    this.scene.time.delayedCall(durationMs, () => {
+    const finalT = this.scene.time.delayedCall(durationMs, () => {
       sound.stop();
       this.scene.sound.remove(sound);
+      this.fadeTimers = this.fadeTimers.filter(x => x !== finalT);
     });
+    this.fadeTimers.push(finalT);
   }
 
   private fadeIn(sound: Phaser.Sound.BaseSound, targetVolume: number, durationMs: number): void {
@@ -252,9 +277,11 @@ export class AudioManager {
     const stepMs = durationMs / steps;
     (sound as Phaser.Sound.WebAudioSound).setVolume(0);
     for (let i = 1; i <= steps; i++) {
-      this.scene.time.delayedCall(i * stepMs, () => {
+      const t = this.scene.time.delayedCall(i * stepMs, () => {
         (sound as Phaser.Sound.WebAudioSound).setVolume(targetVolume * (i / steps));
+        this.fadeTimers = this.fadeTimers.filter(x => x !== t);
       });
+      this.fadeTimers.push(t);
     }
   }
 

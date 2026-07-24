@@ -87,12 +87,24 @@ export class ChestDecrypt {
   private readonly particleGraphics: Phaser.GameObjects.Graphics;
   private readonly lootCards: LootCardHandle[] = [];
   private destroyed = false;
+  // Bound keyboard handlers — stored so destroy() can `kb.off(...)` them and
+  // prevent listener accumulation on the scene keyboard across opened-then-
+  // destroyed chests. Without this, every opened chest leaks a keydown/keyup
+  // pair and stale handlers can still fire on already-destroyed instances.
+  private readonly keydownHandler: () => void;
+  private readonly keyupHandler: () => void;
+  private keyboardPlugin: Phaser.Input.Keyboard.KeyboardPlugin | null = null;
 
   constructor(config: ChestDecryptConfig) {
     this.scene = config.scene;
     this.inputKey = config.inputKey ?? 'F';
     this.onLootCollected = config.onLootCollected ?? (() => {});
     this.lootItems = config.lootItems;
+    // Bind handlers once so the same reference is passed to `kb.on(...)` and
+    // later removed via `kb.off(...)` in destroy(). Arrow functions capture
+    // `this` so they survive being passed as bare references.
+    this.keydownHandler = (): void => this.onKeyDown();
+    this.keyupHandler = (): void => this.state.release();
 
     this.state = new ChestDecryptState({
       onLockBroken: (i) => this.handleLockBroken(i),
@@ -143,6 +155,14 @@ export class ChestDecrypt {
   destroy(): void {
     if (this.destroyed) return;
     this.destroyed = true;
+    // Remove keyboard listeners so they don't accumulate on the scene
+    // keyboard across opened-then-destroyed chests (and stop firing on this
+    // instance after destroy).
+    if (this.keyboardPlugin !== null) {
+      this.keyboardPlugin.off(`keydown-${this.inputKey}`, this.keydownHandler);
+      this.keyboardPlugin.off(`keyup-${this.inputKey}`, this.keyupHandler);
+      this.keyboardPlugin = null;
+    }
     this.container.destroy();
     this.lootCards.length = 0;
   }
@@ -150,8 +170,9 @@ export class ChestDecrypt {
   private wireInput(): void {
     const kb = this.scene.input.keyboard;
     if (kb === null) return;
-    kb.on(`keydown-${this.inputKey}`, () => this.onKeyDown());
-    kb.on(`keyup-${this.inputKey}`, () => this.state.release());
+    this.keyboardPlugin = kb;
+    kb.on(`keydown-${this.inputKey}`, this.keydownHandler);
+    kb.on(`keyup-${this.inputKey}`, this.keyupHandler);
   }
 
   private onKeyDown(): void {

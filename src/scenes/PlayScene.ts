@@ -27,7 +27,7 @@ import { NarrativeUIManager } from '../ui/NarrativeUIManager';
 import { UI_THEME, applyPixelStrokeStyle, applyPixelTextStyle } from '../ui/uiTheme';
 import { DeathFlashManager } from './DeathFlashManager';
 import { isRectInCameraView } from './cameraView';
-import { buildStoryEntityDebugEntries, type StoryEntityDebugEntry } from './storyEntities';
+import { buildStoryEntityDebugEntries, type StoryEntityDebugEntry, type StoryEntityHeadPickupState } from './storyEntities';
 import { YangYunReplayManager } from './YangYunReplayManager';
 import { AudioManager, type SfxName } from '../audio/AudioManager';
 import { ScreenEffectManager } from '../effects/ScreenEffectManager';
@@ -49,7 +49,12 @@ export class PlayScene extends Phaser.Scene {
   private collisionManager!: CollisionManager;
   private playerSprite!: Phaser.GameObjects.Sprite;
   private playerPosition: { x: number; y: number } = { x: PLAYER_SPAWN_X, y: PLAYER_SPAWN_Y };
-  private currentCharacter: CharacterId = 'yangYunRed';
+  // Default to 'yangYunBlue' to match the story-correct opening state
+  // (createDefaultSaveState().controllableCharacterId === 'yangYunBlue').
+  // create() overwrites this from saveState, but the initializer must not
+  // hardcode 'yangYunRed' (AGENTS.md anti-pattern) in case any read happens
+  // before create() completes or if create() throws mid-init.
+  private currentCharacter: CharacterId = 'yangYunBlue';
   private currentDirection: CharacterDirection = 'down';
   private isMoving = false;
   private activeTextureKey: string | null = null;
@@ -58,6 +63,13 @@ export class PlayScene extends Phaser.Scene {
   private currentFloor: FloorId = '4F';
   private currentRoom: RoomId | null = null;
   private scriptedMovementActive = false;
+  // Tracked so the active scripted-movement tween can be stopped when the
+  // player position is overridden mid-tween (e.g. handleSwitchView /
+  // exitToCorridorThroughDoor / scene shutdown). Without this, the old tween
+  // keeps writing to `playerPosition` while the new position source fights
+  // it, causing visual jitter; `scriptedMovementActive` also stays true until
+  // the stale tween's onComplete fires.
+  private scriptedMovementTween: Phaser.Tweens.Tween | null = null;
   private deathFlashManager!: DeathFlashManager;
   private replayManager!: YangYunReplayManager;
 
@@ -74,6 +86,16 @@ export class PlayScene extends Phaser.Scene {
   private storyEntitySprites: Phaser.GameObjects.Image[] = [];
   private storyEntityDebugEntries: StoryEntityDebugEntry[] = [];
   private storyEntitySignature = '';
+  // Cheap per-frame pre-check inputs for refreshStoryEntities(). When none of
+  // these change between frames, the entries array + signature string rebuild
+  // is skipped entirely (avoids per-frame allocation in the common idle case).
+  // `storyEntityHeadPickupsRef` uses reference identity: ReplayManager reassigns
+  // `currentHeadPickups` (never mutates in place), so `===` reliably detects
+  // changes; `null` covers idle/recording phases.
+  private storyEntityFlagsVersion = -1;
+  private storyEntityHeadPickupsRef: StoryEntityHeadPickupState | null = null;
+  private storyEntityFloor: FloorId | null = null;
+  private storyEntityRoom: RoomId | null | undefined = undefined;
 
   // Branch choice UI
   private branchBg: Phaser.GameObjects.Rectangle | null = null;
@@ -526,6 +548,9 @@ export class PlayScene extends Phaser.Scene {
     this.currentRoom = null;
     this.eventEngine.updateLocation(this.currentFloor, this.currentRoom);
     this.refreshStoryEntities();
+    // Override player position via door transition — stop any in-flight
+    // scripted-movement tween so it doesn't fight the new position.
+    this.cancelScriptedMovement();
     this.currentDirection = returnPosition.facing;
     this.playerPosition = { x: returnPosition.x, y: returnPosition.y };
     this.playerSprite.setPosition(this.playerPosition.x, this.playerPosition.y);
@@ -847,7 +872,9 @@ export class PlayScene extends Phaser.Scene {
     this.scriptedMovementActive = true;
     this.syncCharacterDebugState();
 
-    this.tweens.add({
+    // Stop any previous scripted-movement tween before starting a new one.
+    this.scriptedMovementTween?.stop();
+    this.scriptedMovementTween = this.tweens.add({
       targets: this.playerPosition,
       x: movement.target.x,
       y: movement.target.y,
@@ -863,11 +890,29 @@ export class PlayScene extends Phaser.Scene {
         this.playerSprite.setPosition(this.playerPosition.x, this.playerPosition.y);
         this.isMoving = false;
         this.scriptedMovementActive = false;
+        this.scriptedMovementTween = null;
         this.eventEngine.updatePlayerPosition(this.playerPosition);
         this.syncCharacterDebugState();
         complete(this.playerPosition);
       },
     });
+  }
+
+  /**
+   * Stop the active scripted-movement tween (if any) and reset the
+   * `isMoving` / `scriptedMovementActive` flags. Call this whenever the
+   * player position is overridden mid-tween (room transition, switchView,
+   * scene shutdown) so the stale tween doesn't fight the new position.
+   */
+  private cancelScriptedMovement(): void {
+    if (this.scriptedMovementTween) {
+      this.scriptedMovementTween.stop();
+      this.scriptedMovementTween = null;
+    }
+    if (this.scriptedMovementActive) {
+      this.scriptedMovementActive = false;
+      this.isMoving = false;
+    }
   }
 
   // ═══════════════════════════════════════════════════════════════
@@ -896,6 +941,9 @@ export class PlayScene extends Phaser.Scene {
     }
 
     if (position) {
+      // Override player position — stop any in-flight scripted-movement tween
+      // so it doesn't keep writing to `playerPosition` and fight this update.
+      this.cancelScriptedMovement();
       this.playerPosition = { x: position.x, y: position.y };
       this.playerSprite.setPosition(position.x, position.y);
       this.eventEngine.updatePlayerPosition(this.playerPosition);
@@ -1092,11 +1140,32 @@ export class PlayScene extends Phaser.Scene {
   }
 
   private refreshStoryEntities(): void {
+    // Cheap pre-check: skip the entries array + signature string rebuild
+    // (which allocates every frame) when none of the inputs that affect entity
+    // rendering have changed since the last rebuild. ReplayManager reassigns
+    // `currentHeadPickups` (never mutates in place) and returns null during
+    // idle/recording, so reference identity reliably detects head-pickup changes.
+    const flagsVersion = this.eventEngine.getStoryFlagsVersion();
+    const headPickups = this.replayManager.getReplayHeadPickups();
+    if (
+      flagsVersion === this.storyEntityFlagsVersion &&
+      headPickups === this.storyEntityHeadPickupsRef &&
+      this.currentFloor === this.storyEntityFloor &&
+      this.currentRoom === this.storyEntityRoom
+    ) {
+      return;
+    }
     const entries = buildStoryEntityDebugEntries(this.eventEngine.getStoryFlags(), {
       floorId: this.currentFloor,
       roomId: this.currentRoom,
-    }, this.replayManager.getReplayHeadPickups());
+    }, headPickups);
     const signature = entries.map((entry) => `${entry.id}:${entry.textureKey}:${entry.floorId}:${entry.roomId}:${entry.x}:${entry.y}`).join('|');
+    // Refresh cached pre-check inputs regardless of whether the signature
+    // changed, so the next frame's pre-check sees the latest values.
+    this.storyEntityFlagsVersion = flagsVersion;
+    this.storyEntityHeadPickupsRef = headPickups;
+    this.storyEntityFloor = this.currentFloor;
+    this.storyEntityRoom = this.currentRoom;
     if (signature === this.storyEntitySignature) return;
 
     for (const sprite of this.storyEntitySprites) {
@@ -1127,6 +1196,11 @@ export class PlayScene extends Phaser.Scene {
   shutdown(): void {
     this.deathFlashManager?.cleanup();
     this.replayManager?.destroy();
+    // Stop any in-flight scripted-movement tween so its onUpdate/onComplete
+    // don't fire on a half-destroyed scene. Also reset movement/ending flags
+    // so a scene restart (Phaser reuses the same instance) starts clean.
+    this.cancelScriptedMovement();
+    this.endingActive = false;
     // Clean up audio & effect systems
     this.audioManager?.stopBgm();
     this.audioManager?.stopAmbient();
@@ -1141,6 +1215,11 @@ export class PlayScene extends Phaser.Scene {
     this.storyEntitySprites = [];
     this.storyEntityDebugEntries = [];
     this.storyEntitySignature = '';
+    // Reset pre-check cache so a scene restart forces a fresh rebuild.
+    this.storyEntityFlagsVersion = -1;
+    this.storyEntityHeadPickupsRef = null;
+    this.storyEntityFloor = null;
+    this.storyEntityRoom = undefined;
     this.inputManager?.destroy();
     this.mapRenderer?.destroy();
     this.hideBranchChoices();

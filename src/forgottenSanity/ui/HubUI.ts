@@ -56,6 +56,8 @@ export class HubUI {
   private panelLabels: Map<string, Phaser.GameObjects.Text> = new Map();
   private titleText: Phaser.GameObjects.Text | null = null;
   private contentContainer: Phaser.GameObjects.Container | null = null;
+  private backButton: Phaser.GameObjects.Rectangle | null = null;
+  private backLabel: Phaser.GameObjects.Text | null = null;
   private activePanel: HubPanelDef['id'] = 'stash';
 
   constructor(private scene: Phaser.Scene, private callbacks: HubUICallbacks) {}
@@ -83,15 +85,37 @@ export class HubUI {
     this.contentContainer = this.scene.add.container(0, 0).setDepth(HUD_OVERLAY_DEPTH);
 
     // 返回按钮
-    const back = this.scene.add.rectangle(BACK_BUTTON_X, BACK_BUTTON_Y, 120, 40, UI_THEME.colors.surfaceMuted, UI_THEME.alpha.panel)
+    this.backButton = this.scene.add.rectangle(BACK_BUTTON_X, BACK_BUTTON_Y, 120, 40, UI_THEME.colors.surfaceMuted, UI_THEME.alpha.panel)
       .setOrigin(0.5).setDepth(HUD_BASE_DEPTH).setInteractive({ useHandCursor: true });
-    applyPixelStrokeStyle(back, UI_THEME.stroke.thin, UI_THEME.colors.borderMuted, 0.9);
-    applyPixelTextStyle(this.scene.add.text(BACK_BUTTON_X, BACK_BUTTON_Y, '返回',
+    applyPixelStrokeStyle(this.backButton, UI_THEME.stroke.thin, UI_THEME.colors.borderMuted, 0.9);
+    this.backLabel = applyPixelTextStyle(this.scene.add.text(BACK_BUTTON_X, BACK_BUTTON_Y, '返回',
       { align: 'center', color: UI_THEME.colors.textMuted, fontFamily: UI_THEME.font.ui, fontSize: '18px' }))
       .setOrigin(0.5).setDepth(HUD_TEXT_DEPTH);
-    back.on('pointerup', () => this.handleBack());
+    this.backButton.on('pointerup', () => this.handleBack());
 
     this.renderActivePanel();
+  }
+
+  destroy(): void {
+    // Destroy all persistent UI objects. Without this, panelButtons,
+    // panelLabels, titleText, contentContainer, backButton, and backLabel
+    // leak when leaving the hub (scene SHUTDOWN only auto-cleans GameObjects
+    // on full teardown, and HubUI is held by the scene, not the display list).
+    for (const rect of this.panelButtons.values()) rect.destroy();
+    this.panelButtons.clear();
+    for (const label of this.panelLabels.values()) label.destroy();
+    this.panelLabels.clear();
+    this.titleText?.destroy();
+    this.titleText = null;
+    // removeAll(true) destroys all children (action button rects/labels,
+    // content texts) added to the container across all panel renders.
+    this.contentContainer?.removeAll(true);
+    this.contentContainer?.destroy();
+    this.contentContainer = null;
+    this.backButton?.destroy();
+    this.backButton = null;
+    this.backLabel?.destroy();
+    this.backLabel = null;
   }
 
   switchPanel(id: HubPanelDef['id']): void {
@@ -233,12 +257,16 @@ export class HubUI {
     const rect = this.scene.add.rectangle(x, y, 80, 24, enabled ? UI_THEME.colors.accent : UI_THEME.colors.surfaceMuted, UI_THEME.alpha.control)
       .setOrigin(0.5).setInteractive({ useHandCursor: enabled });
     applyPixelStrokeStyle(rect, UI_THEME.stroke.thin, UI_THEME.colors.gold, 0.9);
-    applyPixelTextStyle(this.scene.add.text(x, y, label,
+    // Capture the label text so it can be added to the container — otherwise
+    // it stays orphaned on the scene display list and leaks on every
+    // renderActivePanel() call (contentContainer.removeAll only destroys
+    // container children).
+    const labelText = applyPixelTextStyle(this.scene.add.text(x, y, label,
       { align: 'center', color: UI_THEME.colors.text, fontFamily: UI_THEME.font.ui, fontSize: '14px' }))
       .setOrigin(0.5);
     rect.on('pointerup', onPointerUp);
     if (!enabled) rect.disableInteractive();
-    this.contentContainer?.add([rect]);
+    this.contentContainer?.add([rect, labelText]);
   }
 
   private addContentText(x: number, y: number, text: string, color: string): void {

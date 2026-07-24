@@ -14,7 +14,7 @@ export class ScreenShake {
   }
 
   private get camera(): Phaser.Cameras.Scene2D.Camera {
-    return (this.scene as any).cameras.main;
+    return this.scene.cameras.main;
   }
 
   /** Expose the scene reference for external consumers (e.g. SceneFX). */
@@ -50,8 +50,12 @@ export class ScreenShake {
   /** Red flash overlay using a full-screen rectangle. */
   flashRed(durationMs: number, alpha: number): void {
     const cam = this.camera;
-    const cx = cam.scrollX + cam.width / 2;
-    const cy = cam.scrollY + cam.height / 2;
+    // The rect uses setScrollFactor(0) below, so it lives in screen space.
+    // Position it at the screen-space center (cam.width/2, cam.height/2) —
+    // NOT cam.scrollX + width/2, which would offset it off-viewport when
+    // the camera is scrolled (e.g. ForgottenSanityScene scrolling camera).
+    const cx = cam.width / 2;
+    const cy = cam.height / 2;
     const rect = this.scene.add.rectangle(
       cx, cy, cam.width, cam.height, 0xb01724, alpha
     )
